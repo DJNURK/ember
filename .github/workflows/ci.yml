@@ -226,8 +226,16 @@ jobs:
           foreach ($t in $targets) {
             Write-Host "==> pluginval (strictness 10): $($t.FullName)"
             & $exe --strictness-level 10 --repeat 1 --timeout-ms 600000 --validate $t.FullName
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "!! FAILED: $($t.FullName)"
+            $code = $LASTEXITCODE
+            if ($code -ne 0) {
+              # Distinguish a reported test failure from a crash: pluginval exits
+              # 1 when a test fails and prints why, but an access violation comes
+              # back as 0xC0000005 (-1073741819) with no message at all, and the
+              # two need completely different investigation.
+              Write-Host "!! FAILED: $($t.FullName) (exit code $code)"
+              if ($code -lt 0) {
+                Write-Host "::warning::pluginval terminated abnormally (0x$('{0:X8}' -f $code)) rather than reporting a failed test"
+              }
               $failed = 1
             }
           }
