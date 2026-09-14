@@ -249,3 +249,33 @@ TEST_CASE("every factory preset loads and actually changes the plugin", "[proces
     INFO(changed << " of " << all.size() << " presets changed the state");
     REQUIRE(changed >= all.size() - 1);
 }
+
+TEST_CASE("processBlock survives a buffer narrower than the bus layout", "[processor][safety]")
+{
+    // Hosts do not always hand over exactly as many channels as the bus layout
+    // advertises, and validators deliberately probe the mismatch. Indexing by
+    // getTotalNumOutputChannels() instead of the buffer's own channel count
+    // reads past the end of getArrayOfWritePointers(), which is undefined
+    // behaviour that survives on some platforms and faults on others — it
+    // showed up as an unexplained crash on Windows and nowhere else.
+    EmberAudioProcessor proc;
+    proc.prepareToPlay(48000.0, 512);
+
+    juce::MidiBuffer midi;
+
+    for (int channels : {1, 2})
+    {
+        for (int samples : {0, 1, 7, 32, 33, 128, 512})
+        {
+            juce::AudioBuffer<float> buf(channels, juce::jmax(1, samples));
+            buf.clear();
+            if (samples > 0)
+                fillWhiteNoise(buf, 0x2020u + static_cast<uint32_t>(samples), 0.3f);
+
+            juce::AudioBuffer<float> view(buf.getArrayOfWritePointers(), channels, 0, samples);
+            INFO("channels " << channels << ", samples " << samples);
+            REQUIRE_NOTHROW(proc.processBlock(view, midi));
+            REQUIRE(allFinite(buf));
+        }
+    }
+}

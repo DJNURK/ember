@@ -409,9 +409,17 @@ void EmberAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
 {
     juce::ScopedNoDenormals noDenormals;
 
-    const int totalIn = getTotalNumInputChannels();
-    const int totalOut = getTotalNumOutputChannels();
-    for (int ch = totalIn; ch < totalOut; ++ch)
+    // Index by the buffer's OWN channel count, never by the bus layout's.
+    // getArrayOfWritePointers() has exactly buffer.getNumChannels() entries, so
+    // building a view with getTotalNumOutputChannels() reads past the end of
+    // that array whenever a host hands over a narrower buffer than the layout
+    // advertises - which hosts do, and which validators deliberately do. It is
+    // undefined behaviour that happens to survive on some platforms and faults
+    // on others.
+    const int numCh = juce::jmin(getTotalNumOutputChannels(), buffer.getNumChannels());
+    const int totalIn = juce::jmin(getTotalNumInputChannels(), numCh);
+
+    for (int ch = totalIn; ch < numCh; ++ch)
         buffer.clear(ch, 0, buffer.getNumSamples());
 
     const int numSamples = buffer.getNumSamples();
@@ -444,7 +452,7 @@ void EmberAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         resolveParameters(chunk);
         engine.setParameters(globalParams, bandParams.data(), kMaxBands);
 
-        juce::AudioBuffer<float> view(buffer.getArrayOfWritePointers(), totalOut, offset, chunk);
+        juce::AudioBuffer<float> view(buffer.getArrayOfWritePointers(), numCh, offset, chunk);
         engine.process(view);
 
         for (int b = 0; b < kMaxBands; ++b)
@@ -455,7 +463,7 @@ void EmberAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
 
     // Final safety net: a non-finite sample reaching the host is far worse than
     // a moment of silence, and some hosts will disable a plugin that emits one.
-    for (int ch = 0; ch < totalOut; ++ch)
+    for (int ch = 0; ch < numCh; ++ch)
     {
         auto* d = buffer.getWritePointer(ch);
         for (int i = 0; i < numSamples; ++i)
@@ -468,7 +476,8 @@ void EmberAudioProcessor::processBlock(juce::AudioBuffer<double>& buffer, juce::
     // supportsDoublePrecisionProcessing() is false, so hosts never call this.
     // It exists only because the base class declares the overload.
     juce::ScopedNoDenormals noDenormals;
-    for (int ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
+    const int channels = juce::jmin(getTotalNumOutputChannels(), buffer.getNumChannels());
+    for (int ch = juce::jmin(getTotalNumInputChannels(), channels); ch < channels; ++ch)
         buffer.clear(ch, 0, buffer.getNumSamples());
 }
 
