@@ -157,22 +157,26 @@ jobs:
         run: |
           set -euo pipefail
           find_iscc() {
+            local p
             for p in "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" \
                      "/c/Program Files/Inno Setup 6/ISCC.exe" \
                      "/c/ProgramData/chocolatey/bin/ISCC.exe"; do
-              [ -x "$p" ] && { echo "$p"; return 0; }
+              if [ -x "$p" ]; then echo "$p"; return 0; fi
             done
-            command -v iscc 2>/dev/null && return 0
-            command -v ISCC 2>/dev/null && return 0
+            if p="$(command -v iscc 2>/dev/null)"; then echo "$p"; return 0; fi
+            if p="$(command -v ISCC 2>/dev/null)"; then echo "$p"; return 0; fi
             return 1
           }
           if ! ISCC="$(find_iscc)"; then
             echo "Inno Setup not preinstalled — installing via choco"
             choco install innosetup --no-progress -y
-            ISCC="$(find_iscc)" || { echo "::error::Inno Setup still not found after choco install"; exit 1; }
+            if ! ISCC="$(find_iscc)"; then
+              echo "::error::Inno Setup still not found after choco install"
+              exit 1
+            fi
           fi
           echo "iscc=$ISCC" >> "$GITHUB_OUTPUT"
-          "$ISCC" /? | head -3 || true
+          echo "using $ISCC"
 
       - name: Build the Inno Setup installer
         shell: bash
@@ -352,7 +356,7 @@ jobs:
           rm -rf "$STAGE"; mkdir -p "$STAGE"
           ditto "$VST3" "$STAGE/Ember.vst3"
           ditto "$AU"   "$STAGE/Ember.component"
-          [ -n "$APP" ] && ditto "$APP" "$STAGE/Ember.app"
+          if [ -n "$APP" ]; then ditto "$APP" "$STAGE/Ember.app"; fi
           echo "EMBER_STAGE=$STAGE" >> "$GITHUB_ENV"
 
           # A silently single-architecture "universal" build is a classic release bug:

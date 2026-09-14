@@ -125,6 +125,7 @@ jobs:
         run: cmake --preset ${{ matrix.preset }}
 
       - name: Build
+        id: build
         run: cmake --build --preset ${{ matrix.preset }} --parallel
 
       - name: Unit tests (ctest)
@@ -153,6 +154,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $false
           $bin = Get-ChildItem -Path "build/${{ matrix.preset }}" -Recurse -File -Filter "ember_benchmark.exe" |
                  Select-Object -First 1
           if (-not $bin) {
@@ -185,6 +187,7 @@ jobs:
         env:
           PLUGINVAL_VERSION: v1.0.4
         run: |
+          $PSNativeCommandUseErrorActionPreference = $false
           $tools = Join-Path $PWD "build/tools"
           New-Item -ItemType Directory -Force -Path $tools | Out-Null
           $exe = Join-Path $tools "pluginval.exe"
@@ -202,7 +205,7 @@ jobs:
           $targets = @(Get-ChildItem -Path "build/${{ matrix.preset }}/Ember_artefacts" -Recurse -Filter "Ember.vst3" |
                        Where-Object { $_.FullName -match "[\\/]VST3[\\/]Ember\.vst3$" })
           if ($targets.Count -eq 0) {
-            Write-Host "no built VST3 found under build/${{ matrix.preset }}/Ember_artefacts — build first"
+            Write-Host "no built VST3 found under build/${{ matrix.preset }}/Ember_artefacts - build first"
             exit 1
           }
           $failed = 0
@@ -216,7 +219,10 @@ jobs:
           }
           exit $failed
 
+      # Uploaded whenever the build itself succeeded, so a red pluginval or test
+      # run still leaves something a reviewer can download and try.
       - name: Upload plug-in artefacts
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: Ember-${{ matrix.os }}
