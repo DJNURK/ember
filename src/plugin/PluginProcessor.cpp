@@ -7,21 +7,6 @@ namespace ember
 {
 namespace
 {
-/** Read a parameter's current value with modulation applied.
-
-    Modulation offsets are deltas in NORMALISED units, so the offset is added in
-    the normalised domain and converted back through the parameter's own range.
-    That keeps a modulation amount meaning the same fraction of travel on a
-    logarithmic frequency control as on a linear gain control. */
-inline float resolveValue(const juce::RangedAudioParameter* p, float modOffset) noexcept
-{
-    const auto& range = p->getNormalisableRange();
-    if (modOffset == 0.0f)
-        return range.convertFrom0to1(p->getValue());
-    const float n = juce::jlimit(0.0f, 1.0f, p->getValue() + modOffset);
-    return range.convertFrom0to1(n);
-}
-
 inline int choiceIndex(const juce::RangedAudioParameter* p) noexcept
 {
     if (auto* c = dynamic_cast<const juce::AudioParameterChoice*>(p))
@@ -76,6 +61,79 @@ void EmberAudioProcessor::buildModulationTargetTable()
     }
 
     registerSourceParameterOwnership();
+    buildParameterCache();
+}
+
+void EmberAudioProcessor::buildParameterCache()
+{
+    auto cache = [this](const juce::String& id)
+    {
+        CachedParam c;
+        c.param = apvts.getParameter(id);
+        c.modIndex = getModulationTargetIndex(id);
+        jassert(c.param != nullptr);   // a typo'd id would silently do nothing
+        return c;
+    };
+
+    inGainCache = cache(pid::inputGain);
+    outGainCache = cache(pid::outputGain);
+    globalMixCache = cache(pid::globalMix);
+    autoGainCache = cache(pid::autoGain);
+    numBandsCache = cache(pid::numBands);
+    stereoModeCache = cache(pid::stereoMode);
+
+    for (int i = 0; i < kMaxCrossovers; ++i)
+        crossoverCache[static_cast<size_t>(i)] = cache(pid::crossover(i));
+
+    for (int b = 0; b < kMaxBands; ++b)
+    {
+        auto& c = bandCache[static_cast<size_t>(b)];
+        c.drive = cache(pid::drive(b));
+        c.mix = cache(pid::bandMix(b));
+        c.level = cache(pid::level(b));
+        c.pan = cache(pid::pan(b));
+        c.width = cache(pid::width(b));
+        c.style = cache(pid::style(b));
+        c.feedback = cache(pid::feedback(b));
+        c.feedbackFreq = cache(pid::feedbackFreq(b));
+        c.dynamics = cache(pid::dynamics(b));
+        c.toneLow = cache(pid::toneLow(b));
+        c.toneMid = cache(pid::toneMid(b));
+        c.toneHigh = cache(pid::toneHigh(b));
+        c.bypass = cache(pid::bypass(b));
+        c.solo = cache(pid::solo(b));
+    }
+
+    for (int i = 0; i < kNumXLFOs; ++i)
+    {
+        auto& c = lfoCache[static_cast<size_t>(i)];
+        c.rate = cache(pid::lfoRate(i));     c.sync = cache(pid::lfoSync(i));
+        c.phase = cache(pid::lfoPhase(i));   c.smooth = cache(pid::lfoSmooth(i));
+        c.steps = cache(pid::lfoSteps(i));   c.depth = cache(pid::lfoDepth(i));
+    }
+    for (int i = 0; i < kNumEnvGenerators; ++i)
+    {
+        auto& c = egCache[static_cast<size_t>(i)];
+        c.attack = cache(pid::egAttack(i));       c.decay = cache(pid::egDecay(i));
+        c.sustain = cache(pid::egSustain(i));     c.release = cache(pid::egRelease(i));
+        c.threshold = cache(pid::egThreshold(i)); c.trigger = cache(pid::egTrigger(i));
+    }
+    for (int i = 0; i < kNumEnvFollowers; ++i)
+    {
+        auto& c = efCache[static_cast<size_t>(i)];
+        c.attack = cache(pid::efAttack(i)); c.release = cache(pid::efRelease(i));
+        c.band = cache(pid::efBand(i));     c.gain = cache(pid::efGain(i));
+    }
+    xyXCache = cache(pid::xyX);
+    xyYCache = cache(pid::xyY);
+    for (int i = 0; i < kNumMidiSources; ++i)
+    {
+        auto& c = midiCache[static_cast<size_t>(i)];
+        c.type = cache(pid::midiType(i)); c.cc = cache(pid::midiCC(i));
+        c.smooth = cache(pid::midiSmooth(i));
+    }
+    for (int i = 0; i < kNumMacros; ++i)
+        macroCache[static_cast<size_t>(i)] = cache(pid::macro(i));
 }
 
 void EmberAudioProcessor::registerSourceParameterOwnership()
@@ -126,80 +184,74 @@ void EmberAudioProcessor::registerSourceParameterOwnership()
 
 void EmberAudioProcessor::pushSourceParameters() noexcept
 {
-    // Base (un-modulated) values. The engine adds any modulation to the fields
-    // registered above, so applying it here as well would double it.
-    auto raw = [this](const juce::String& id) noexcept
-    {
-        auto* p = apvts.getParameter(id);
-        return p == nullptr ? 0.0f : p->getNormalisableRange().convertFrom0to1(p->getValue());
-    };
-    auto choice = [this](const juce::String& id) noexcept
-    {
-        auto* p = apvts.getParameter(id);
-        return p == nullptr ? 0 : choiceIndex(p);
-    };
-
+    // Base (un-modulated) values. Fields registered with setTargetOwner are
+    // modulated by the engine itself, so applying modulation here too would
+    // double it. Cached pointers only — this runs once per control block.
     for (int i = 0; i < kNumXLFOs; ++i)
     {
+        const auto& c = lfoCache[static_cast<size_t>(i)];
         XLfoParams lp;
-        lp.rateHz = juce::jlimit(0.01f, 40.0f, raw(pid::lfoRate(i)));
-        lp.tempoSync = raw(pid::lfoSync(i)) >= 0.5f;
+        lp.rateHz = juce::jlimit(0.01f, 40.0f, c.rate.raw());
+        lp.tempoSync = c.sync.isOn();
         // There is no separate sync-division parameter, so a synced LFO carries
-        // its division in the rate field at the 120 BPM reference (a quarter
-        // note is 2 Hz there). Presets are written with that convention.
+        // its division in the rate field at the 120 BPM reference, where a
+        // quarter note is 2 Hz. The factory presets are written that way.
         lp.syncBeats = juce::jlimit(0.03125f, 64.0f, 2.0f / juce::jmax(0.01f, lp.rateHz));
-        lp.phaseOffset = raw(pid::lfoPhase(i)) / 360.0f;
-        lp.steps = static_cast<int>(std::lround(raw(pid::lfoSteps(i))));
-        lp.smoothingMs = juce::jlimit(0.0f, 500.0f, raw(pid::lfoSmooth(i)) * 5.0f);
-        lp.depth = juce::jlimit(0.0f, 1.0f, raw(pid::lfoDepth(i)) * 0.01f);
+        lp.phaseOffset = c.phase.raw() / 360.0f;
+        lp.steps = static_cast<int>(std::lround(c.steps.raw()));
+        lp.smoothingMs = juce::jlimit(0.0f, 500.0f, c.smooth.raw() * 5.0f);
+        lp.depth = juce::jlimit(0.0f, 1.0f, c.depth.raw() * 0.01f);
         modulation.setXLfoParameters(i, lp);
     }
 
     for (int i = 0; i < kNumEnvGenerators; ++i)
     {
+        const auto& c = egCache[static_cast<size_t>(i)];
         EnvelopeGeneratorParams ep;
-        ep.attackMs = raw(pid::egAttack(i));
-        ep.decayMs = raw(pid::egDecay(i));
-        ep.sustain = juce::jlimit(0.0f, 1.0f, raw(pid::egSustain(i)) * 0.01f);
-        ep.releaseMs = raw(pid::egRelease(i));
-        ep.threshold = juce::Decibels::decibelsToGain(raw(pid::egThreshold(i)));
+        ep.attackMs = c.attack.raw();
+        ep.decayMs = c.decay.raw();
+        ep.sustain = juce::jlimit(0.0f, 1.0f, c.sustain.raw() * 0.01f);
+        ep.releaseMs = c.release.raw();
+        ep.threshold = juce::Decibels::decibelsToGain(c.threshold.raw());
         ep.detectorBand = -1;
-        ep.trigger = static_cast<EgTriggerMode>(
-            juce::jlimit(0, static_cast<int>(EgTriggerMode::Count) - 1, choice(pid::egTrigger(i))));
+        ep.trigger = static_cast<EgTriggerMode>(juce::jlimit(0, static_cast<int>(EgTriggerMode::Count) - 1,
+                                                            static_cast<int>(std::lround(c.trigger.raw()))));
         modulation.setEnvelopeGeneratorParameters(i, ep);
     }
 
     for (int i = 0; i < kNumEnvFollowers; ++i)
     {
+        const auto& c = efCache[static_cast<size_t>(i)];
         EnvelopeFollowerParams fp;
-        fp.attackMs = raw(pid::efAttack(i));
-        fp.releaseMs = raw(pid::efRelease(i));
+        fp.attackMs = c.attack.raw();
+        fp.releaseMs = c.release.raw();
         // The parameter is 0 = Full Range, 1..6 = band; the engine wants -1 for
         // full range and a zero-based band index otherwise.
-        fp.band = static_cast<int>(std::lround(raw(pid::efBand(i)))) - 1;
-        fp.gainDb = raw(pid::efGain(i));
+        fp.band = static_cast<int>(std::lround(c.band.raw())) - 1;
+        fp.gainDb = c.gain.raw();
         modulation.setEnvelopeFollowerParameters(i, fp);
     }
 
     XyControllerParams xy;
-    xy.x = juce::jlimit(0.0f, 1.0f, raw(pid::xyX) * 0.01f);
-    xy.y = juce::jlimit(0.0f, 1.0f, raw(pid::xyY) * 0.01f);
+    xy.x = juce::jlimit(0.0f, 1.0f, xyXCache.raw() * 0.01f);
+    xy.y = juce::jlimit(0.0f, 1.0f, xyYCache.raw() * 0.01f);
     modulation.setXyParameters(xy);
 
     for (int i = 0; i < kNumMidiSources; ++i)
     {
+        const auto& c = midiCache[static_cast<size_t>(i)];
         MidiSourceParams mp;
-        mp.kind = static_cast<MidiSourceKind>(
-            juce::jlimit(0, static_cast<int>(MidiSourceKind::Count) - 1, choice(pid::midiType(i))));
-        mp.ccNumber = juce::jlimit(0, 127, static_cast<int>(std::lround(raw(pid::midiCC(i)))));
-        mp.smoothingMs = juce::jlimit(0.0f, 500.0f, raw(pid::midiSmooth(i)));
+        mp.kind = static_cast<MidiSourceKind>(juce::jlimit(0, static_cast<int>(MidiSourceKind::Count) - 1,
+                                                          static_cast<int>(std::lround(c.type.raw()))));
+        mp.ccNumber = juce::jlimit(0, 127, static_cast<int>(std::lround(c.cc.raw())));
+        mp.smoothingMs = juce::jlimit(0.0f, 500.0f, c.smooth.raw());
         modulation.setMidiSourceParameters(i, mp);
     }
 
     for (int i = 0; i < kNumMacros; ++i)
     {
         MacroParams mp;
-        mp.value = juce::jlimit(0.0f, 1.0f, raw(pid::macro(i)) * 0.01f);
+        mp.value = juce::jlimit(0.0f, 1.0f, macroCache[static_cast<size_t>(i)].raw() * 0.01f);
         modulation.setMacroParameters(i, mp);
     }
 }
@@ -286,58 +338,61 @@ void EmberAudioProcessor::resolveParameters(int numSamples) noexcept
 {
     juce::ignoreUnused(numSamples);
 
-    auto mod = [this](const juce::String& id) noexcept
+    // Everything here reads cached pointers: no id strings, no hashing, no
+    // allocation. Modulation offsets are deltas in NORMALISED units, so they are
+    // added in the normalised domain and converted back through the parameter's
+    // own range — that keeps a given modulation amount meaning the same
+    // fraction of travel on a logarithmic frequency control as on a linear one.
+    auto value = [this](const CachedParam& c) noexcept
     {
-        const int idx = modTargetIndexByID.contains(id) ? modTargetIndexByID[id] : -1;
-        return idx < 0 ? 0.0f : modulation.getModulationOffset(idx);
-    };
-    auto value = [this, &mod](const juce::String& id) noexcept
-    {
-        auto* p = apvts.getParameter(id);
-        return p == nullptr ? 0.0f : resolveValue(p, mod(id));
-    };
-    auto raw = [this](const juce::String& id) noexcept
-    {
-        auto* p = apvts.getParameter(id);
-        return p == nullptr ? 0.0f : p->getValue();
+        if (c.param == nullptr)
+            return 0.0f;
+        const auto& range = c.param->getNormalisableRange();
+        if (c.modIndex < 0)
+            return range.convertFrom0to1(c.param->getValue());
+        const float offset = modulation.getModulationOffset(c.modIndex);
+        if (offset == 0.0f)
+            return range.convertFrom0to1(c.param->getValue());
+        return range.convertFrom0to1(juce::jlimit(0.0f, 1.0f, c.param->getValue() + offset));
     };
 
-    globalParams.inputGainDb = value(pid::inputGain);
-    globalParams.outputGainDb = value(pid::outputGain);
-    globalParams.mix01 = value(pid::globalMix) * 0.01f;
-    globalParams.autoGain = raw(pid::autoGain) >= 0.5f;
-    globalParams.numBands = juce::jlimit(kMinBands, kMaxBands, static_cast<int>(std::lround(value(pid::numBands))));
+    globalParams.inputGainDb = value(inGainCache);
+    globalParams.outputGainDb = value(outGainCache);
+    globalParams.mix01 = value(globalMixCache) * 0.01f;
+    globalParams.autoGain = autoGainCache.isOn();
+    globalParams.numBands = juce::jlimit(kMinBands, kMaxBands, static_cast<int>(std::lround(value(numBandsCache))));
     globalParams.stereoMode =
-        static_cast<StereoMode>(juce::jlimit(0, 1, choiceIndex(apvts.getParameter(pid::stereoMode))));
+        static_cast<StereoMode>(juce::jlimit(0, 1, static_cast<int>(std::lround(stereoModeCache.raw()))));
 
     for (int i = 0; i < kMaxCrossovers; ++i)
-        globalParams.crossoverHz[i] = value(pid::crossover(i));
+        globalParams.crossoverHz[i] = value(crossoverCache[static_cast<size_t>(i)]);
 
-    // Keep the edges ascending and at least a third of an octave apart, even if
-    // modulation pushes two of them together: unordered edges would produce
-    // unstable crossover coefficients.
-    constexpr float kMinRatio = 1.26f; // one third of an octave
+    // Keep the edges ascending and at least a third of an octave apart even if
+    // modulation pushes two together: unordered edges would produce unstable
+    // crossover coefficients.
+    constexpr float kMinRatio = 1.26f;
     for (int i = 1; i < kMaxCrossovers; ++i)
         globalParams.crossoverHz[i] =
             juce::jmax(globalParams.crossoverHz[i], globalParams.crossoverHz[i - 1] * kMinRatio);
 
     for (int b = 0; b < kMaxBands; ++b)
     {
+        const auto& c = bandCache[static_cast<size_t>(b)];
         auto& p = bandParams[static_cast<size_t>(b)];
-        p.driveDb = value(pid::drive(b));
-        p.mix01 = value(pid::bandMix(b)) * 0.01f;
-        p.levelDb = value(pid::level(b));
-        p.pan = value(pid::pan(b)) * 0.01f;
-        p.width01 = value(pid::width(b)) * 0.01f;
-        p.style = static_cast<StyleID>(juce::jlimit(0, kNumStyles - 1, choiceIndex(apvts.getParameter(pid::style(b)))));
-        p.feedback01 = value(pid::feedback(b)) * 0.01f;
-        p.feedbackFreq = value(pid::feedbackFreq(b));
-        p.dynamics = value(pid::dynamics(b)) * 0.01f;
-        p.toneLowDb = value(pid::toneLow(b));
-        p.toneMidDb = value(pid::toneMid(b));
-        p.toneHighDb = value(pid::toneHigh(b));
-        p.bypass = raw(pid::bypass(b)) >= 0.5f;
-        p.solo = raw(pid::solo(b)) >= 0.5f;
+        p.driveDb = value(c.drive);
+        p.mix01 = value(c.mix) * 0.01f;
+        p.levelDb = value(c.level);
+        p.pan = value(c.pan) * 0.01f;
+        p.width01 = value(c.width) * 0.01f;
+        p.style = static_cast<StyleID>(juce::jlimit(0, kNumStyles - 1, static_cast<int>(std::lround(c.style.raw()))));
+        p.feedback01 = value(c.feedback) * 0.01f;
+        p.feedbackFreq = value(c.feedbackFreq);
+        p.dynamics = value(c.dynamics) * 0.01f;
+        p.toneLowDb = value(c.toneLow);
+        p.toneMidDb = value(c.toneMid);
+        p.toneHighDb = value(c.toneHigh);
+        p.bypass = c.bypass.isOn();
+        p.solo = c.solo.isOn();
     }
 }
 

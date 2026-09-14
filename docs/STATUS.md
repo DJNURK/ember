@@ -33,31 +33,43 @@ Last updated: 2026-09-14. Everything below is measured on the host machine
 
 ## CPU
 
-Measured with `ember_benchmark` on an Apple M2, worst-case settings (every band a
-different style, feedback and dynamics active, auto-gain on):
+Measured with `ember_benchmark` on an Apple M2. The engine figures drive every
+band with a different style plus feedback and dynamics; the full-plugin figures
+add the wrapper — parameter resolution and modulation evaluation once per
+32-sample control block — with six modulation routings active, which is the
+number a host actually pays.
 
 | Configuration | % of one core |
 |---|---|
-| 6 bands, 4×, 48 kHz | 7.6 % |
-| 6 bands, 2×, 48 kHz | 4.9 % |
-| 6 bands, no oversampling | 2.9 % |
-| 3 bands, 4×, 48 kHz | 3.2 % |
-| 6 bands, 16×, 48 kHz | 24 % |
+| **Full plugin, 6 bands, 4×, 48 kHz, 6 routings** | **6.6 %** |
+| **Full plugin, 3 bands, 4×, 48 kHz, 6 routings** | **3.2 %** |
+| Engine only, 6 bands, 4×, 48 kHz | 7.7 % |
+| Engine only, 6 bands, 2× | 5.0 % |
+| Engine only, 6 bands, no oversampling | 2.9 % |
+| Engine only, 6 bands, 16× | 23.7 % |
+| Engine only, 6 bands, 4×, 96 kHz | 15.4 % |
 
-The specification's 3 % target is met at 3 bands / 4× and missed by roughly 2.5×
-at 6 bands / 4×. What was tried: the obvious hot-loop work (trigonometry out of
-the pan law, pointers hoisted out of per-sample loops, an integer delay instead
-of Lagrange interpolation for a latency that is always whole, the spectrum FFT
-skipped when no editor is open) moved it only from 11.4 % to 10.7 %, because the
-resampling filters dominate. Switching the realtime path to polyphase IIR — and
-keeping the linear-phase FIR for offline rendering, where latency and CPU do not
-matter — was the real win, 10.7 % → 7.6 %.
+The specification's 3 % target is **met at three bands** (3.2 %) and missed by
+about 2× at six (6.6 %). Three things moved the number, in increasing order of
+usefulness:
 
-With oversampling off the floor is 2.9 %, so 3 % at six oversampled bands is not
-reachable by tuning; it would need the band chain itself to be roughly halved,
-most plausibly by hand-vectorising the style shapers and the half-band filters.
-That is a substantial piece of work and has not been attempted. The number is
-reported rather than hidden, and the benchmark prints it in CI.
+1. Hot-loop work — trigonometry out of the pan law, pointers hoisted out of
+   per-sample loops, an integer delay instead of Lagrange interpolation for a
+   latency that is always whole, the spectrum FFT skipped when no editor is
+   open. Worth only 11.4 % → 10.7 %: the resampling filters dominate.
+2. Moving the realtime path to polyphase IIR half-band filters and keeping the
+   linear-phase FIR for offline rendering, where latency and CPU do not matter.
+   10.7 % → 7.7 %.
+3. Caching the parameter pointers. `resolveParameters` and `pushSourceParameters`
+   run ~1500 times a second and touch well over a hundred parameters each time;
+   looking them up by id meant a string copy and a hash per parameter per block.
+   That alone was 1.8 points of a core — the full plugin went 9.3 % → 6.6 %.
+
+With oversampling off the engine floor is 2.9 %, so 3 % at six oversampled bands
+is not reachable by tuning. It would need the band chain roughly halved, most
+plausibly by hand-vectorising the style shapers and the half-band filters. That
+has not been attempted. The benchmark prints these numbers in CI so the figure
+cannot quietly drift.
 
 ## Known gaps
 

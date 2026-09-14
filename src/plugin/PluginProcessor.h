@@ -108,7 +108,50 @@ private:
     void parameterChanged(const juce::String& parameterID, float newValue) override;
     void buildModulationTargetTable();
     void registerSourceParameterOwnership();
+    void buildParameterCache();
     void pushSourceParameters() noexcept;
+
+    /** One parameter, resolved once at construction.
+
+        `resolveParameters` and `pushSourceParameters` run once per 32-sample
+        control block — about 1500 times a second — and touch well over a
+        hundred parameters each time. Looking those up by ID on the audio thread
+        means a `juce::String` copy and a hash per parameter per block. It is not
+        an allocation, but it measured at 1.8 percentage points of a core on top
+        of a 7.5 % engine, so the pointers and modulation indices are resolved
+        once here and the audio thread only ever dereferences. */
+    struct CachedParam
+    {
+        juce::RangedAudioParameter* param { nullptr };
+        int modIndex { -1 };
+
+        float raw() const noexcept
+        {
+            return param == nullptr ? 0.0f : param->getNormalisableRange().convertFrom0to1(param->getValue());
+        }
+        float normalised() const noexcept { return param == nullptr ? 0.0f : param->getValue(); }
+        bool isOn() const noexcept { return param != nullptr && param->getValue() >= 0.5f; }
+    };
+
+    struct BandCache
+    {
+        CachedParam drive, mix, level, pan, width, style, feedback, feedbackFreq, dynamics;
+        CachedParam toneLow, toneMid, toneHigh, bypass, solo;
+    };
+    struct LfoCache { CachedParam rate, sync, phase, smooth, steps, depth; };
+    struct EgCache { CachedParam attack, decay, sustain, release, threshold, trigger; };
+    struct EfCache { CachedParam attack, release, band, gain; };
+    struct MidiCache { CachedParam type, cc, smooth; };
+
+    std::array<BandCache, kMaxBands> bandCache {};
+    std::array<CachedParam, kMaxCrossovers> crossoverCache {};
+    CachedParam inGainCache, outGainCache, globalMixCache, autoGainCache, numBandsCache, stereoModeCache;
+    std::array<LfoCache, kNumXLFOs> lfoCache {};
+    std::array<EgCache, kNumEnvGenerators> egCache {};
+    std::array<EfCache, kNumEnvFollowers> efCache {};
+    CachedParam xyXCache, xyYCache;
+    std::array<MidiCache, kNumMidiSources> midiCache {};
+    std::array<CachedParam, kNumMacros> macroCache {};
     void resolveParameters(int numSamples) noexcept;
     void applyMidiMappings(const juce::MidiBuffer& midi);
     juce::ValueTree captureFullState() const;

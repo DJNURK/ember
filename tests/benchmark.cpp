@@ -4,6 +4,8 @@
 #include <chrono>
 #include <cstdio>
 #include "dsp/EmberEngine.h"
+#include "plugin/PluginProcessor.h"
+#include "plugin/ParameterIDs.h"
 
 using namespace ember;
 
@@ -79,6 +81,73 @@ Result run(int numBands, OversamplingFactor os, double sampleRate, int blockSize
 }
 } // namespace
 
+/** The engine benchmark above skips the plugin wrapper, which resolves every
+    parameter and pushes every modulation source once per 32-sample control
+    block. That is real per-block work a host pays for, so measure it too. */
+Result runProcessor(int numBands, int osChoiceIndex, double sampleRate, int blockSize, double seconds)
+{
+    EmberAudioProcessor proc;
+
+    auto set = [&proc](const juce::String& id, float realValue)
+    {
+        if (auto* p = proc.getAPVTS().getParameter(id))
+            p->setValueNotifyingHost(p->getNormalisableRange().convertTo0to1(realValue));
+    };
+
+    set(pid::numBands, static_cast<float>(numBands));
+    for (int b = 0; b < kMaxBands; ++b)
+    {
+        set(pid::drive(b), 18.0f);
+        set(pid::feedback(b), 30.0f);
+        set(pid::feedbackFreq(b), 250.0f);
+        set(pid::dynamics(b), 40.0f);
+    }
+    if (auto* p = proc.getAPVTS().getParameter(pid::osFactor))
+        p->setValueNotifyingHost(p->convertTo0to1(static_cast<float>(osChoiceIndex)));
+
+    // A realistic modulation load: every macro driving a band drive.
+    for (int i = 0; i < kNumMacros && i < kMaxBands; ++i)
+    {
+        ModConnection c;
+        c.sourceIndex = flatSourceIndex(ModSourceType::Macro, i);
+        c.targetIndex = proc.getModulationTargetIndex(pid::drive(i));
+        c.amount = 0.2f;
+        proc.getModulationEngine().addConnection(c);
+    }
+
+    proc.prepareToPlay(sampleRate, blockSize);
+
+    juce::AudioBuffer<float> buf(2, blockSize);
+    juce::MidiBuffer midi;
+    uint32_t s = 0x2468u;
+    auto noise = [&s]() noexcept
+    {
+        s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+        return static_cast<float>(static_cast<int32_t>(s)) / 2147483648.0f * 0.25f;
+    };
+
+    const int totalBlocks = static_cast<int>((seconds * sampleRate) / blockSize);
+    for (int i = 0; i < 50; ++i)
+    {
+        for (int ch = 0; ch < 2; ++ch)
+            for (int j = 0; j < blockSize; ++j) buf.setSample(ch, j, noise());
+        proc.processBlock(buf, midi);
+    }
+
+    const auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < totalBlocks; ++i)
+    {
+        for (int ch = 0; ch < 2; ++ch)
+            for (int j = 0; j < blockSize; ++j) buf.setSample(ch, j, noise());
+        proc.processBlock(buf, midi);
+    }
+    const auto end = std::chrono::steady_clock::now();
+
+    const double elapsed = std::chrono::duration<double>(end - start).count();
+    const double audio = (totalBlocks * static_cast<double>(blockSize)) / sampleRate;
+    return { audio, elapsed, 100.0 * elapsed / audio };
+}
+
 int main()
 {
     std::printf("\nEmber offline CPU benchmark\n");
@@ -112,7 +181,17 @@ int main()
             headline = r.percentOfOneCore;
     }
     std::printf("---------------------------------------------------------------\n");
-    std::printf("headline (6 bands, 4x, 48k): %.2f%% of one core\n\n", headline);
+    std::printf("headline (6 bands, 4x, 48k): %.2f%% of one core\n", headline);
+
+    std::printf("\nFull plugin (processor + modulation, the number a host pays)\n");
+    std::printf("---------------------------------------------------------------\n");
+    {
+        const auto r = runProcessor(6, 2, 48000.0, 512, 10.0);
+        std::printf("%-42s %9.2f%%\n", "stereo 48k, 6 bands, 4x, 6 routings", r.percentOfOneCore);
+        const auto r2 = runProcessor(3, 2, 48000.0, 512, 10.0);
+        std::printf("%-42s %9.2f%%\n", "stereo 48k, 3 bands, 4x, 6 routings", r2.percentOfOneCore);
+    }
+    std::printf("\n");
 
     // Fail only if we cannot sustain realtime at all — the 3% spec target is
     // reported rather than enforced, because CI runners vary by an order of
