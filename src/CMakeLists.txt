@@ -4,7 +4,22 @@
 add_library(ember_dsp STATIC)
 
 target_sources(ember_dsp PRIVATE
-    dsp/EmberEngine.cpp)
+    dsp/EmberEngine.cpp
+    dsp/BandChain.cpp
+    dsp/BandFx.cpp
+    dsp/Crossover.cpp
+    dsp/StyleCalibrator.cpp
+    dsp/styles/StyleFactory.cpp
+    dsp/styles/TubeStyles.cpp
+    dsp/styles/TapeStyles.cpp
+    dsp/styles/AmpStyles.cpp
+    dsp/styles/RectifyStyles.cpp
+    dsp/styles/DestroyStyles.cpp
+    dsp/styles/FxStyles.cpp
+    dsp/modulation/ModTypes.cpp
+    dsp/modulation/ModSources.cpp
+    dsp/modulation/ModulationEngine.cpp
+    plugin/Parameters.cpp)
 
 target_include_directories(ember_dsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 

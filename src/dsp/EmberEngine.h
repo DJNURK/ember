@@ -1,17 +1,111 @@
 #pragma once
+#include <array>
 #include <juce_dsp/juce_dsp.h>
+#include "dsp/EmberTypes.h"
+#include "dsp/BandParams.h"
+#include "dsp/BandChain.h"
+#include "dsp/Crossover.h"
+#include "dsp/SpectrumFifo.h"
 
 namespace ember
 {
-/** Placeholder engine — replaced by the real multiband chain in M2. */
+/**
+    The whole audio graph below the plugin wrapper.
+
+    Input gain -> [M/S encode] -> crossover -> 6 band chains -> sum ->
+    [M/S decode] -> auto-gain -> global dry/wet -> output gain.
+
+    Parameters arrive already resolved: the processor layer applies modulation
+    and hands down plain `GlobalParams` / `BandParams`, so nothing here needs to
+    know about APVTS, modulation or the GUI.
+
+    Band-count changes are click-free by construction. Two crossovers are kept;
+    on a change the engine crossfades each band's INPUT from the old split to
+    the new one over ~20 ms. Because a crossover is transparent — the bands sum
+    back to the input — the total at fade position f is
+
+        f * sum(newBands) + (1 - f) * sum(oldBands) = input
+
+    for every f, so the sum never jumps even though the band boundaries move.
+    Bands that do not exist in a configuration simply contribute silence and
+    fade in or out continuously.
+*/
 class EmberEngine
 {
 public:
+    EmberEngine();
+    ~EmberEngine();
+
     void prepare(const juce::dsp::ProcessSpec& spec);
     void reset();
-    void process(juce::AudioBuffer<float>& buffer);
+
+    /** Message/prepare thread only — reallocates the oversamplers. */
+    void setOversamplingFactor(OversamplingFactor factor);
+    void setCrossoverMode(CrossoverMode mode);
+
+    /** Control-rate update. Realtime-safe. */
+    void setParameters(const GlobalParams& global, const BandParams* bands, int numBandParams) noexcept;
+
+    void process(juce::AudioBuffer<float>& buffer) noexcept;
+
+    /** Total latency in samples, for `setLatencySamples`. */
+    int getLatencySamples() const noexcept;
+
+    SpectrumFifo& getSpectrumFifo() noexcept { return spectrumFifo; }
+
+    float getBandGainReductionDb(int band) const noexcept;
+
+    /** Peak level of each band's output, for the GUI band "heat" overlay. */
+    float getBandLevel(int band) const noexcept;
 
 private:
+    void pushSpectrum(const juce::AudioBuffer<float>& in, const juce::AudioBuffer<float>& out, int numSamples) noexcept;
+    void accumulateSpectrum(const float* input, const float* output, int numSamples) noexcept;
+
+    std::array<BandChain, kMaxBands> bands;
+    Crossover crossoverA, crossoverB;
+    Crossover* activeCrossover { &crossoverA };
+    Crossover* previousCrossover { nullptr };
+
+    std::array<juce::AudioBuffer<float>, kMaxBands> bandBuffers;
+    std::array<juce::AudioBuffer<float>, kMaxBands> altBandBuffers;
+    juce::AudioBuffer<float> dryBuffer, sumBuffer, msBuffer;
+
+    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Lagrange3rd> globalDryDelay { 8192 };
+
+    // Band-count crossfade
+    float bandFade { 1.0f };
+    float bandFadeStep { 1.0f };
+    int activeNumBands { 3 };
+    int previousNumBands { 3 };
+
+    std::array<juce::SmoothedValue<float>, kMaxBands> bandGateGain;   // solo / bypass-to-silence
+    std::array<std::atomic<float>, kMaxBands> bandLevels {};
+
+    juce::SmoothedValue<float> smoothedInputGain, smoothedOutputGain, smoothedGlobalMix, smoothedAutoGain;
+
+    // Auto-gain: slow RMS comparison of the dry and wet paths.
+    float dryRms { 0.0f }, wetRms { 0.0f };
+    float autoGainCoeff { 0.0f };
+
+    // Spectrum
+    juce::dsp::FFT fft { kSpectrumFFTOrder };
+    std::array<float, kSpectrumFFTSize> window {};
+    std::array<float, kSpectrumFFTSize> inputAccum {}, outputAccum {};
+    std::array<float, 2 * kSpectrumFFTSize> fftScratch {};
+    int accumIndex { 0 };
+    SpectrumFifo spectrumFifo;
+    SpectrumFrame scratchFrame;
+
+    GlobalParams globalParams;
+    std::array<BandParams, kMaxBands> bandParams;
+
     double sampleRate { 44100.0 };
+    int maxBlockSize { 512 };
+    int numChannels { 2 };
+    OversamplingFactor osFactor { OversamplingFactor::x2 };
+    int latencySamples { 0 };
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EmberEngine)
 };
 } // namespace ember
