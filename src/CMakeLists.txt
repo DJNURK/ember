@@ -47,7 +47,9 @@ set_target_properties(ember_dsp PROPERTIES FOLDER "Ember")
 # ------------------------------------------------------------------ Plugin
 target_sources(Ember PRIVATE
     plugin/PluginProcessor.cpp
-    plugin/PluginEditor.cpp)
+    plugin/PluginEditor.cpp
+    gui/EmberLookAndFeel.cpp
+    gui/Widgets.cpp)
 
 target_compile_definitions(Ember PUBLIC
     JUCE_WEB_BROWSER=0

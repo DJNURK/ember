@@ -21,24 +21,21 @@ constexpr float kMaxPreGain = 128.0f;
     needs a band level above +/-12 to engage, so normal material never sees it. */
 constexpr float kMaxFoldInput = 256.0f;
 
-/** The same safety net for the hard clipper, and the reason it is so much
-    wider than the folder's.
+/** Ceiling the hard clipper's ADAA history is parked at when the pre-gain
+    multiply overflows.
 
     `kMaxPreGain` is 128, so a finite input above ~2.6e36 — which `sanitise`
-    happily passes, because it is finite — overflows the pre-gain multiply to
-    +/-inf. `adaa::process1` degrades gracefully when it is handed one (the
-    quotient goes non-finite, so it falls back to the midpoint evaluation and
-    still returns +/-1), but it also writes that inf into the caller's ADAA
-    state; if the spike lands on the last sample of a block the state is
-    sanitised to 0 at the block boundary and the first sample of the NEXT block
-    is then averaged from 0 instead of from the spike. Clamping the product
-    closes that off. The folder already does exactly this.
+    passes, because it IS finite — overflows to +/-inf. The clipper's
+    antiderivative is |x| - 1/2, so unlike the folder (whose input is clamped
+    to `kMaxFoldInput` because its fold COUNT would otherwise be unbounded) the
+    clipper needs no per-sample clamp: `process1` reads the magnitude, sees a
+    non-finite quotient and falls back to the midpoint evaluation, which is
+    +/-1 — the right answer. Only the retained state needs repairing.
 
-    1e6 rather than the folder's 256 because hard clip's antiderivative is
-    |x| - 1/2, so the ADAA quotient keeps reading the magnitude even where the
-    shaper itself has saturated: clamping to 256 would move a segment that
-    spans zero by up to 0.4%, whereas clamping to 1e6 moves it by 1.3e-6
-    (-118 dB) and still leaves 3e32 of headroom under the multiply. */
+    1e6 rather than the folder's 256: hard clip's ADAA quotient keeps reading
+    the magnitude even where the shaper itself has saturated, so parking the
+    history at 256 would move a following segment that spans zero by up to
+    0.4%, whereas 1e6 moves it by 1.3e-6 (-118 dB). */
 constexpr float kMaxClipInput = 1.0e6f;
 
 /**
@@ -293,12 +290,22 @@ void HardClipStyle::process (float* const* channelData, int numChannels, int num
 
         for (int n = 0; n < numSamples; ++n)
         {
-            const float driven = dsputil::sanitise (data[n]) * gain;
-            const float x = juce::jlimit (-kMaxClipInput, kMaxClipInput, driven);
+            const float x = dsputil::sanitise (data[n]) * gain;
             data[n] = dsputil::sanitise (adaa::process1 (x, state, adaa::hardClipF, adaa::hardClipF1));
         }
 
-        adaaState[idx] = dsputil::sanitise (state);
+        // Clamp BEFORE sanitising. `sanitise` maps a non-finite state to 0,
+        // which is the wrong repair for an ADAA history value: 0 sits in the
+        // middle of the clipper's linear region, so the first sample of the
+        // next block would be averaged from 0 rather than from the saturated
+        // value the spike actually left behind, and comes out ~8x too quiet.
+        // Clamping first lands it on the saturation plateau instead. One
+        // clamp per channel per block, not one per sample — measured, guarding
+        // this inside the loop instead costs 12.5% of this style's inner loop
+        // and buys nothing, because `process1` already falls back to the
+        // midpoint evaluation and returns the correct +/-1 for the spike and
+        // for the sample after it.
+        adaaState[idx] = dsputil::sanitise (juce::jlimit (-kMaxClipInput, kMaxClipInput, state));
     }
 }
 

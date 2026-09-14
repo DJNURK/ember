@@ -1035,34 +1035,6 @@ juce::File resolveOutputDirectory (int argc, char** argv)
 
 int main (int argc, char** argv)
 {
-    // TEMP-AUDIT: --dump-targets prints the source and target tables so an
-    // auditor can resolve an emitted index back to a name instead of eyeballing.
-    if (argc > 1 && juce::String (argv[1]) == "--dump-targets")
-    {
-        LayoutHost h;
-        int n = 0;
-
-        for (auto* param : h.getParameters())
-            if (auto* withID = dynamic_cast<juce::AudioProcessorParameterWithID*> (param))
-                if (pid::isModulatable (withID->paramID))
-                    std::printf ("TARGET %d %s\n", n++, withID->paramID.toRawUTF8());
-
-        for (int i = 0; i < kNumModSources; ++i)
-            std::printf ("SOURCE %d %s\n", i, modSourceDisplayName (i).toRawUTF8());
-
-        // And every preset's routings, resolved.
-        for (const auto& preset : buildPresetBank())
-            for (const auto& m : preset.mods)
-                std::printf ("ROUTE %s | src=%d (%s) | tgt=%s | amt=%.4f | curve=%d | smooth=%.1f\n",
-                             preset.fileName.toRawUTF8(),
-                             flatSourceIndex (m.sourceType, m.sourceOrdinal),
-                             modSourceDisplayName (flatSourceIndex (m.sourceType, m.sourceOrdinal)).toRawUTF8(),
-                             m.targetId.toRawUTF8(), m.amountPercent / 100.0, static_cast<int> (m.curve),
-                             m.smoothingMs);
-
-        return 0;
-    }
-
     const auto outputDir = resolveOutputDirectory (argc, argv);
 
     if (outputDir == juce::File())

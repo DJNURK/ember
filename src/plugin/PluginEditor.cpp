@@ -3,21 +3,34 @@
 namespace ember
 {
 EmberAudioProcessorEditor::EmberAudioProcessorEditor(EmberAudioProcessor& p)
-    : juce::AudioProcessorEditor(&p), processorRef(p), generic(p)
+    : juce::AudioProcessorEditor(&p), processorRef(p)
 {
-    addAndMakeVisible(generic);
+    setLookAndFeel(&lookAndFeel);
+
+    // The spectrum FFT only runs while a window is open.
+    processorRef.getEngineSpectrumEnabled(true);
+
+    const auto stored = processorRef.getEditorBounds();
     setResizable(true, true);
     setResizeLimits(800, 480, 3000, 2000);
-    setSize(1100, 640);
+    getConstrainer()->setFixedAspectRatio(0.0);
+    setSize(stored.getWidth(), stored.getHeight());
+}
+
+EmberAudioProcessorEditor::~EmberAudioProcessorEditor()
+{
+    processorRef.getEngineSpectrumEnabled(false);
+    setLookAndFeel(nullptr);
 }
 
 void EmberAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(0xff121214));
+    g.fillAll(gui::EmberColours::backgroundDeep);
 }
 
 void EmberAudioProcessorEditor::resized()
 {
-    generic.setBounds(getLocalBounds());
+    // Remember the size so the window comes back the way the user left it.
+    processorRef.setEditorBounds(getWidth(), getHeight());
 }
 } // namespace ember
