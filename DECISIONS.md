@@ -166,3 +166,16 @@ reported that "compression" *raised* it. Peak and RMS on such a signal are both
 dominated by the loud parts, so they move together under compression and the
 ratio barely responds — it discriminates almost nothing. Comparing gain against
 input level is the measurement that matches what the words mean.
+
+**D20 — No bundled fonts or icon assets.** The specification's layout reserves
+`resources/fonts` and `resources/icons` for original artwork. Ember ships
+neither, because the interface is drawn entirely in vectors: every icon is a
+`juce::Path` built in code (see `IconButton` in `src/gui/GlobalBar.h`), and the
+type comes from JUCE's own font stack through `EmberFonts`, which derives a
+small named scale from the editor height rather than shipping a typeface.
+
+This is a deliberate choice, not an omission. Bundling a typeface means shipping
+someone else's licence with a GPLv3 plugin and getting that interaction right;
+drawing the icons means they scale cleanly to any window size and DPI without a
+second set of assets, which matters for a GUI that is resizable from 800×480 to
+3000×2000. The directories are therefore empty and git does not track them.
