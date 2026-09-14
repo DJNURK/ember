@@ -47,41 +47,55 @@ const float kFreqs[kMaxCrossovers] = { 120.0f, 600.0f, 2500.0f, 6000.0f, 12000.0
 
 TEST_CASE("crossover band sum is magnitude-flat for every band count", "[crossover][null]")
 {
-    // A Linkwitz-Riley crossover sums to an ALLPASS, not to unity: the magnitude
-    // response is flat but the phase is rotated by 360 degrees per crossover.
-    // So the meaningful minimum-phase gate is magnitude flatness, which is what
-    // "phase-coherent summing" actually buys you. The true time-domain null is
-    // tested separately in linear-phase mode below.
+    // A Linkwitz-Riley crossover sums to an ALLPASS, not to unity: flat in
+    // magnitude, but with 360 degrees of phase rotation per crossover. So the
+    // meaningful gate in minimum-phase mode is magnitude flatness, which is
+    // what "phase-coherent summing" actually buys you. The true time-domain
+    // null is tested separately in linear-phase mode below.
+    //
+    // Measured from the impulse response so the result is the exact transfer
+    // function rather than a windowed approximation.
+    constexpr int kIrLength = 32768;   // 0.68 s at 48 kHz: long enough to decay
+
     for (int numBands = 1; numBands <= kMaxBands; ++numBands)
     {
         Crossover xo;
-        xo.prepare(kRate, kBlock, 2);
+        xo.prepare(kRate, kBlock, 1);
         xo.setMode(CrossoverMode::MinimumPhaseLR4);
         xo.setNumBands(numBands);
         xo.setCrossoverFrequencies(kFreqs, numBands - 1);
         xo.reset();
 
-        juce::AudioBuffer<float> input(2, kFftSize * 2);
-        fillWhiteNoise(input, 0xBEEF01u, 0.25f);
+        juce::AudioBuffer<float> impulse(1, kIrLength);
+        impulse.clear();
+        impulse.setSample(0, 0, 1.0f);
 
-        auto summed = splitAndSum(xo, input, numBands);
+        auto ir = splitAndSum(xo, impulse, numBands);
+        REQUIRE(allFinite(ir));
 
-        REQUIRE(allFinite(summed));
+        // Confirm the response really has decayed, otherwise the FFT would be
+        // truncating and the flatness number would be meaningless.
+        float tailPeak = 0.0f;
+        for (int i = kIrLength - 2048; i < kIrLength; ++i)
+            tailPeak = juce::jmax(tailPeak, std::abs(ir.getSample(0, i)));
+        INFO("numBands = " << numBands << ", impulse response tail peak = " << tailPeak);
+        REQUIRE(tailPeak < 1.0e-6f);
 
-        // Analyse the second half so the filters have fully settled.
-        auto tf = transferFunctionDb(input.getReadPointer(0) + kFftSize,
-                                     summed.getReadPointer(0) + kFftSize, kFftSize);
+        auto mag = impulseResponseMagnitudeDb(ir.getReadPointer(0), kIrLength);
 
-        // Ignore the extreme bins: the lowest few have no energy in a windowed
-        // noise burst and the top bin sits at Nyquist.
-        const int firstBin = static_cast<int>(30.0 / (kRate / kFftSize));
-        const int lastBin = static_cast<int>(18000.0 / (kRate / kFftSize));
+        const int firstBin = static_cast<int>(30.0 / (kRate / kIrLength));
+        const int lastBin = static_cast<int>(18000.0 / (kRate / kIrLength));
 
         float worst = 0.0f;
+        int worstBin = firstBin;
         for (int bin = firstBin; bin < lastBin; ++bin)
-            worst = juce::jmax(worst, std::abs(tf[static_cast<size_t>(bin)]));
+        {
+            const float dev = std::abs(mag[static_cast<size_t>(bin)]);
+            if (dev > worst) { worst = dev; worstBin = bin; }
+        }
 
-        INFO("numBands = " << numBands << ", worst magnitude deviation = " << worst << " dB");
+        INFO("numBands = " << numBands << ", worst magnitude deviation = " << worst
+             << " dB at " << (worstBin * kRate / kIrLength) << " Hz");
         REQUIRE(worst < 0.01f);
     }
 }

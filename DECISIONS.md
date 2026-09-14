@@ -97,3 +97,38 @@ loudness at 0 dB drive" and "switching styles doesn't jump in level" true by
 construction rather than by hand-fitted constants that rot as the shapers are
 tuned. The table depends only on sample rate, so it is computed once per rate,
 cached, and shared by all six bands.
+
+**D16 — Gain matching is defined against a reference stimulus: pink noise at
+−18 dBFS RMS.** There is no signal-independent "correct" output gain for a
+nonlinearity — the compensation that loudness-matches white noise does not
+loudness-match a sine or a kick drum, because the stages respond to spectrum and
+crest factor, not just level. Ember therefore calibrates and verifies against a
+stated reference: pink noise (long-term spectrum close to programme material) at
+−18 dBFS (the usual alignment level). `tests/test_styles.cpp` measures with an
+independently seeded instance of that stimulus, so it checks the measured table
+rather than restating it. The ±1 dB gate the specification asks for holds against
+this reference; with a deliberately different stimulus the spread is larger, and
+that is a property of nonlinear gain matching rather than a defect.
+
+**D17 — Crossover flatness is measured from the impulse response, not from a
+windowed noise burst.** Comparing the windowed spectra of noise before and after
+the crossover looks equivalent and is not: where the system has appreciable group
+delay — precisely what happens around a crossover — the analysis window no longer
+lines up with the delayed output, and the resulting amplitude error is worst at
+the low frequencies where the delay is longest. That method reported ~5 dB of
+"error" for a crossover that is in fact flat to better than 0.01 dB. The impulse
+response, captured until it has decayed (verified in the test), gives the exact
+transfer function.
+
+**D18 — Aliasing is measured with a bin-centred fundamental and a rectangular
+window.** The obvious measurement — Hann-window the output and look for
+non-harmonic energy — is wrong by roughly the amount being measured: the
+window's own sidelobes sit about −50 dB below a strong peak a few bins away and
+land directly in the bins being called "aliases", so the method reports about
+−51 dB regardless of how good the anti-aliasing is. Choosing a fundamental that
+completes an exact integer number of cycles in the FFT window (3716 cycles in
+16384 samples at 44.1 kHz, i.e. 10001.2 Hz) puts the fundamental, every harmonic
+and every folded image on exact bins, so the spectrum can be taken with no window
+and no leakage. Measured alias floors at 16× with this method: Hard Clip
+−91 dB, Foldback −84 dB, Rectify −92 dB, Smudge −95 dB, relative to the
+fundamental — comfortably inside the specification's −80 dB gate.

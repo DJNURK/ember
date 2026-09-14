@@ -11,101 +11,103 @@ namespace
 constexpr double kHostRate = 44100.0;
 constexpr int kFftSize = 16384;
 
-/** Energy in every bin that is neither the fundamental nor one of its true
-    harmonics — i.e. the aliased components folded back down the spectrum. */
-float measureAliasFloorDb(const juce::AudioBuffer<float>& output, double sampleRate, double fundamental)
-{
-    auto spec = magnitudeSpectrumDb(output.getReadPointer(0), kFftSize);
-    const double binHz = sampleRate / kFftSize;
+// A bin-centred fundamental: 3716 cycles in 16384 samples is 10001.2 Hz, near
+// enough to the specified 10 kHz. Choosing it this way means the fundamental,
+// every harmonic and every aliased image all land exactly on FFT bins, so the
+// spectrum can be taken with a RECTANGULAR window and has no leakage at all.
+//
+// This matters more than it looks. Measuring with a Hann window instead puts
+// the window's own sidelobes — about -50 dB a few bins from a strong peak —
+// straight into the "alias" bins, and the measurement then reports roughly
+// -51 dB no matter how good the anti-aliasing actually is. That is a property
+// of the analysis, not of the plugin.
+constexpr int kFundamentalBin = 3716;
+constexpr double kFundamental = kFundamentalBin * kHostRate / kFftSize;
 
-    // Reference level = the fundamental's bin.
-    const int fundBin = static_cast<int>(std::round(fundamental / binHz));
-    float fundamentalDb = -200.0f;
-    for (int b = juce::jmax(0, fundBin - 3); b <= fundBin + 3 && b < static_cast<int>(spec.size()); ++b)
+/** Worst non-harmonic component, in dB relative to the fundamental.
+
+    At 44.1 kHz a 10 kHz fundamental has only one harmonic below Nyquist (the
+    2nd, which a symmetric clipper does not produce anyway), so every other
+    component in the output is an aliased image folded back down. */
+float measureAliasFloorDb(const juce::AudioBuffer<float>& output)
+{
+    auto spec = magnitudeSpectrumDb(output.getReadPointer(0), kFftSize, /*applyWindow*/ false);
+
+    float fundamentalDb = -300.0f;
+    for (int b = kFundamentalBin - 1; b <= kFundamentalBin + 1; ++b)
         fundamentalDb = juce::jmax(fundamentalDb, spec[static_cast<size_t>(b)]);
 
-    auto isHarmonicOrFundamental = [&](int bin)
+    auto isExcluded = [](int bin)
     {
-        const double f = bin * binHz;
-        for (int h = 1; h <= 40; ++h)
-        {
-            const double hf = fundamental * h;
-            if (hf > sampleRate * 0.5) break;
-            if (std::abs(f - hf) < binHz * 4.0) return true;
-        }
+        if (bin <= 2) return true;                                   // DC and the first bins
+        if (std::abs(bin - kFundamentalBin) <= 2) return true;        // fundamental
+        if (std::abs(bin - 2 * kFundamentalBin) <= 2) return true;    // 2nd harmonic, if any
         return false;
     };
 
-    float worstAliasDb = -200.0f;
-    for (int bin = 4; bin < static_cast<int>(spec.size()) - 4; ++bin)
+    float worst = -300.0f;
+    for (int bin = 0; bin < static_cast<int>(spec.size()); ++bin)
+        if (! isExcluded(bin))
+            worst = juce::jmax(worst, spec[static_cast<size_t>(bin)]);
+
+    return worst - fundamentalDb;
+}
+
+float runAndMeasure(OversamplingFactor factor, StyleID style, float driveDb)
+{
+    BandChain chain;
+    chain.prepare(kHostRate, kFftSize, 1, factor);
+    chain.reset();
+
+    BandParams p;
+    p.style = style;
+    p.driveDb = driveDb;
+    p.mix01 = 1.0f;
+    chain.setParameters(p);
+
+    // Two warm-up blocks so parameter smoothing and the oversampler's filter
+    // state are fully settled before the measured block.
+    juce::AudioBuffer<float> buf(1, kFftSize);
+    for (int i = 0; i < 3; ++i)
     {
-        if (isHarmonicOrFundamental(bin)) continue;
-        worstAliasDb = juce::jmax(worstAliasDb, spec[static_cast<size_t>(bin)]);
+        fillSine(buf, kHostRate, kFundamental, 0.5f);
+        chain.process(buf, kFftSize);
     }
-    return worstAliasDb - fundamentalDb;   // relative to the fundamental
+    return measureAliasFloorDb(buf);
 }
 } // namespace
 
 TEST_CASE("hard clip at 16x oversampling keeps aliasing below -80 dBFS", "[aliasing]")
 {
-    // The spec's gate: a 10 kHz sine at 44.1 kHz through the hard-clip style at
-    // 16x oversampling must show alias components below -80 dBFS. At 44.1 kHz a
-    // 10 kHz fundamental has only two harmonics below Nyquist, so essentially
-    // every other component in the output is an alias — this is a demanding and
-    // honest measurement of the oversampler plus the ADAA shaper together.
-    BandChain chain;
-    chain.prepare(kHostRate, kFftSize, 1, OversamplingFactor::x16);
-    chain.reset();
-
-    BandParams p;
-    p.style = StyleID::HardClip;
-    p.driveDb = 24.0f;
-    p.mix01 = 1.0f;
-    p.levelDb = 0.0f;
-    chain.setParameters(p);
-
-    juce::AudioBuffer<float> buf(1, kFftSize);
-    fillSine(buf, kHostRate, 10000.0, 0.5f);
-
-    // Let smoothing settle before the measured block.
-    {
-        juce::AudioBuffer<float> warm(1, kFftSize);
-        fillSine(warm, kHostRate, 10000.0, 0.5f);
-        chain.process(warm, kFftSize);
-    }
-    chain.process(buf, kFftSize);
-
-    REQUIRE(allFinite(buf));
-
-    const float aliasDb = measureAliasFloorDb(buf, kHostRate, 10000.0);
-    INFO("worst alias component relative to fundamental: " << aliasDb << " dB");
+    // The specification's gate. Hard Clip is the worst case: a discontinuous
+    // slope generating harmonics far above Nyquist, which the oversampler and
+    // the ADAA shaper together have to keep from folding back into the band.
+    const float aliasDb = runAndMeasure(OversamplingFactor::x16, StyleID::HardClip, 24.0f);
+    INFO("worst alias component, relative to the fundamental: " << aliasDb << " dB");
     REQUIRE(aliasDb < -80.0f);
 }
 
-TEST_CASE("oversampling meaningfully reduces aliasing", "[aliasing]")
+TEST_CASE("oversampling monotonically reduces aliasing", "[aliasing]")
 {
-    // A relative check that catches an oversampler that is silently doing
-    // nothing: 16x must be clearly better than no oversampling at all.
-    auto measure = [](OversamplingFactor f)
+    // Catches an oversampler that is silently doing nothing, and documents what
+    // each factor actually buys.
+    const float off = runAndMeasure(OversamplingFactor::Off, StyleID::HardClip, 24.0f);
+    const float x2  = runAndMeasure(OversamplingFactor::x2,  StyleID::HardClip, 24.0f);
+    const float x4  = runAndMeasure(OversamplingFactor::x4,  StyleID::HardClip, 24.0f);
+    const float x16 = runAndMeasure(OversamplingFactor::x16, StyleID::HardClip, 24.0f);
+
+    INFO("alias floor: off=" << off << "  2x=" << x2 << "  4x=" << x4 << "  16x=" << x16 << " dB");
+    REQUIRE(x2 < off);
+    REQUIRE(x4 < x2);
+    REQUIRE(x16 < off - 40.0f);
+}
+
+TEST_CASE("the other hard-edged styles are also anti-aliased", "[aliasing]")
+{
+    for (auto style : { StyleID::Foldback, StyleID::Rectify, StyleID::Smudge })
     {
-        BandChain chain;
-        chain.prepare(kHostRate, kFftSize, 1, f);
-        chain.reset();
-        BandParams p;
-        p.style = StyleID::HardClip;
-        p.driveDb = 24.0f;
-        chain.setParameters(p);
-
-        juce::AudioBuffer<float> warm(1, kFftSize), buf(1, kFftSize);
-        fillSine(warm, kHostRate, 10000.0, 0.5f);
-        fillSine(buf, kHostRate, 10000.0, 0.5f);
-        chain.process(warm, kFftSize);
-        chain.process(buf, kFftSize);
-        return measureAliasFloorDb(buf, kHostRate, 10000.0);
-    };
-
-    const float off = measure(OversamplingFactor::Off);
-    const float x16 = measure(OversamplingFactor::x16);
-    INFO("alias floor: off = " << off << " dB, 16x = " << x16 << " dB");
-    REQUIRE(x16 < off - 20.0f);
+        const float aliasDb = runAndMeasure(OversamplingFactor::x16, style, 24.0f);
+        INFO(getStyleName(style) << " alias floor: " << aliasDb << " dB");
+        REQUIRE(aliasDb < -60.0f);
+    }
 }

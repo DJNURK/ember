@@ -44,9 +44,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # JUCE 8's Linux dependency set (docs/Linux Dependencies.md) plus ninja,
-      # xvfb (pluginval opens a window even in --validate-in-process mode) and
-      # unzip (used by scripts/run-pluginval.sh).
+      # JUCE 8's Linux dependency set (see JUCE's own docs/Linux Dependencies.md)
+      # plus ninja, xvfb (pluginval 1.x always validates in-process and still
+      # opens editor windows, so it needs a display) and unzip, which
+      # scripts/run-pluginval.sh uses to unpack the pluginval release.
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         env:
@@ -180,7 +181,9 @@ jobs:
             bash scripts/run-pluginval.sh
           fi
 
-      # scripts/run-pluginval.sh is bash-only; this is the same thing inline.
+      # Git Bash on the Windows runner ships no unzip, which
+      # scripts/run-pluginval.sh needs to unpack the release, so the same
+      # validation is inlined here instead.
       - name: pluginval (strictness 10)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -211,7 +214,7 @@ jobs:
           $failed = 0
           foreach ($t in $targets) {
             Write-Host "==> pluginval (strictness 10): $($t.FullName)"
-            & $exe --strictness-level 10 --validate-in-process --repeat 1 --timeout-ms 600000 --validate $t.FullName
+            & $exe --strictness-level 10 --repeat 1 --timeout-ms 600000 --validate $t.FullName
             if ($LASTEXITCODE -ne 0) {
               Write-Host "!! FAILED: $($t.FullName)"
               $failed = 1

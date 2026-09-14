@@ -2,7 +2,8 @@
 
 This file is the **design** of Ember's 35 factory presets. It is the source of truth from
 which `resources/presets/<Category>/<NN>_<Name>.xml` is generated once the parameter layout in
-`src/plugin/ParameterIDs.h` is frozen. No XML exists yet by design — the IDs are still moving.
+`src/plugin/ParameterIDs.h` is frozen. No per-preset XML exists yet by design — the IDs are still
+moving, so `resources/presets/` holds only the `Init.xml` placeholder.
 
 The spec asks for at least 30 presets across six categories. This library has **35**, so there
 is margin for one or two to be dropped in voicing without falling under the bar.
@@ -13,15 +14,21 @@ A preset library is worthless if every entry is "drive 20, Warm Tube". Ember's f
 built around the idea that each source material needs a *different kind* of processing, not a
 different amount of the same processing:
 
-- **Drums** are about transient behaviour and band-split control. The low band gets weight and a
-  compressive dynamics setting so it stays steady; the top band gets a negative (expansive)
-  dynamics setting so the stick and beater attack survives instead of being flattened. Crossovers
-  are placed on drum anatomy — beater click, snare body, cymbal sheen — not on round numbers.
-- **Bass** is about low-band weight *without* mud. Nearly every bass preset leaves the lowest band
-  almost dry (mix 15–45 %) and does the audible harmonic work in the mids and highs, which is what
-  actually makes bass translate on small speakers.
-- **Vocals** are about restraint and upper-mid presence. Drive stays low, band mix stays under
-  60 %, and the high band carries a small positive tone lift rather than brute drive.
+- **Drums** are about transient behaviour and band-split control. Wherever the point is to keep
+  the hit intact (01, 02, 06, 07) the low band gets weight and a compressive dynamics setting so
+  it stays steady, while the top band gets a negative (expansive) setting so the stick and beater
+  attack survives instead of being flattened. The three presets whose point is the opposite — the
+  room-mic glue of 03, the overhead density of 04 and the parallel smash of 05 — are compressive
+  in every band on purpose. Crossovers are placed on drum anatomy — beater click, snare body,
+  cymbal sheen — not on round numbers.
+- **Bass** is about low-band weight *without* mud. Four of the six bass presets (08, 09, 12, 13)
+  leave the lowest band almost dry (mix 15–45 %) and do the audible harmonic work in the mids and
+  highs, which is what actually makes bass translate on small speakers; the two that do not (10,
+  11) are the ones whose whole job is low-band weight.
+- **Vocals** are about restraint and upper-mid presence. In the four full-signal presets drive
+  stays low and band mix at or below 60 %, and the high band carries a small positive tone lift
+  rather than brute drive. The exception is 17, which drives hard on purpose and is then blended
+  in parallel at 45 % global mix.
 - **Guitar** spans clean sparkle to feedback-on-the-edge sustain, and uses the amp styles where
   they belong.
 - **Mix bus** is very gentle wideband work: drive 2–6 dB, mix 15–35 %, **auto-gain on in every
@@ -71,9 +78,13 @@ Each preset has a per-band table, a global line, and — where it applies — a 
 3. **Feedback frequency always lies inside its band's passband.** A resonance tuned outside the
    band it lives in is inaudible. Check this if crossovers are re-voiced.
 4. **Unstated parameters take their plugin defaults:** pan 0, width 100 %, feedback 0 %,
-   band bypass off, band solo off, input gain 0 dB, output gain 0 dB, dither Off, crossover mode
-   Minimum-phase LR4, offline oversampling = realtime oversampling. Any preset that departs from
-   these says so on its Global line.
+   band bypass off, band solo off, input gain 0 dB, output gain 0 dB, crossover mode
+   Minimum-phase LR4. Any preset that departs from these says so on its Global line.
+   Two parameters are the exception and are written into **every** preset rather than left
+   alone, because their plugin defaults in `Parameters.cpp` are not what a preset wants:
+   `dither` defaults to **Triangular** and `osOffline` defaults to **8×** independently of the
+   realtime factor. So every preset stores dither **Off** except 28, and every preset stores
+   offline oversampling **equal to its own realtime oversampling** except 28.
 5. **Modulation routings** are written as `<source> -> <destination>, <amount>, <curve>`.
    The amount is a signed percentage of the destination parameter's full range and maps to
    `ModConnection::amount` as `amount / 100` (so +50 % → `0.5f`). Curves are the `ModCurve` names
@@ -82,6 +93,13 @@ Each preset has a per-band table, a global line, and — where it applies — a 
 6. **Modulation sources need their own settings**, so every preset with routings also carries a
    *Source setup* line giving the XLFO / EG / follower / MIDI / macro parameters it depends on.
    A preset that ships a routing without configuring its source is a broken preset.
+   *Open gap:* where a Source setup below says `sync 1/8`, `sync 1/4`, `sync 1/16`, `sync 1/2`
+   or `sync 4 bars` (presets 29, 30, 31, 33, 35) there is **no parameter to store the division
+   in yet** — the layout in `Parameters.cpp` gives each XLFO a boolean `lfoSync`
+   (Free / Tempo Sync) and a free-running `lfoRate` in Hz, and nothing else. Those divisions are
+   the intended voicing and need either a division parameter or a stated convention for encoding
+   one in `lfoRate` before the XML can be generated. Presets 21 and 34 run their XLFO free and
+   are unaffected.
 7. **Macros ship with a sensible default position** so the preset sounds right the moment it
    loads and the macro is a "turn me" control, not a silent one.
 8. **Oversampling is chosen per preset, not globally.** Smooth tanh-class styles at low drive are
@@ -100,8 +118,12 @@ Each preset has a per-band table, a global line, and — where it applies — a 
 | 6 | Creative | 7 | `resources/presets/Creative/` |
 | | **Total** | **35** | |
 
-Preset numbering is global and stable (`01`…`35`) so the browser has a deterministic order and so
-a renamed preset never silently swaps places with another.
+Preset numbering is global and stable (`01`…`35`) so the files have a deterministic order on disk
+and a renamed preset never silently swaps places with another. It does **not** set the browser's
+order: `PresetManager::refresh()` sorts factory-first, then by category, then by the preset's
+display `name` attribute, so within a category the browser lists presets alphabetically. If the
+numbered order is wanted in the GUI too, the number has to go into the sort key, not just the
+file name.
 
 ---
 
@@ -144,7 +166,7 @@ Stereo · minimum-phase LR4.
 - Envelope Generator 1 -> Band 3 drive, +22 %, ExpoOut — transient-triggered, so the top band only
   bites on the hit and the tail stays clean.
 
-**Source setup:** Envelope Generator 1 — trigger Transient, threshold −22 dB, attack 0.5 ms,
+**Source setup:** Envelope Generator 1 — trigger Input Transient, threshold −22 dB, attack 0.5 ms,
 decay 60 ms, sustain 0 %, release 120 ms.
 
 ---
@@ -417,7 +439,7 @@ with it.*
 | 2 | > 600 | Clean Tape | 10 | 60 | 0 | 0 | 150 | 0 | — | +25 | 0 | +0.5 | +1.0 |
 
 **Global:** 2 bands · crossover 600 Hz · OS 4× · global mix 100 % · auto-gain **ON** ·
-**stereo mode Mid/Side** (the width settings act on the side signal, which is the point) ·
+**stereo mode Mid-Side** (the width settings act on the side signal, which is the point) ·
 minimum-phase LR4.
 
 ---
@@ -563,7 +585,7 @@ with almost no audible saturation.*
 | 2 | > 300 | Clean Tube | 5 | 30 | 0 | 0 | 125 | 0 | — | +10 | 0 | 0 | +0.5 |
 
 **Global:** 2 bands · crossover 300 Hz · OS 4× · global mix 100 % · auto-gain **ON** ·
-**stereo mode Mid/Side** · minimum-phase LR4.
+**stereo mode Mid-Side** · minimum-phase LR4.
 
 ---
 
@@ -708,7 +730,7 @@ auto-gain **OFF** · Stereo · minimum-phase LR4.
 - Macro 6 "Sweep Rate" -> XLFO 1 rate, +50 %, Linear.
 
 **Source setup:** XLFO 1 — sync 1/2, 5-point sine-ish shape, depth 100 %, phase 0°, smooth 50 %.
-Envelope Generator 1 — trigger Transient, threshold −26 dB, attack 2 ms, decay 120 ms,
+Envelope Generator 1 — trigger Input Transient, threshold −26 dB, attack 2 ms, decay 120 ms,
 sustain 20 %, release 200 ms. Macro 6 default 50 %.
 
 ---
@@ -871,8 +893,20 @@ left free in every preset so there is always an empty macro to assign.
    Use the exact category strings from the table above — `Drums`, `Bass`, `Vocals`, `Guitar`,
    `Mix Bus`, `Creative` — so the browser can group them. (`Init.xml` uses `category="Factory"`
    because it is not part of the six-category library.)
-6. **The generator is `ember_makepresets`**, which reads this file. If it is taught to parse the
-   per-band tables directly, the column order here is fixed and machine-readable: band index,
-   range, style, drive, mix, level, pan, width, feedback, feedback frequency, dynamics, low, mid,
-   high. The `Range (Hz)` column is derived from the crossover list and should be ignored on read;
+6. **The generator does not exist yet.** `resources/presets/Init.xml` names it
+   `ember_makepresets`, but there is no such CMake target in this repository — the only
+   executables the build defines are `ember_tests`, `ember_benchmark` and `ember_render`. Keep
+   that name when it is written, so the two files agree. If it is taught to parse the per-band
+   tables directly, the column order here is fixed and machine-readable: band index, range, style,
+   drive, mix, level, pan, width, feedback, feedback frequency, dynamics, low, mid, high. The
+   `Range (Hz)` column is derived from the crossover list and should be ignored on read;
    `—` appears only in `FB (Hz)`.
+7. **The category subdirectories need a build change to be picked up.** This manifest writes each
+   preset to `resources/presets/<Category>/<NN>_<Name>.xml`, but the top-level `CMakeLists.txt`
+   collects presets with a non-recursive `file(GLOB … "resources/presets/*.xml")` into
+   `ember_resources`. As it stands, nothing inside `Drums/`, `Bass/`, `Vocals/`, `Guitar/`,
+   `MixBus/` or `Creative/` would be compiled in, so `PresetManager::loadFactoryPresets()` would
+   find only `Init.xml`. Whoever generates the XML must either switch that glob to `GLOB_RECURSE`
+   (plus `resources/presets/*/*.xml`) or write all 35 files flat into `resources/presets/`. The
+   flat layout still works, because the browser groups on the `category` XML attribute, not on the
+   directory.

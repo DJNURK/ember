@@ -5,9 +5,10 @@ name: Release
 #
 #   Ember-<VERSION>-Windows.exe    Inno Setup installer (packaging/windows/ember.iss)
 #   Ember-<VERSION>-Windows.zip    raw Ember.vst3 bundle
-#   Ember-<VERSION>-macOS.pkg      installer (packaging/macos/build-pkg.sh), VST3 + AU
+#   Ember-<VERSION>-macOS.pkg      installer (packaging/macos/build-pkg.sh): VST3 + AU + app
 #   Ember-<VERSION>-macOS.zip      raw Ember.vst3 + Ember.component bundles
-#   Ember-<VERSION>-Linux.tar.gz   Ember.vst3 bundle + install.sh
+#   Ember-<VERSION>-Linux.tar.gz   Ember-<VERSION>-Linux/ with Ember.vst3,
+#                                  install.sh, uninstall.sh and LICENSE
 #
 # macOS binaries are universal (arm64 + x86_64) and are verified with `lipo -archs`.
 # Signing and notarisation happen only when the Apple secrets are configured; without
@@ -183,7 +184,6 @@ jobs:
         env:
           ISCC: ${{ steps.iscc.outputs.iscc }}
           ARTEFACTS: ${{ steps.art.outputs.artefacts }}
-          VST3: ${{ steps.art.outputs.vst3 }}
         run: |
           set -euo pipefail
           if [ ! -f packaging/windows/ember.iss ]; then
@@ -192,23 +192,20 @@ jobs:
           fi
           mkdir -p dist
           DIST_W="$(cygpath -w "$(cd dist && pwd)")"
-          ROOT_W="$(cygpath -w "$(pwd)")"
           ART_W="$(cygpath -w "$ARTEFACTS")"
-          VST3_W="$(cygpath -w "$VST3")"
-          STANDALONE_W="$(cygpath -w "$ARTEFACTS/Standalone")"
 
-          # /O and /F override OutputDir / OutputBaseFilename whatever the script declares,
-          # so the asset name is guaranteed. The /D defines are the script's inputs; unused
-          # ones are ignored by ISPP, so several spellings of the source dir are supplied.
+          # ember.iss consumes exactly four defines: EmberVersion, EmberSourceDir,
+          # EmberOutputDir and EmberLicenseFile. EmberSourceDir is the Ember_artefacts/<config>
+          # directory holding VST3/Ember.vst3 and Standalone/Ember.exe. The EmberLicenseFile
+          # default (resolved against the script's own folder) already points at ./LICENSE, and
+          # /O overrides OutputDir, so only the two below need passing — every other name would
+          # either be ignored or collide with one the script #defines itself.
+          # /O and /F override OutputDir / OutputBaseFilename, guaranteeing the asset name.
           "$ISCC" \
             /O"$DIST_W" \
             /F"Ember-$VERSION-Windows" \
             /DEmberVersion="$VERSION" \
             /DEmberSourceDir="$ART_W" \
-            /DEmberArtefactsDir="$ART_W" \
-            /DEmberVst3Dir="$VST3_W" \
-            /DEmberStandaloneDir="$STANDALONE_W" \
-            /DEmberRepoRoot="$ROOT_W" \
             packaging/windows/ember.iss
 
           if [ ! -f "dist/Ember-$VERSION-Windows.exe" ]; then
@@ -346,26 +343,35 @@ jobs:
           for d in build/macos-universal/Ember_artefacts/*/AU/Ember.component;   do AU="$d"; done
           for d in build/macos-universal/Ember_artefacts/*/Standalone/Ember.app; do APP="$d"; done
 
-          if [ -z "$VST3" ] || [ -z "$AU" ]; then
-            echo "::error::missing built bundles (vst3='$VST3' au='$AU')"
+          # All three are mandatory: packaging/macos/build-pkg.sh builds one component
+          # package per format and aborts if any of the three bundles is absent.
+          if [ -z "$VST3" ] || [ -z "$AU" ] || [ -z "$APP" ]; then
+            echo "::error::missing built bundles (vst3='$VST3' au='$AU' app='$APP')"
             find build/macos-universal/Ember_artefacts -maxdepth 3 -print || true
             exit 1
           fi
 
+          # build-pkg.sh takes an Ember_artefacts/<config>-shaped directory and looks for
+          # VST3/Ember.vst3, AU/Ember.component and Standalone/Ember.app inside it, so the
+          # staging tree mirrors that layout rather than flattening the bundles together.
           STAGE="$RUNNER_TEMP/stage"
-          rm -rf "$STAGE"; mkdir -p "$STAGE"
-          ditto "$VST3" "$STAGE/Ember.vst3"
-          ditto "$AU"   "$STAGE/Ember.component"
-          if [ -n "$APP" ]; then ditto "$APP" "$STAGE/Ember.app"; fi
+          rm -rf "$STAGE"; mkdir -p "$STAGE/VST3" "$STAGE/AU" "$STAGE/Standalone"
+          ditto "$VST3" "$STAGE/VST3/Ember.vst3"
+          ditto "$AU"   "$STAGE/AU/Ember.component"
+          ditto "$APP"  "$STAGE/Standalone/Ember.app"
           echo "EMBER_STAGE=$STAGE" >> "$GITHUB_ENV"
 
           # A silently single-architecture "universal" build is a classic release bug:
           # fail hard unless every shipped Mach-O carries both slices.
           FAILED=0
-          for bin in "$STAGE/Ember.vst3/Contents/MacOS/Ember" \
-                     "$STAGE/Ember.component/Contents/MacOS/Ember" \
-                     "$STAGE/Ember.app/Contents/MacOS/Ember"; do
-            [ -f "$bin" ] || continue
+          for bin in "$STAGE/VST3/Ember.vst3/Contents/MacOS/Ember" \
+                     "$STAGE/AU/Ember.component/Contents/MacOS/Ember" \
+                     "$STAGE/Standalone/Ember.app/Contents/MacOS/Ember"; do
+            if [ ! -f "$bin" ]; then
+              echo "::error::expected executable $bin does not exist"
+              FAILED=1
+              continue
+            fi
             ARCHS="$(lipo -archs "$bin")"
             echo "$bin: $ARCHS"
             for want in arm64 x86_64; do
@@ -390,8 +396,9 @@ jobs:
             IDENTITY="-"
             EXTRA=(--timestamp=none)
           fi
-          for b in "$EMBER_STAGE"/Ember.vst3 "$EMBER_STAGE"/Ember.component "$EMBER_STAGE"/Ember.app; do
-            [ -d "$b" ] || continue
+          for b in "$EMBER_STAGE/VST3/Ember.vst3" \
+                   "$EMBER_STAGE/AU/Ember.component" \
+                   "$EMBER_STAGE/Standalone/Ember.app"; do
             codesign --force --sign "$IDENTITY" "${EXTRA[@]}" "$b"
             codesign --verify --deep --strict --verbose=2 "$b"
           done
@@ -409,8 +416,9 @@ jobs:
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_PASSWORD" \
             --wait --timeout 45m
-          for b in "$EMBER_STAGE"/Ember.vst3 "$EMBER_STAGE"/Ember.component "$EMBER_STAGE"/Ember.app; do
-            [ -d "$b" ] || continue
+          for b in "$EMBER_STAGE/VST3/Ember.vst3" \
+                   "$EMBER_STAGE/AU/Ember.component" \
+                   "$EMBER_STAGE/Standalone/Ember.app"; do
             xcrun stapler staple "$b"
             xcrun stapler validate "$b"
           done
@@ -424,36 +432,20 @@ jobs:
             exit 1
           fi
           chmod +x packaging/macos/build-pkg.sh
-          mkdir -p dist "$RUNNER_TEMP/pkg"
+          mkdir -p "$RUNNER_TEMP/pkg"
           OUT="$RUNNER_TEMP/pkg/Ember-$VERSION-macOS.pkg"
           rm -f "$OUT"
 
-          # The script's inputs are supplied three ways — environment, long options and
-          # positionals — so either calling convention works.
-          export EMBER_VERSION="$VERSION"
-          export EMBER_VST3="$EMBER_STAGE/Ember.vst3"
-          export EMBER_AU="$EMBER_STAGE/Ember.component"
-          export EMBER_STAGE_DIR="$EMBER_STAGE"
-          export EMBER_PKG_OUTPUT="$OUT"
-
-          if ! packaging/macos/build-pkg.sh \
-                 --version "$VERSION" \
-                 --vst3 "$EMBER_STAGE/Ember.vst3" \
-                 --au "$EMBER_STAGE/Ember.component" \
-                 --output "$OUT"; then
-            echo "::warning::build-pkg.sh rejected the long options — retrying positionally"
-            packaging/macos/build-pkg.sh "$VERSION" "$EMBER_STAGE" "$OUT"
-          fi
+          # build-pkg.sh <version> <artefacts-dir> <output-pkg-path> — exactly three
+          # positional arguments, no options and no environment inputs. INSTALLER_SIGN_ID
+          # is deliberately left unset: the package is productsigned in the next step so
+          # that the unsigned path stays identical up to this point.
+          packaging/macos/build-pkg.sh "$VERSION" "$EMBER_STAGE" "$OUT"
 
           if [ ! -f "$OUT" ]; then
-            # Accept a package written somewhere else under the expected roots.
-            FOUND="$(find "$RUNNER_TEMP/pkg" dist build packaging -name '*.pkg' -type f 2>/dev/null | head -1 || true)"
-            if [ -n "$FOUND" ]; then
-              mv "$FOUND" "$OUT"
-            else
-              echo "::error::build-pkg.sh produced no .pkg (expected $OUT)"
-              exit 1
-            fi
+            echo "::error::build-pkg.sh reported success but did not produce $OUT"
+            ls -l "$RUNNER_TEMP/pkg" || true
+            exit 1
           fi
           echo "EMBER_PKG_UNSIGNED=$OUT" >> "$GITHUB_ENV"
           ls -l "$OUT"
@@ -489,8 +481,8 @@ jobs:
           mkdir -p dist
           PACK="$RUNNER_TEMP/zip-stage"
           rm -rf "$PACK"; mkdir -p "$PACK"
-          ditto "$EMBER_STAGE/Ember.vst3" "$PACK/Ember.vst3"
-          ditto "$EMBER_STAGE/Ember.component" "$PACK/Ember.component"
+          ditto "$EMBER_STAGE/VST3/Ember.vst3" "$PACK/Ember.vst3"
+          ditto "$EMBER_STAGE/AU/Ember.component" "$PACK/Ember.component"
           ditto -c -k --sequesterRsrc "$PACK" "dist/Ember-$VERSION-macOS.zip"
           ls -l "dist/Ember-$VERSION-macOS.zip"
 
@@ -521,7 +513,10 @@ jobs:
   linux:
     name: Linux (x86_64)
     needs: prepare
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: the release notes promise a specific glibc floor
+    # (2.39, Ubuntu 24.04), and that promise must not change silently underneath
+    # them when GitHub repoints the `latest` label at a newer image.
+    runs-on: ubuntu-24.04
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
@@ -581,20 +576,28 @@ jobs:
             find build/linux-release/Ember_artefacts -maxdepth 3 -print || true
             exit 1
           fi
-          if [ ! -f packaging/linux/install.sh ]; then
-            echo "::error::packaging/linux/install.sh is missing — it ships inside the tarball"
-            exit 1
-          fi
+          for f in packaging/linux/install.sh packaging/linux/uninstall.sh; do
+            if [ ! -f "$f" ]; then
+              echo "::error::$f is missing — it ships inside the tarball"
+              exit 1
+            fi
+          done
 
+          # install.sh documents `tar xf …; cd Ember-<VERSION>-Linux; ./install.sh` and
+          # signs off by pointing at ./uninstall.sh, so the tarball carries a single top
+          # level directory of that name holding both scripts (and the GPL text, which
+          # must accompany the binaries) rather than unpacking into the current one.
           STAGE="$RUNNER_TEMP/stage"
-          rm -rf "$STAGE"; mkdir -p "$STAGE"
-          cp -a "$VST3" "$STAGE/Ember.vst3"
-          cp -a packaging/linux/install.sh "$STAGE/install.sh"
-          chmod +x "$STAGE/install.sh"
-          find "$STAGE/Ember.vst3" -name '*.so' -exec chmod 755 {} +
+          PAYLOAD="$STAGE/Ember-$VERSION-Linux"
+          rm -rf "$STAGE"; mkdir -p "$PAYLOAD"
+          cp -a "$VST3" "$PAYLOAD/Ember.vst3"
+          cp -a packaging/linux/install.sh packaging/linux/uninstall.sh "$PAYLOAD/"
+          cp -a LICENSE "$PAYLOAD/LICENSE"
+          chmod +x "$PAYLOAD/install.sh" "$PAYLOAD/uninstall.sh"
+          find "$PAYLOAD/Ember.vst3" -name '*.so' -exec chmod 755 {} +
 
           mkdir -p dist
-          tar -czf "dist/Ember-$VERSION-Linux.tar.gz" -C "$STAGE" Ember.vst3 install.sh
+          tar -czf "dist/Ember-$VERSION-Linux.tar.gz" -C "$STAGE" "Ember-$VERSION-Linux"
           tar -tzf "dist/Ember-$VERSION-Linux.tar.gz" | head -20
           ls -l "dist/Ember-$VERSION-Linux.tar.gz"
 
@@ -663,9 +666,9 @@ jobs:
             echo "| --- | --- | --- |"
             echo "| \`Ember-$VERSION-Windows.exe\` | Windows 10/11, 64-bit | Installer: VST3 + Standalone |"
             echo "| \`Ember-$VERSION-Windows.zip\` | Windows 10/11, 64-bit | Raw \`Ember.vst3\` bundle |"
-            echo "| \`Ember-$VERSION-macOS.pkg\` | macOS 10.15+, Apple silicon & Intel | Installer: VST3 + Audio Unit |"
+            echo "| \`Ember-$VERSION-macOS.pkg\` | macOS 10.15+, Apple silicon & Intel | Installer: VST3 + Audio Unit + Standalone |"
             echo "| \`Ember-$VERSION-macOS.zip\` | macOS 10.15+, Apple silicon & Intel | Raw \`Ember.vst3\` + \`Ember.component\` |"
-            echo "| \`Ember-$VERSION-Linux.tar.gz\` | Ubuntu 24.04+ / glibc 2.39+, x86_64 | \`Ember.vst3\` + \`install.sh\` |"
+            echo "| \`Ember-$VERSION-Linux.tar.gz\` | Ubuntu 24.04+ / glibc 2.39+, x86_64 | \`Ember.vst3\` + \`install.sh\` + \`uninstall.sh\` |"
             echo
             echo "## Requirements"
             echo
@@ -682,8 +685,10 @@ jobs:
             echo
             echo "- Windows: \`C:\\Program Files\\Common Files\\VST3\\\`"
             echo "- macOS: \`/Library/Audio/Plug-Ins/VST3/\` and \`/Library/Audio/Plug-Ins/Components/\`"
-            echo "- Linux: \`~/.vst3/\` (per user) or \`/usr/lib/vst3/\` (system-wide) — or run the"
-            echo "  bundled \`install.sh\`, which does exactly that."
+            echo "- Linux: \`~/.vst3/\` (per user) or \`/usr/local/lib/vst3/\` (system-wide) — or"
+            echo "  unpack the tarball, \`cd Ember-$VERSION-Linux\` and run the bundled"
+            echo "  \`install.sh\` (add \`--system\`, under \`sudo\`, for the system-wide location),"
+            echo "  which does exactly that. \`./uninstall.sh\` takes the same options and undoes it."
             echo
             echo "## macOS Gatekeeper"
             echo

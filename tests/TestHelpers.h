@@ -24,6 +24,48 @@ inline void fillWhiteNoise(juce::AudioBuffer<float>& buf, uint32_t seed = 0x1234
     }
 }
 
+/** Deterministic pink-ish noise normalised to a target RMS in dBFS.
+
+    Gain matching a nonlinearity is inherently signal-dependent — there is no
+    single "correct" output gain for every possible input — so the match is
+    defined against a reference stimulus: pink noise at -18 dBFS RMS, the usual
+    alignment level, whose long-term spectrum resembles programme material. The
+    seed here differs from the calibrator's, so this is an independent check of
+    the measured table rather than a restatement of it. */
+inline void fillPinkNoise(juce::AudioBuffer<float>& buf, uint32_t seed = 0x51EEDu, float targetRmsDb = -18.0f)
+{
+    for (int ch = 0; ch < buf.getNumChannels(); ++ch)
+    {
+        uint32_t s = seed + static_cast<uint32_t>(ch) * 2654435761u;
+        // Paul Kellet's economy pink filter: three one-poles summed.
+        float b0 = 0.0f, b1 = 0.0f, b2 = 0.0f;
+        auto* d = buf.getWritePointer(ch);
+        for (int i = 0; i < buf.getNumSamples(); ++i)
+        {
+            s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+            const float white = static_cast<float>(static_cast<int32_t>(s)) / 2147483648.0f;
+            b0 = 0.99765f * b0 + white * 0.0990460f;
+            b1 = 0.96300f * b1 + white * 0.2965164f;
+            b2 = 0.57000f * b2 + white * 1.0526913f;
+            d[i] = b0 + b1 + b2 + white * 0.1848f;
+        }
+
+        // Remove the DC the long time constants leave behind, then normalise.
+        double mean = 0.0;
+        for (int i = 0; i < buf.getNumSamples(); ++i) mean += d[i];
+        mean /= juce::jmax(1, buf.getNumSamples());
+        double sumSq = 0.0;
+        for (int i = 0; i < buf.getNumSamples(); ++i)
+        {
+            d[i] -= static_cast<float>(mean);
+            sumSq += static_cast<double>(d[i]) * d[i];
+        }
+        const double r = std::sqrt(sumSq / juce::jmax(1, buf.getNumSamples()));
+        const float scale = r > 1.0e-12 ? static_cast<float>(juce::Decibels::decibelsToGain(targetRmsDb) / r) : 1.0f;
+        for (int i = 0; i < buf.getNumSamples(); ++i) d[i] *= scale;
+    }
+}
+
 inline void fillSine(juce::AudioBuffer<float>& buf, double sampleRate, double freq, float amplitude = 0.5f)
 {
     const double w = juce::MathConstants<double>::twoPi * freq / sampleRate;
@@ -76,6 +118,33 @@ inline std::vector<float> magnitudeSpectrumDb(const float* signal, int fftSize, 
             : 1.0f;
         scratch[static_cast<size_t>(i)] = signal[i] * w;
     }
+    fft.performFrequencyOnlyForwardTransform(scratch.data(), true);
+
+    std::vector<float> out(static_cast<size_t>(fftSize / 2));
+    for (int i = 0; i < fftSize / 2; ++i)
+        out[static_cast<size_t>(i)] =
+            juce::Decibels::gainToDecibels(scratch[static_cast<size_t>(i)] + 1.0e-20f);
+    return out;
+}
+
+/** Exact magnitude response, in dB per bin, of a system given its impulse
+    response.
+
+    This is the right way to measure a filter's magnitude flatness. Comparing
+    the windowed spectra of a noise burst before and after the filter looks
+    equivalent but is not: where the system has appreciable group delay — which
+    is exactly what happens around a crossover — the window no longer lines up
+    with the delayed output, and the resulting amplitude error is largest at the
+    low frequencies where the delay is longest. An impulse response, captured
+    until it has decayed, has no such error. */
+inline std::vector<float> impulseResponseMagnitudeDb(const float* impulseResponse, int fftSize)
+{
+    const int order = static_cast<int>(std::round(std::log2(static_cast<double>(fftSize))));
+    juce::dsp::FFT fft(order);
+    std::vector<float> scratch(static_cast<size_t>(fftSize) * 2, 0.0f);
+    for (int i = 0; i < fftSize; ++i)
+        scratch[static_cast<size_t>(i)] = impulseResponse[i];   // no window: the IR is already finite
+
     fft.performFrequencyOnlyForwardTransform(scratch.data(), true);
 
     std::vector<float> out(static_cast<size_t>(fftSize / 2));

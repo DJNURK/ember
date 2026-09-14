@@ -126,7 +126,7 @@ TEST_CASE("calibrated styles are loudness matched at 0 dB drive", "[styles][gain
     const auto& cal = StyleCalibrator::getForSampleRate(kRate);
 
     juce::AudioBuffer<float> reference(1, kBlock * 8);
-    fillWhiteNoise(reference, 0xC0FFEEu, 0.2f);
+    fillPinkNoise(reference, 0xC0FFEEu, -18.0f);
     const float inputRms = rms(reference, 0, kBlock, kBlock * 6);
 
     for (int i = 0; i < kNumStyles; ++i)
@@ -159,7 +159,7 @@ TEST_CASE("gain matching holds across the drive range", "[styles][gainmatch]")
     const auto& cal = StyleCalibrator::getForSampleRate(kRate);
 
     juce::AudioBuffer<float> reference(1, kBlock * 8);
-    fillWhiteNoise(reference, 0xFEEDu, 0.2f);
+    fillPinkNoise(reference, 0xFEEDu, -18.0f);
     const float inputRms = rms(reference, 0, kBlock, kBlock * 6);
 
     for (int i = 0; i < kNumStyles; ++i)

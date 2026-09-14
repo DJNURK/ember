@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Ember — one-command local build for Windows.
+    Ember - one-command local build for Windows.
 
 .DESCRIPTION
     Builds the Ember plug-in (VST3 + Standalone) through the presets in
@@ -32,7 +32,7 @@
     Parallel compile jobs. Defaults to the number of logical processors.
 
 .PARAMETER Pluginval
-    Run scripts/run-pluginval.sh after a successful build (needs bash — Git for
+    Run scripts/run-pluginval.sh after a successful build (needs bash - Git for
     Windows ships one).
 
 .PARAMETER Help
@@ -139,7 +139,10 @@ if (-not $ctestCmd -and -not $NoTests) {
     Write-Fail "ctest was not found on PATH even though cmake was ($($cmakeCmd.Source)). Re-install CMake, or pass -NoTests."
 }
 
-$versionLine = (& cmake --version 2>&1 | Select-Object -First 1)
+# No 2>&1 here on purpose: with $ErrorActionPreference = 'Stop', redirecting a
+# native program's stderr into the success stream turns any stray stderr line
+# into a terminating NativeCommandError on Windows PowerShell 5.1.
+$versionLine = (& cmake --version | Select-Object -First 1)
 $versionText = [string]$versionLine
 $match = [regex]::Match($versionText, '(\d+)\.(\d+)(?:\.(\d+))?')
 if (-not $match.Success) {
@@ -151,7 +154,7 @@ $cmVersion = $match.Value
 
 if ($cmMajor -lt 3 -or ($cmMajor -eq 3 -and $cmMinor -lt 22)) {
     Write-Fail @"
-CMake $cmVersion is too old — Ember needs 3.22 or newer
+CMake $cmVersion is too old - Ember needs 3.22 or newer
 (CMakePresets.json v3 and 'cmake --preset' require it).
 
 Upgrade with:
@@ -182,7 +185,7 @@ Visual Studio 2022 was not detected. The windows-* presets use the
 "Visual Studio 17 2022" generator, which needs VS 2022 (any edition) or the
 Build Tools with the "Desktop development with C++" workload:
     winget install --id Microsoft.VisualStudio.2022.BuildTools
-Continuing anyway — CMake will report the real error if it is genuinely absent.
+Continuing anyway - CMake will report the real error if it is genuinely absent.
 '@
 }
 
@@ -192,7 +195,7 @@ if ($Jobs -le 0) {
 }
 
 # --------------------------------------------------------------- build
-Write-Step "Ember 1.0.0 — preset $Preset ($Configuration), $Jobs job(s)"
+Write-Step "Ember 1.0.0 - preset $Preset ($Configuration), $Jobs job(s)"
 Write-Host "    cmake $cmVersion, source $Root" -ForegroundColor DarkGray
 
 Push-Location $Root
@@ -239,7 +242,7 @@ try {
                 -Arguments @('--preset', $Preset, '--parallel', "$Jobs") -What 'ctest'
         }
         else {
-            Write-Warn "no ctest preset named '$Preset' in CMakePresets.json — running ctest directly in $BuildDir"
+            Write-Warn "no ctest preset named '$Preset' in CMakePresets.json - running ctest directly in $BuildDir"
             Invoke-Checked -Exe 'ctest' `
                 -Arguments @('--test-dir', $BuildDir, '-C', $Configuration,
                              '--output-on-failure', '--parallel', "$Jobs") -What 'ctest'
@@ -251,9 +254,11 @@ try {
     # If the configuration directory is not where we expect it, fall back to
     # whatever config dir actually exists so the paths printed are never a lie.
     if (-not (Test-Path $ArtefactDir)) {
-        $root = Join-Path $BuildDir 'Ember_artefacts'
-        if (Test-Path $root) {
-            $candidate = Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
+        # NB: not $root - PowerShell variable names are case-insensitive, so that
+        # would silently clobber $Root (the repo root) used further down.
+        $artefactRoot = Join-Path $BuildDir 'Ember_artefacts'
+        if (Test-Path $artefactRoot) {
+            $candidate = Get-ChildItem -LiteralPath $artefactRoot -Directory -ErrorAction SilentlyContinue |
                 Where-Object { $_.Name -ne 'JuceLibraryCode' } |
                 Select-Object -First 1
             if ($candidate) { $ArtefactDir = $candidate.FullName }
@@ -282,7 +287,7 @@ try {
     }
 
     if (-not $foundAny) {
-        Write-Warn "no artefacts found under $ArtefactDir — check the build output above"
+        Write-Warn "no artefacts found under $ArtefactDir - check the build output above"
     }
 
     Write-Host ''

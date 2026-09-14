@@ -54,9 +54,11 @@ section below.
 
 ### macOS
 
-1. Open **`Ember-1.0.0-macOS.pkg`**. This installs both formats:
+1. Open **`Ember-1.0.0-macOS.pkg`**. It offers three components, all selected by default —
+   untick any you do not want:
    - VST3 → `/Library/Audio/Plug-Ins/VST3/Ember.vst3`
    - Audio Unit → `/Library/Audio/Plug-Ins/Components/Ember.component`
+   - Standalone app → `/Applications/Ember.app`
 2. **If the build you downloaded is unsigned**, macOS Gatekeeper will refuse to open it with
    a message like *"Ember-1.0.0-macOS.pkg cannot be opened because it is from an
    unidentified developer."* Two ways around it:
@@ -84,20 +86,22 @@ section below.
 
 ### Linux
 
-1. Extract the archive and run the installer script:
+1. Extract the archive and run the installer script. The tarball holds `Ember.vst3` and
+   `install.sh` at its top level, so unpack it into a directory of its own:
 
    ```sh
-   tar -xzf Ember-1.0.0-Linux.tar.gz
+   mkdir Ember-1.0.0-Linux
+   tar -xzf Ember-1.0.0-Linux.tar.gz -C Ember-1.0.0-Linux
    cd Ember-1.0.0-Linux
    ./install.sh
    ```
 
 2. `install.sh` copies `Ember.vst3` into **`~/.vst3/`**, the standard per-user VST3 folder.
-   To install for every user on the machine instead, copy it to `/usr/local/lib/vst3/`
-   yourself:
+   To install for every user on the machine instead, or into a directory of your choosing:
 
    ```sh
-   sudo cp -r Ember.vst3 /usr/local/lib/vst3/
+   sudo ./install.sh --system          # /usr/local/lib/vst3
+   ./install.sh --prefix /opt/vst3     # /opt/vst3/Ember.vst3
    ```
 
 3. Rescan plugins in your DAW. If your host does not search `~/.vst3`, add that folder to its
@@ -232,7 +236,20 @@ Override the defaults with environment variables: `STRICTNESS=10` (the default),
 
 **Syntax check** — `scripts/syntax-check.sh src/dsp/Crossover.cpp` compiles a single
 translation unit with the real build flags and no linking. Handy for a fast iteration loop
-while the tree is mid-change.
+while the tree is mid-change. Its flag list is baked in from `build/compile_commands.json`,
+so it needs a plain (non-preset) configure in `build/` rather than one of the preset
+directories, and the committed flags carry absolute paths from the machine that generated
+them — regenerate them with `scripts/refresh-syntax-flags.py` on yours:
+
+```sh
+cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+./scripts/refresh-syntax-flags.py
+./scripts/syntax-check.sh src/dsp/Crossover.cpp
+```
+
+**Formatting** — `scripts/format.sh` reformats every tracked source under `src/` and
+`tests/` with the repo's `.clang-format`; `scripts/format.sh --check` changes nothing and
+fails if anything is out of style, which is what CI runs.
 
 **Manual checklist** — host and hardware behaviour that no automated test covers lives in
 [`docs/TESTING.md`](docs/TESTING.md). Work through it before tagging a release.
@@ -246,10 +263,12 @@ while the tree is mid-change.
 ├── CMakeLists.txt          top-level build: options, juce_add_plugin(Ember)
 ├── CMakePresets.json       the configure / build / test presets listed above
 ├── CHANGELOG.md            release history, Keep a Changelog format
+├── DECISIONS.md            the design decisions and why they were made
 ├── LICENSE                 GNU GPL v3
 ├── cmake/
 │   └── Dependencies.cmake  pinned FetchContent declarations (JUCE, Catch2)
 ├── docs/
+│   ├── MANUAL.md           the user manual
 │   ├── PLAN.md             milestones and architecture
 │   ├── STATUS.md           current milestone state
 │   └── TESTING.md          the manual release checklist
@@ -258,20 +277,21 @@ while the tree is mid-change.
 │   ├── macos/              .pkg sources
 │   └── linux/              tarball + install.sh sources
 ├── resources/
-│   ├── fonts/  icons/      GUI assets
-│   └── presets/            factory presets, compiled in as binary data
+│   └── presets/            the factory preset library — MANIFEST.md is its design,
+│                           the XML alongside it is compiled in as binary data
 ├── scripts/
 │   ├── build.sh            one-command build (macOS / Linux)
 │   ├── build.ps1           one-command build (Windows)
+│   ├── format.sh           clang-format entry point, shared with CI
 │   ├── run-pluginval.sh    fetch + run pluginval at strictness 10
-│   └── syntax-check.sh     single-file syntax check with real build flags
+│   ├── syntax-check.sh     single-file syntax check with real build flags
+│   └── refresh-syntax-flags.py  regenerates those flags from compile_commands.json
 ├── src/
 │   ├── CMakeLists.txt      ember_dsp static library + the Ember plugin target
 │   ├── dsp/                the audio engine — crossovers, oversampling, band chain
 │   │   ├── styles/         the 19 saturation shapers, grouped by family
 │   │   └── modulation/     control-rate modulation sources and routing graph
-│   ├── gui/                editor components, spectrum display, mod matrix view
-│   └── plugin/             AudioProcessor, editor shell, parameter definitions
+│   └── plugin/             AudioProcessor, editor, parameter definitions
 ├── tests/                  Catch2 unit tests, benchmark.cpp, render_tool.cpp
 ├── test-renders/           output of ember_render (git-ignored)
 └── .github/workflows/      CI: build matrix, tests, pluginval, release

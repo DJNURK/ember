@@ -1,5 +1,5 @@
 ; ===========================================================================
-;  Ember — Windows installer (Inno Setup 6)
+;  Ember - Windows installer (Inno Setup 6)
 ;
 ;  Builds Ember-<version>-Windows.exe, which installs:
 ;    * Ember.vst3  ->  {commoncf64}\VST3\        (C:\Program Files\Common Files\VST3)
@@ -14,10 +14,14 @@
 ;
 ;  All three defines are optional; the defaults below assume the layout produced
 ;  by `cmake --build --preset windows-release`. Prefer absolute paths for
-;  /DEmberSourceDir — a relative one is resolved against this script's folder.
+;  /DEmberSourceDir - a relative one is resolved against this script's folder.
 ;
 ;  Requires Inno Setup 6 (https://jrsoftware.org/isdl.php). 64-bit only.
 ; ===========================================================================
+
+#if VER < EncodeVer(6,0,0)
+  #error "This script requires Inno Setup 6 or newer (https://jrsoftware.org/isdl.php)."
+#endif
 
 #ifndef EmberVersion
   #define EmberVersion "1.0.0"
@@ -58,7 +62,7 @@
 #if FileExists(EmberStandaloneExe)
   #define EmberHaveStandalone
 #else
-  #pragma message "Ember.exe not found under " + EmberSrc + "\Standalone — building a VST3-only installer."
+  #pragma message "Ember.exe was not found under <EmberSourceDir>\Standalone: building a VST3-only installer."
 #endif
 
 [Setup]
@@ -82,6 +86,10 @@ DefaultDirName={autopf}\{#EmberPublisher}\{#EmberName}
 DefaultGroupName={#EmberPublisher}
 DisableProgramGroupPage=yes
 DisableWelcomePage=no
+#ifndef EmberHaveStandalone
+; {app} is only used by the standalone, so do not ask for a folder without it.
+DisableDirPage=yes
+#endif
 LicenseFile={#EmberLicenseFile}
 
 OutputDir={#EmberOutputDir}
@@ -92,7 +100,7 @@ WizardStyle=modern
 
 ; 64-bit only. x64compatible also covers ARM64 machines running x64 code;
 ; it needs Inno Setup 6.3, so fall back to the older identifier on 6.0-6.2.
-#if Ver >= EncodeVer(6,3,0,0)
+#if VER >= EncodeVer(6,3,0)
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 #else
