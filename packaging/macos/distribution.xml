@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!--
+    productbuild distribution file for the Ember installer.
+
+    build-pkg.sh copies this file into a temporary directory, replaces every
+    __EMBER_VERSION__ with the version being built, and drops the <license>
+    line if the repository has no LICENSE file. Running productbuild against
+    this file directly also works; the title then shows the literal
+    placeholder, and LICENSE.txt must exist in the --resources directory.
+-->
+<installer-gui-script minSpecVersion="2">
+    <title>Ember __EMBER_VERSION__</title>
+    <organization>audio.ember</organization>
+
+    <!-- Ember ships as a universal binary; allow installation on both slices. -->
+    <options customize="allow" require-scripts="false" rootVolumeOnly="true"
+             hostArchitectures="arm64,x86_64"/>
+
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+
+    <volume-check>
+        <allowed-os-versions>
+            <os-version min="10.15"/>
+        </allowed-os-versions>
+    </volume-check>
+
+    <license file="LICENSE.txt" mime-type="text/plain"/>
+
+    <!-- Each format is an independently selectable choice. -->
+    <choices-outline>
+        <line choice="audio.ember.plugin.vst3"/>
+        <line choice="audio.ember.plugin.au"/>
+        <line choice="audio.ember.plugin.standalone"/>
+    </choices-outline>
+
+    <choice id="audio.ember.plugin.vst3"
+            title="VST3 Plug-In"
+            description="Ember.vst3, installed into /Library/Audio/Plug-Ins/VST3. For Cubase, Live, Reaper, Studio One, Bitwig and any other VST3 host."
+            visible="true" start_selected="true" start_enabled="true">
+        <pkg-ref id="audio.ember.plugin.vst3"/>
+    </choice>
+
+    <choice id="audio.ember.plugin.au"
+            title="Audio Unit"
+            description="Ember.component, installed into /Library/Audio/Plug-Ins/Components. For Logic Pro, GarageBand, MainStage and other AU hosts."
+            visible="true" start_selected="true" start_enabled="true">
+        <pkg-ref id="audio.ember.plugin.au"/>
+    </choice>
+
+    <choice id="audio.ember.plugin.standalone"
+            title="Standalone Application"
+            description="Ember.app, installed into /Applications. Runs Ember without a DAW, using CoreAudio directly."
+            visible="true" start_selected="true" start_enabled="true">
+        <pkg-ref id="audio.ember.plugin.standalone"/>
+    </choice>
+
+    <pkg-ref id="audio.ember.plugin.vst3"
+             version="__EMBER_VERSION__" onConclusion="none">#Ember-VST3.pkg</pkg-ref>
+    <pkg-ref id="audio.ember.plugin.au"
+             version="__EMBER_VERSION__" onConclusion="none">#Ember-AU.pkg</pkg-ref>
+    <pkg-ref id="audio.ember.plugin.standalone"
+             version="__EMBER_VERSION__" onConclusion="none">#Ember-Standalone.pkg</pkg-ref>
+</installer-gui-script>

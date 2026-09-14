@@ -1,0 +1,759 @@
+name: Release
+
+# Tagging v<x.y.z> builds every shipping artefact on its native OS and publishes
+# them to a GitHub Release. The five assets produced are:
+#
+#   Ember-<VERSION>-Windows.exe    Inno Setup installer (packaging/windows/ember.iss)
+#   Ember-<VERSION>-Windows.zip    raw Ember.vst3 bundle
+#   Ember-<VERSION>-macOS.pkg      installer (packaging/macos/build-pkg.sh), VST3 + AU
+#   Ember-<VERSION>-macOS.zip      raw Ember.vst3 + Ember.component bundles
+#   Ember-<VERSION>-Linux.tar.gz   Ember.vst3 bundle + install.sh
+#
+# macOS binaries are universal (arm64 + x86_64) and are verified with `lipo -archs`.
+# Signing and notarisation happen only when the Apple secrets are configured; without
+# them the release is still produced, ad-hoc signed, and the notes carry the
+# right-click-Open / `xattr -cr` workaround.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, without the leading v (e.g. 1.0.0). Publishes a draft release.'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------- version
+  prepare:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      draft: ${{ steps.v.outputs.draft }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive VERSION from the tag
+        id: v
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="${INPUT_VERSION#v}"
+            DRAFT=true
+          else
+            VERSION="${REF_NAME#v}"
+            DRAFT=false
+          fi
+          TAG="v$VERSION"
+
+          if [ -z "$VERSION" ]; then
+            echo "::error::could not derive a version (ref '$REF_NAME')"
+            exit 1
+          fi
+          case "$VERSION" in
+            *[!0-9A-Za-z.+-]*)
+              echo "::error::version '$VERSION' contains characters that are not safe in a filename"
+              exit 1
+              ;;
+          esac
+
+          # The plug-in reports the version baked into project(Ember VERSION ...).
+          # A mismatch means the binaries would identify themselves as a different
+          # release than the tag; warn loudly but do not block the build.
+          CMAKE_VERSION="$(grep -m1 -oE '^[[:space:]]*VERSION[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt \
+                           | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)"
+          if [ -n "$CMAKE_VERSION" ] && [ "$CMAKE_VERSION" != "${VERSION%%-*}" ]; then
+            echo "::warning::tag version $VERSION does not match project() version $CMAKE_VERSION in CMakeLists.txt"
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+            echo "draft=$DRAFT"
+          } >> "$GITHUB_OUTPUT"
+          echo "Building Ember $VERSION (tag $TAG, draft=$DRAFT)"
+
+  # ---------------------------------------------------------------- Windows
+  windows:
+    name: Windows (x64)
+    needs: prepare
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/windows-release/_deps
+          key: windows-deps-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: |
+            windows-deps-
+
+      - name: Configure
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --preset windows-release \
+            -D EMBER_BUILD_TESTS=OFF \
+            -D EMBER_BUILD_BENCHMARK=OFF
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build --preset windows-release --target Ember_VST3 Ember_Standalone
+
+      - name: Locate artefacts
+        id: art
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          VST3=""
+          for d in build/windows-release/Ember_artefacts/*/VST3/Ember.vst3; do VST3="$d"; done
+          if [ -z "$VST3" ]; then
+            echo "::error::no Ember.vst3 under build/windows-release/Ember_artefacts/*/VST3/"
+            find build/windows-release/Ember_artefacts -maxdepth 3 -print || true
+            exit 1
+          fi
+          ARTEFACTS="$(cd "$(dirname "$(dirname "$VST3")")" && pwd)"
+          echo "vst3=$VST3" >> "$GITHUB_OUTPUT"
+          echo "artefacts=$ARTEFACTS" >> "$GITHUB_OUTPUT"
+          echo "VST3 bundle: $VST3"
+          echo "artefacts dir: $ARTEFACTS"
+
+      - name: Zip the raw VST3 bundle
+        shell: bash
+        env:
+          VST3: ${{ steps.art.outputs.vst3 }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          DIST_W="$(cygpath -w "$(cd dist && pwd)")"
+          ( cd "$(dirname "$VST3")" && 7z a -tzip -mx=9 "$DIST_W\\Ember-$VERSION-Windows.zip" "Ember.vst3" >/dev/null )
+          ls -l "dist/Ember-$VERSION-Windows.zip"
+
+      - name: Ensure Inno Setup is available
+        id: iscc
+        shell: bash
+        run: |
+          set -euo pipefail
+          find_iscc() {
+            for p in "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" \
+                     "/c/Program Files/Inno Setup 6/ISCC.exe" \
+                     "/c/ProgramData/chocolatey/bin/ISCC.exe"; do
+              [ -x "$p" ] && { echo "$p"; return 0; }
+            done
+            command -v iscc 2>/dev/null && return 0
+            command -v ISCC 2>/dev/null && return 0
+            return 1
+          }
+          if ! ISCC="$(find_iscc)"; then
+            echo "Inno Setup not preinstalled — installing via choco"
+            choco install innosetup --no-progress -y
+            ISCC="$(find_iscc)" || { echo "::error::Inno Setup still not found after choco install"; exit 1; }
+          fi
+          echo "iscc=$ISCC" >> "$GITHUB_OUTPUT"
+          "$ISCC" /? | head -3 || true
+
+      - name: Build the Inno Setup installer
+        shell: bash
+        env:
+          ISCC: ${{ steps.iscc.outputs.iscc }}
+          ARTEFACTS: ${{ steps.art.outputs.artefacts }}
+          VST3: ${{ steps.art.outputs.vst3 }}
+        run: |
+          set -euo pipefail
+          if [ ! -f packaging/windows/ember.iss ]; then
+            echo "::error::packaging/windows/ember.iss is missing — the Windows installer cannot be built"
+            exit 1
+          fi
+          mkdir -p dist
+          DIST_W="$(cygpath -w "$(cd dist && pwd)")"
+          ROOT_W="$(cygpath -w "$(pwd)")"
+          ART_W="$(cygpath -w "$ARTEFACTS")"
+          VST3_W="$(cygpath -w "$VST3")"
+          STANDALONE_W="$(cygpath -w "$ARTEFACTS/Standalone")"
+
+          # /O and /F override OutputDir / OutputBaseFilename whatever the script declares,
+          # so the asset name is guaranteed. The /D defines are the script's inputs; unused
+          # ones are ignored by ISPP, so several spellings of the source dir are supplied.
+          "$ISCC" \
+            /O"$DIST_W" \
+            /F"Ember-$VERSION-Windows" \
+            /DEmberVersion="$VERSION" \
+            /DEmberSourceDir="$ART_W" \
+            /DEmberArtefactsDir="$ART_W" \
+            /DEmberVst3Dir="$VST3_W" \
+            /DEmberStandaloneDir="$STANDALONE_W" \
+            /DEmberRepoRoot="$ROOT_W" \
+            packaging/windows/ember.iss
+
+          if [ ! -f "dist/Ember-$VERSION-Windows.exe" ]; then
+            echo "::error::iscc did not produce dist/Ember-$VERSION-Windows.exe"
+            ls -l dist || true
+            exit 1
+          fi
+          ls -l "dist/Ember-$VERSION-Windows.exe"
+
+      - name: Upload Windows assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ember-windows
+          path: |
+            dist/Ember-${{ needs.prepare.outputs.version }}-Windows.exe
+            dist/Ember-${{ needs.prepare.outputs.version }}-Windows.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------- macOS
+  macos:
+    name: macOS (universal)
+    needs: prepare
+    runs-on: macos-latest
+    outputs:
+      signed: ${{ steps.signing.outputs.enabled }}
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      # Secrets are copied into the environment here because `if:` conditions cannot
+      # test `secrets.*` directly; every signing step keys off steps.signing.outputs.
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+      APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+      APPLE_INSTALLER_CERT_P12_BASE64: ${{ secrets.APPLE_INSTALLER_CERT_P12_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/macos-universal/_deps
+          key: macos-deps-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: |
+            macos-deps-
+
+      - name: Install Ninja
+        run: command -v ninja >/dev/null || brew install ninja
+
+      - name: Decide whether signing is possible
+        id: signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${APPLE_ID:-}" ] \
+             && [ -n "${APPLE_TEAM_ID:-}" ] \
+             && [ -n "${APPLE_APP_PASSWORD:-}" ] \
+             && [ -n "${APPLE_CERT_P12_BASE64:-}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "Apple credentials present — builds will be Developer ID signed and notarised."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Apple signing secrets are not configured — producing an ad-hoc signed release."
+          fi
+
+      - name: Import signing certificates
+        if: steps.signing.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/ember-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "EMBER_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+
+          printf '%s' "$APPLE_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/app-cert.p12"
+          security import "$RUNNER_TEMP/app-cert.p12" -k "$KEYCHAIN" \
+            -P "${APPLE_CERT_PASSWORD:-}" -A -T /usr/bin/codesign -T /usr/bin/productsign
+
+          if [ -n "${APPLE_INSTALLER_CERT_P12_BASE64:-}" ]; then
+            printf '%s' "$APPLE_INSTALLER_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/installer-cert.p12"
+            security import "$RUNNER_TEMP/installer-cert.p12" -k "$KEYCHAIN" \
+              -P "${APPLE_CERT_PASSWORD:-}" -A -T /usr/bin/codesign -T /usr/bin/productsign
+          fi
+
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+
+          APP_ID="$(security find-identity -v -p codesigning "$KEYCHAIN" \
+                    | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)"
+          INSTALLER_ID="$(security find-identity -v "$KEYCHAIN" \
+                    | sed -n 's/.*"\(Developer ID Installer:.*\)"/\1/p' | head -1)"
+
+          if [ -z "$APP_ID" ]; then
+            echo "::error::no 'Developer ID Application' identity found in the imported certificate"
+            security find-identity -v "$KEYCHAIN" || true
+            exit 1
+          fi
+          echo "EMBER_APP_IDENTITY=$APP_ID" >> "$GITHUB_ENV"
+          echo "EMBER_INSTALLER_IDENTITY=$INSTALLER_ID" >> "$GITHUB_ENV"
+          echo "application identity: $APP_ID"
+          if [ -z "$INSTALLER_ID" ]; then
+            echo "::warning::no 'Developer ID Installer' identity — the .pkg will not be productsigned"
+          else
+            echo "installer identity:   $INSTALLER_ID"
+          fi
+          rm -f "$RUNNER_TEMP"/*.p12
+
+      - name: Configure (universal)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --preset macos-universal \
+            -D EMBER_BUILD_TESTS=OFF \
+            -D EMBER_BUILD_BENCHMARK=OFF
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build --preset macos-universal --target Ember_VST3 Ember_AU Ember_Standalone
+
+      - name: Stage bundles and verify universal binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          VST3=""; AU=""; APP=""
+          for d in build/macos-universal/Ember_artefacts/*/VST3/Ember.vst3;      do VST3="$d"; done
+          for d in build/macos-universal/Ember_artefacts/*/AU/Ember.component;   do AU="$d"; done
+          for d in build/macos-universal/Ember_artefacts/*/Standalone/Ember.app; do APP="$d"; done
+
+          if [ -z "$VST3" ] || [ -z "$AU" ]; then
+            echo "::error::missing built bundles (vst3='$VST3' au='$AU')"
+            find build/macos-universal/Ember_artefacts -maxdepth 3 -print || true
+            exit 1
+          fi
+
+          STAGE="$RUNNER_TEMP/stage"
+          rm -rf "$STAGE"; mkdir -p "$STAGE"
+          ditto "$VST3" "$STAGE/Ember.vst3"
+          ditto "$AU"   "$STAGE/Ember.component"
+          [ -n "$APP" ] && ditto "$APP" "$STAGE/Ember.app"
+          echo "EMBER_STAGE=$STAGE" >> "$GITHUB_ENV"
+
+          # A silently single-architecture "universal" build is a classic release bug:
+          # fail hard unless every shipped Mach-O carries both slices.
+          FAILED=0
+          for bin in "$STAGE/Ember.vst3/Contents/MacOS/Ember" \
+                     "$STAGE/Ember.component/Contents/MacOS/Ember" \
+                     "$STAGE/Ember.app/Contents/MacOS/Ember"; do
+            [ -f "$bin" ] || continue
+            ARCHS="$(lipo -archs "$bin")"
+            echo "$bin: $ARCHS"
+            for want in arm64 x86_64; do
+              case " $ARCHS " in
+                *" $want "*) ;;
+                *) echo "::error::$bin is missing the $want slice (has: $ARCHS)"; FAILED=1 ;;
+              esac
+            done
+          done
+          exit $FAILED
+
+      - name: Code-sign the bundles
+        shell: bash
+        env:
+          SIGNING: ${{ steps.signing.outputs.enabled }}
+        run: |
+          set -euo pipefail
+          if [ "$SIGNING" = "true" ]; then
+            IDENTITY="$EMBER_APP_IDENTITY"
+            EXTRA=(--options runtime --timestamp)
+          else
+            IDENTITY="-"
+            EXTRA=(--timestamp=none)
+          fi
+          for b in "$EMBER_STAGE"/Ember.vst3 "$EMBER_STAGE"/Ember.component "$EMBER_STAGE"/Ember.app; do
+            [ -d "$b" ] || continue
+            codesign --force --sign "$IDENTITY" "${EXTRA[@]}" "$b"
+            codesign --verify --deep --strict --verbose=2 "$b"
+          done
+
+      - name: Notarise and staple the bundles
+        if: steps.signing.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="$RUNNER_TEMP/notarize-bundles.zip"
+          rm -f "$ZIP"
+          ditto -c -k --sequesterRsrc "$EMBER_STAGE" "$ZIP"
+          xcrun notarytool submit "$ZIP" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait --timeout 45m
+          for b in "$EMBER_STAGE"/Ember.vst3 "$EMBER_STAGE"/Ember.component "$EMBER_STAGE"/Ember.app; do
+            [ -d "$b" ] || continue
+            xcrun stapler staple "$b"
+            xcrun stapler validate "$b"
+          done
+
+      - name: Build the installer package
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f packaging/macos/build-pkg.sh ]; then
+            echo "::error::packaging/macos/build-pkg.sh is missing — the macOS installer cannot be built"
+            exit 1
+          fi
+          chmod +x packaging/macos/build-pkg.sh
+          mkdir -p dist "$RUNNER_TEMP/pkg"
+          OUT="$RUNNER_TEMP/pkg/Ember-$VERSION-macOS.pkg"
+          rm -f "$OUT"
+
+          # The script's inputs are supplied three ways — environment, long options and
+          # positionals — so either calling convention works.
+          export EMBER_VERSION="$VERSION"
+          export EMBER_VST3="$EMBER_STAGE/Ember.vst3"
+          export EMBER_AU="$EMBER_STAGE/Ember.component"
+          export EMBER_STAGE_DIR="$EMBER_STAGE"
+          export EMBER_PKG_OUTPUT="$OUT"
+
+          if ! packaging/macos/build-pkg.sh \
+                 --version "$VERSION" \
+                 --vst3 "$EMBER_STAGE/Ember.vst3" \
+                 --au "$EMBER_STAGE/Ember.component" \
+                 --output "$OUT"; then
+            echo "::warning::build-pkg.sh rejected the long options — retrying positionally"
+            packaging/macos/build-pkg.sh "$VERSION" "$EMBER_STAGE" "$OUT"
+          fi
+
+          if [ ! -f "$OUT" ]; then
+            # Accept a package written somewhere else under the expected roots.
+            FOUND="$(find "$RUNNER_TEMP/pkg" dist build packaging -name '*.pkg' -type f 2>/dev/null | head -1 || true)"
+            if [ -n "$FOUND" ]; then
+              mv "$FOUND" "$OUT"
+            else
+              echo "::error::build-pkg.sh produced no .pkg (expected $OUT)"
+              exit 1
+            fi
+          fi
+          echo "EMBER_PKG_UNSIGNED=$OUT" >> "$GITHUB_ENV"
+          ls -l "$OUT"
+
+      - name: Sign, notarise and staple the package
+        shell: bash
+        env:
+          SIGNING: ${{ steps.signing.outputs.enabled }}
+        run: |
+          set -euo pipefail
+          FINAL="dist/Ember-$VERSION-macOS.pkg"
+          mkdir -p dist
+          if [ "$SIGNING" = "true" ] && [ -n "${EMBER_INSTALLER_IDENTITY:-}" ]; then
+            productsign --sign "$EMBER_INSTALLER_IDENTITY" "$EMBER_PKG_UNSIGNED" "$FINAL"
+            pkgutil --check-signature "$FINAL"
+            xcrun notarytool submit "$FINAL" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD" \
+              --wait --timeout 45m
+            xcrun stapler staple "$FINAL"
+            xcrun stapler validate "$FINAL"
+          else
+            cp "$EMBER_PKG_UNSIGNED" "$FINAL"
+            echo "::notice::shipping an unsigned .pkg"
+          fi
+          ls -l "$FINAL"
+
+      - name: Zip the raw bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          PACK="$RUNNER_TEMP/zip-stage"
+          rm -rf "$PACK"; mkdir -p "$PACK"
+          ditto "$EMBER_STAGE/Ember.vst3" "$PACK/Ember.vst3"
+          ditto "$EMBER_STAGE/Ember.component" "$PACK/Ember.component"
+          ditto -c -k --sequesterRsrc "$PACK" "dist/Ember-$VERSION-macOS.zip"
+          ls -l "dist/Ember-$VERSION-macOS.zip"
+
+      - name: Upload macOS assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ember-macos
+          path: |
+            dist/Ember-${{ needs.prepare.outputs.version }}-macOS.pkg
+            dist/Ember-${{ needs.prepare.outputs.version }}-macOS.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Remove the temporary keychain
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          rm -f "$RUNNER_TEMP"/*.p12
+          if [ -n "${EMBER_KEYCHAIN:-}" ] && [ -e "$EMBER_KEYCHAIN" ]; then
+            security list-keychains -d user -s login.keychain
+            security delete-keychain "$EMBER_KEYCHAIN"
+            echo "deleted $EMBER_KEYCHAIN"
+          fi
+          exit 0
+
+  # ---------------------------------------------------------------- Linux
+  linux:
+    name: Linux (x86_64)
+    needs: prepare
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build \
+            libasound2-dev \
+            libjack-jackd2-dev \
+            libfreetype-dev \
+            libfontconfig1-dev \
+            libx11-dev \
+            libxcomposite-dev \
+            libxcursor-dev \
+            libxext-dev \
+            libxinerama-dev \
+            libxrandr-dev \
+            libxrender-dev \
+            libglu1-mesa-dev \
+            mesa-common-dev
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/linux-release/_deps
+          key: linux-deps-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: |
+            linux-deps-
+
+      - name: Configure
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --preset linux-release \
+            -D EMBER_BUILD_TESTS=OFF \
+            -D EMBER_BUILD_BENCHMARK=OFF
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build --preset linux-release --target Ember_VST3
+
+      - name: Pack the tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          VST3=""
+          for d in build/linux-release/Ember_artefacts/*/VST3/Ember.vst3; do VST3="$d"; done
+          if [ -z "$VST3" ]; then
+            echo "::error::no Ember.vst3 under build/linux-release/Ember_artefacts/*/VST3/"
+            find build/linux-release/Ember_artefacts -maxdepth 3 -print || true
+            exit 1
+          fi
+          if [ ! -f packaging/linux/install.sh ]; then
+            echo "::error::packaging/linux/install.sh is missing — it ships inside the tarball"
+            exit 1
+          fi
+
+          STAGE="$RUNNER_TEMP/stage"
+          rm -rf "$STAGE"; mkdir -p "$STAGE"
+          cp -a "$VST3" "$STAGE/Ember.vst3"
+          cp -a packaging/linux/install.sh "$STAGE/install.sh"
+          chmod +x "$STAGE/install.sh"
+          find "$STAGE/Ember.vst3" -name '*.so' -exec chmod 755 {} +
+
+          mkdir -p dist
+          tar -czf "dist/Ember-$VERSION-Linux.tar.gz" -C "$STAGE" Ember.vst3 install.sh
+          tar -tzf "dist/Ember-$VERSION-Linux.tar.gz" | head -20
+          ls -l "dist/Ember-$VERSION-Linux.tar.gz"
+
+      - name: Upload Linux asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: ember-linux
+          path: dist/Ember-${{ needs.prepare.outputs.version }}-Linux.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------- publish
+  release:
+    name: Publish GitHub Release
+    needs: [prepare, windows, macos, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      DRAFT: ${{ needs.prepare.outputs.draft }}
+      SIGNED: ${{ needs.macos.outputs.signed }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download every build artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Verify the asset set
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          ls -l
+          MISSING=0
+          for f in "Ember-$VERSION-Windows.exe" \
+                   "Ember-$VERSION-Windows.zip" \
+                   "Ember-$VERSION-macOS.pkg" \
+                   "Ember-$VERSION-macOS.zip" \
+                   "Ember-$VERSION-Linux.tar.gz"; do
+            if [ ! -f "$f" ]; then
+              echo "::error::missing release asset $f"
+              MISSING=1
+            fi
+          done
+          exit $MISSING
+
+      - name: Write the release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          NOTES="$RUNNER_TEMP/notes.md"
+          {
+            echo "# Ember $VERSION"
+            echo
+            echo "Multiband analog saturation and distortion — VST3, Audio Unit and Standalone."
+            echo
+            echo "## Downloads"
+            echo
+            echo "| File | Platform | Contents |"
+            echo "| --- | --- | --- |"
+            echo "| \`Ember-$VERSION-Windows.exe\` | Windows 10/11, 64-bit | Installer: VST3 + Standalone |"
+            echo "| \`Ember-$VERSION-Windows.zip\` | Windows 10/11, 64-bit | Raw \`Ember.vst3\` bundle |"
+            echo "| \`Ember-$VERSION-macOS.pkg\` | macOS 10.15+, Apple silicon & Intel | Installer: VST3 + Audio Unit |"
+            echo "| \`Ember-$VERSION-macOS.zip\` | macOS 10.15+, Apple silicon & Intel | Raw \`Ember.vst3\` + \`Ember.component\` |"
+            echo "| \`Ember-$VERSION-Linux.tar.gz\` | Ubuntu 24.04+ / glibc 2.39+, x86_64 | \`Ember.vst3\` + \`install.sh\` |"
+            echo
+            echo "## Requirements"
+            echo
+            echo "- **Windows:** Windows 10 or 11, 64-bit. A VST3 host."
+            echo "- **macOS:** macOS 10.15 Catalina or newer. Universal binary — native on both"
+            echo "  Apple silicon and Intel. VST3 and Audio Unit (\`aumf\`, a MIDI-receiving effect,"
+            echo "  so it appears under MIDI-controlled effects in Logic Pro)."
+            echo "- **Linux:** x86_64, glibc 2.39 or newer (built on Ubuntu 24.04). ALSA or JACK."
+            echo "  VST3 only — there is no Audio Unit on Linux."
+            echo
+            echo "## Installing by hand"
+            echo
+            echo "If you prefer the zip/tarball over the installer, copy the bundles to:"
+            echo
+            echo "- Windows: \`C:\\Program Files\\Common Files\\VST3\\\`"
+            echo "- macOS: \`/Library/Audio/Plug-Ins/VST3/\` and \`/Library/Audio/Plug-Ins/Components/\`"
+            echo "- Linux: \`~/.vst3/\` (per user) or \`/usr/lib/vst3/\` (system-wide) — or run the"
+            echo "  bundled \`install.sh\`, which does exactly that."
+            echo
+            echo "## macOS Gatekeeper"
+            echo
+            if [ "$SIGNED" = "true" ]; then
+              echo "These builds are signed with a Developer ID certificate, notarised by Apple and"
+              echo "stapled, so they install without any Gatekeeper prompt."
+              echo
+              echo "If macOS still refuses to open the installer after the download was interrupted"
+              echo "or copied between machines, clear the quarantine flag:"
+            else
+              echo "**These builds are not signed or notarised**, so Gatekeeper will block them on"
+              echo "first use. Two ways around it:"
+              echo
+              echo "1. **Right-click to open.** In Finder, right-click (or Control-click)"
+              echo "   \`Ember-$VERSION-macOS.pkg\`, choose **Open**, then confirm **Open** in the"
+              echo "   dialog. The plain double-click does not offer that choice — the right-click"
+              echo "   Open is what grants the exception."
+              echo "2. **Clear the quarantine flag** from a terminal, before or after installing:"
+            fi
+            echo
+            echo '```sh'
+            echo "xattr -cr ~/Downloads/Ember-$VERSION-macOS.pkg"
+            echo "# after installing, or when using the zip:"
+            echo 'sudo xattr -cr "/Library/Audio/Plug-Ins/VST3/Ember.vst3"'
+            echo 'sudo xattr -cr "/Library/Audio/Plug-Ins/Components/Ember.component"'
+            echo '```'
+            echo
+            echo "Then rescan plug-ins in your DAW. Logic Pro users may also need to reset the"
+            echo "Audio Unit cache if Ember was rejected on an earlier scan."
+            echo
+            echo "## Checksums (SHA-256)"
+            echo
+            echo '```'
+            ( cd dist && sha256sum \
+                "Ember-$VERSION-Windows.exe" \
+                "Ember-$VERSION-Windows.zip" \
+                "Ember-$VERSION-macOS.pkg" \
+                "Ember-$VERSION-macOS.zip" \
+                "Ember-$VERSION-Linux.tar.gz" )
+            echo '```'
+            echo
+            echo "## Licence"
+            echo
+            echo "Ember is distributed under the GNU General Public License v3.0. It is built with"
+            echo "JUCE 8, which is GPLv3 for open-source distribution."
+          } > "$NOTES"
+          echo "EMBER_NOTES=$NOTES" >> "$GITHUB_ENV"
+          cat "$NOTES"
+
+      - name: Create or update the GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASSETS=(
+            "dist/Ember-$VERSION-Windows.exe"
+            "dist/Ember-$VERSION-Windows.zip"
+            "dist/Ember-$VERSION-macOS.pkg"
+            "dist/Ember-$VERSION-macOS.zip"
+            "dist/Ember-$VERSION-Linux.tar.gz"
+          )
+          DRAFT_FLAG=()
+          [ "$DRAFT" = "true" ] && DRAFT_FLAG=(--draft)
+          PRERELEASE_FLAG=()
+          case "$VERSION" in *-*) PRERELEASE_FLAG=(--prerelease) ;; esac
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG exists — updating it"
+            gh release edit "$TAG" --title "Ember $VERSION" --notes-file "$EMBER_NOTES"
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
+          else
+            gh release create "$TAG" "${ASSETS[@]}" \
+              --title "Ember $VERSION" \
+              --notes-file "$EMBER_NOTES" \
+              "${DRAFT_FLAG[@]}" "${PRERELEASE_FLAG[@]}"
+          fi
+          gh release view "$TAG" --json name,isDraft,assets \
+            --jq '{name, isDraft, assets: [.assets[].name]}'

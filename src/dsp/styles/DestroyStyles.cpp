@@ -15,10 +15,23 @@ namespace
     misbehaving modulation source cannot turn into an unbounded fold count. */
 constexpr float kMaxPreGain = 128.0f;
 
-/** Largest magnitude fed to the wavefolder. 64 is 32 folds — well past
-    "destroyed" — and keeps the fold-phase arithmetic far from the point where
-    single-precision rounding of `|x| + 1` would start to matter. */
-constexpr float kMaxFoldInput = 64.0f;
+/** Pure safety net on the wavefolder's input: a band that somehow arrives at
+    +/-128 still folds a bounded number of times instead of grinding through
+    thousands of triangle periods per sample. Normal material never reaches it. */
+constexpr float kMaxFoldInput = 256.0f;
+
+/**
+    Fold-count exponent.
+
+    A straight `driveLin` pre-gain would put 100x into the folder at +40 dB —
+    fifty folds, which is not a wavefolder any more, it is a noise source: past
+    roughly ten folds every further fold sounds the same and only adds alias
+    energy. `driveLin ^ 0.65` keeps the mapping monotonic and still "further
+    past the threshold = more folds", but spends the knob over 1x .. ~20x
+    (up to ten folds of a full-scale signal), which is the range where the
+    character actually changes, and buys ~26 dB of alias rejection at the top.
+*/
+constexpr float kFoldDriveExponent = 0.65f;
 
 /** ADAA fallback threshold for the folder. Wider than the hard-clip default:
     the folder's antiderivative swings over a full unit per fold, so dividing
@@ -193,7 +206,7 @@ void FoldbackStyle::process (float* const* channelData, int numChannels, int num
     if (! buffersUsable (channelData, nCh, numSamples))
         return;
 
-    const float gain = safePreGain (params.driveLin);
+    const float gain = std::pow (safePreGain (params.driveLin), kFoldDriveExponent);
 
     for (int ch = 0; ch < nCh; ++ch)
     {
@@ -382,8 +395,17 @@ void BitcrushStyle::process (float* const* channelData, int numChannels, int num
                 // before rounding is what makes the "never outside the
                 // pre-quantisation range" guarantee below hold.
                 const float x = juce::jlimit (-1.0f, 1.0f, dsputil::sanitise (data[n]) * gain);
-                const float d = ditherGain * ditherSample (ditherMode, rngState[idx]);
-                const float q = std::round (x * levels + d) * invLevels;
+
+                // Digital black stays black: there is no quantisation error to
+                // decorrelate, and six bands each hissing into silence is not a
+                // feature. Everything else gets the dither.
+                float q = 0.0f;
+
+                if (std::abs (x) > 0.0f)
+                {
+                    const float d = ditherGain * ditherSample (ditherMode, rngState[idx]);
+                    q = std::round (x * levels + d) * invLevels;
+                }
 
                 held[idx] = juce::jlimit (-1.0f, 1.0f, q);
             }

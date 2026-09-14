@@ -238,8 +238,9 @@ void EmberEngine::process(juce::AudioBuffer<float>& buffer) noexcept
     {
         previousCrossover->process(buffer, altBandBuffers, numSamples);
 
-        const int maxActive = juce::jmax(activeNumBands, previousNumBands);
-        float fadeAtEnd = bandFade;
+        // Every band advances through the same fade ramp, so the end point is
+        // the same for all of them and can be computed once.
+        const float fadeAtEnd = bandFade + bandFadeStep * static_cast<float>(numSamples);
         for (int b = 0; b < kMaxBands; ++b)
         {
             auto& dst = bandBuffers[static_cast<size_t>(b)];
@@ -257,8 +258,6 @@ void EmberEngine::process(juce::AudioBuffer<float>& buffer) noexcept
                 }
                 f += bandFadeStep;
             }
-            if (b == maxActive - 1 || b == kMaxBands - 1)
-                fadeAtEnd = f;
         }
         bandFade = juce::jlimit(0.0f, 1.0f, fadeAtEnd);
         if (bandFade >= 1.0f)

@@ -1,0 +1,338 @@
+name: CI
+
+# Build, test, sanitize, format-check and pluginval-validate Ember on every push
+# and pull request. Release packaging lives in a separate workflow.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# Superseded runs on the same branch / PR are cancelled.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # ---------------------------------------------------------------- build matrix
+  build:
+    name: Build & validate (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+            preset: linux-release
+          - name: macOS arm64
+            os: macos-latest
+            preset: macos-release
+          - name: Windows
+            os: windows-latest
+            preset: windows-release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # JUCE 8's Linux dependency set (docs/Linux Dependencies.md) plus ninja,
+      # xvfb (pluginval opens a window even in --validate-in-process mode) and
+      # unzip (used by scripts/run-pluginval.sh).
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -eu
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
+            ninja-build \
+            ladspa-sdk \
+            libasound2-dev \
+            libjack-jackd2-dev \
+            libcurl4-openssl-dev \
+            libfreetype-dev \
+            libfontconfig1-dev \
+            libx11-dev \
+            libxcomposite-dev \
+            libxcursor-dev \
+            libxext-dev \
+            libxinerama-dev \
+            libxrandr-dev \
+            libxrender-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libglu1-mesa-dev \
+            mesa-common-dev \
+            xvfb \
+            unzip
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: |
+          set -eu
+          if ! command -v ninja >/dev/null 2>&1; then
+            brew install ninja
+          fi
+          ninja --version
+
+      # The cache key carries the pinned tags straight out of
+      # cmake/Dependencies.cmake, so bumping JUCE or Catch2 invalidates it.
+      - name: Read pinned dependency tags
+        id: deps
+        run: |
+          set -eu
+          # First quoted value on the line that sets each tag. awk (rather than
+          # grep | head) so nothing in the pipeline can die of SIGPIPE under the
+          # runner's `bash -eo pipefail`.
+          read_tag() {
+            awk -v key="$1" 'index($0, key) && match($0, /"[^"]+"/) { print substr($0, RSTART + 1, RLENGTH - 2); exit }' \
+              cmake/Dependencies.cmake
+          }
+          juce=$(read_tag EMBER_JUCE_TAG)
+          catch2=$(read_tag EMBER_CATCH2_TAG)
+          cmakever=$(cmake --version | awk 'NR == 1 { v = $3 } END { print v }')
+          [ -n "$juce" ] && [ -n "$catch2" ] && [ -n "$cmakever" ]
+          echo "juce=$juce" >> "$GITHUB_OUTPUT"
+          echo "catch2=$catch2" >> "$GITHUB_OUTPUT"
+          echo "cmake=$cmakever" >> "$GITHUB_OUTPUT"
+          echo "JUCE $juce / Catch2 $catch2 / CMake $cmakever"
+
+      # Only the FetchContent source + subbuild (stamp) trees are cached; the
+      # -build trees are ordinary object output and are rebuilt every run.
+      # No restore-keys on purpose: a partial hit would hand CMake a clone
+      # checked out at the wrong tag, which is worse than a cold clone.
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/${{ matrix.preset }}/_deps/juce-src
+            build/${{ matrix.preset }}/_deps/juce-subbuild
+            build/${{ matrix.preset }}/_deps/catch2-src
+            build/${{ matrix.preset }}/_deps/catch2-subbuild
+          key: fetchcontent-${{ matrix.os }}-cmake${{ steps.deps.outputs.cmake }}-juce${{ steps.deps.outputs.juce }}-catch2${{ steps.deps.outputs.catch2 }}
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }} --parallel
+
+      - name: Unit tests (ctest)
+        run: |
+          set -eu
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a ctest --preset ${{ matrix.preset }} --output-on-failure
+          else
+            ctest --preset ${{ matrix.preset }} --output-on-failure
+          fi
+
+      - name: CPU benchmark
+        if: runner.os != 'Windows'
+        run: |
+          set -eu
+          bin=$(find "build/${{ matrix.preset }}" -type f -name ember_benchmark -print -quit)
+          if [ -z "$bin" ]; then
+            echo "ember_benchmark was not built under build/${{ matrix.preset }}" >&2
+            exit 1
+          fi
+          echo "::group::ember_benchmark"
+          "$bin"
+          echo "::endgroup::"
+
+      - name: CPU benchmark
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bin = Get-ChildItem -Path "build/${{ matrix.preset }}" -Recurse -File -Filter "ember_benchmark.exe" |
+                 Select-Object -First 1
+          if (-not $bin) {
+            Write-Host "ember_benchmark.exe was not built under build/${{ matrix.preset }}"
+            exit 1
+          }
+          Write-Host "::group::ember_benchmark"
+          & $bin.FullName
+          $code = $LASTEXITCODE
+          Write-Host "::endgroup::"
+          exit $code
+
+      - name: pluginval (strictness 10)
+        if: runner.os != 'Windows'
+        env:
+          STRICTNESS: "10"
+          PLUGINVAL_VERSION: v1.0.4
+        run: |
+          set -eu
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a bash scripts/run-pluginval.sh
+          else
+            bash scripts/run-pluginval.sh
+          fi
+
+      # scripts/run-pluginval.sh is bash-only; this is the same thing inline.
+      - name: pluginval (strictness 10)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          PLUGINVAL_VERSION: v1.0.4
+        run: |
+          $tools = Join-Path $PWD "build/tools"
+          New-Item -ItemType Directory -Force -Path $tools | Out-Null
+          $exe = Join-Path $tools "pluginval.exe"
+          if (-not (Test-Path $exe)) {
+            $zip = Join-Path $tools "pluginval_Windows.zip"
+            $url = "https://github.com/Tracktion/pluginval/releases/download/$env:PLUGINVAL_VERSION/pluginval_Windows.zip"
+            Write-Host "==> fetching pluginval $env:PLUGINVAL_VERSION"
+            Invoke-WebRequest -Uri $url -OutFile $zip
+            Expand-Archive -Path $zip -DestinationPath $tools -Force
+          }
+          if (-not (Test-Path $exe)) {
+            Write-Host "pluginval.exe missing after extraction"
+            exit 1
+          }
+          $targets = @(Get-ChildItem -Path "build/${{ matrix.preset }}/Ember_artefacts" -Recurse -Filter "Ember.vst3" |
+                       Where-Object { $_.FullName -match "[\\/]VST3[\\/]Ember\.vst3$" })
+          if ($targets.Count -eq 0) {
+            Write-Host "no built VST3 found under build/${{ matrix.preset }}/Ember_artefacts — build first"
+            exit 1
+          }
+          $failed = 0
+          foreach ($t in $targets) {
+            Write-Host "==> pluginval (strictness 10): $($t.FullName)"
+            & $exe --strictness-level 10 --validate-in-process --repeat 1 --timeout-ms 600000 --validate $t.FullName
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "!! FAILED: $($t.FullName)"
+              $failed = 1
+            }
+          }
+          exit $failed
+
+      - name: Upload plug-in artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ember-${{ matrix.os }}
+          path: build/${{ matrix.preset }}/Ember_artefacts/Release/
+          if-no-files-found: error
+          retention-days: 14
+
+  # ---------------------------------------------------------------- sanitizers
+  asan:
+    name: Sanitizers (Linux ASan/UBSan)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      # Fail on the very first report rather than limping on with poisoned state.
+      ASAN_OPTIONS: halt_on_error=1:abort_on_error=1:print_stacktrace=1:detect_leaks=1:detect_stack_use_after_return=1
+      UBSAN_OPTIONS: halt_on_error=1:abort_on_error=1:print_stacktrace=1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -eu
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
+            ninja-build \
+            ladspa-sdk \
+            libasound2-dev \
+            libjack-jackd2-dev \
+            libcurl4-openssl-dev \
+            libfreetype-dev \
+            libfontconfig1-dev \
+            libx11-dev \
+            libxcomposite-dev \
+            libxcursor-dev \
+            libxext-dev \
+            libxinerama-dev \
+            libxrandr-dev \
+            libxrender-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libglu1-mesa-dev \
+            mesa-common-dev \
+            xvfb
+
+      - name: Read pinned dependency tags
+        id: deps
+        run: |
+          set -eu
+          # First quoted value on the line that sets each tag. awk (rather than
+          # grep | head) so nothing in the pipeline can die of SIGPIPE under the
+          # runner's `bash -eo pipefail`.
+          read_tag() {
+            awk -v key="$1" 'index($0, key) && match($0, /"[^"]+"/) { print substr($0, RSTART + 1, RLENGTH - 2); exit }' \
+              cmake/Dependencies.cmake
+          }
+          juce=$(read_tag EMBER_JUCE_TAG)
+          catch2=$(read_tag EMBER_CATCH2_TAG)
+          cmakever=$(cmake --version | awk 'NR == 1 { v = $3 } END { print v }')
+          [ -n "$juce" ] && [ -n "$catch2" ] && [ -n "$cmakever" ]
+          echo "juce=$juce" >> "$GITHUB_OUTPUT"
+          echo "catch2=$catch2" >> "$GITHUB_OUTPUT"
+          echo "cmake=$cmakever" >> "$GITHUB_OUTPUT"
+          echo "JUCE $juce / Catch2 $catch2 / CMake $cmakever"
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/linux-asan/_deps/juce-src
+            build/linux-asan/_deps/juce-subbuild
+            build/linux-asan/_deps/catch2-src
+            build/linux-asan/_deps/catch2-subbuild
+          key: fetchcontent-ubuntu-latest-asan-cmake${{ steps.deps.outputs.cmake }}-juce${{ steps.deps.outputs.juce }}-catch2${{ steps.deps.outputs.catch2 }}
+
+      - name: Configure (linux-asan)
+        run: cmake --preset linux-asan
+
+      - name: Build (linux-asan)
+        run: cmake --build --preset linux-asan --parallel
+
+      - name: Unit tests under ASan/UBSan
+        run: xvfb-run -a ctest --preset linux-asan --output-on-failure
+
+  # ---------------------------------------------------------------- formatting
+  format:
+    name: clang-format
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -eu
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 clang-format
+
+      # Checks only; nothing is rewritten. git pathspecs are used so untracked
+      # and generated files (e.g. anything under build/) are never considered.
+      - name: Check src/ and tests/ against .clang-format
+        run: |
+          set -eu
+          clang-format --version
+          files=$(git ls-files -- \
+            'src/*.cpp' 'src/*.cc' 'src/*.h' 'src/*.hpp' 'src/*.mm' \
+            'tests/*.cpp' 'tests/*.cc' 'tests/*.h' 'tests/*.hpp' 'tests/*.mm')
+          if [ -z "$files" ]; then
+            echo "no tracked C++ sources found under src/ or tests/" >&2
+            exit 1
+          fi
+          echo "checking:"
+          echo "$files" | sed 's/^/  /'
+          echo "$files" | xargs clang-format --style=file --dry-run --Werror
