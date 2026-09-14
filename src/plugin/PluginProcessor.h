@@ -122,8 +122,8 @@ private:
         once here and the audio thread only ever dereferences. */
     struct CachedParam
     {
-        juce::RangedAudioParameter* param { nullptr };
-        int modIndex { -1 };
+        juce::RangedAudioParameter* param{nullptr};
+        int modIndex{-1};
 
         float raw() const noexcept
         {
@@ -138,20 +138,32 @@ private:
         CachedParam drive, mix, level, pan, width, style, feedback, feedbackFreq, dynamics;
         CachedParam toneLow, toneMid, toneHigh, bypass, solo;
     };
-    struct LfoCache { CachedParam rate, sync, phase, smooth, steps, depth; };
-    struct EgCache { CachedParam attack, decay, sustain, release, threshold, trigger; };
-    struct EfCache { CachedParam attack, release, band, gain; };
-    struct MidiCache { CachedParam type, cc, smooth; };
+    struct LfoCache
+    {
+        CachedParam rate, sync, phase, smooth, steps, depth;
+    };
+    struct EgCache
+    {
+        CachedParam attack, decay, sustain, release, threshold, trigger;
+    };
+    struct EfCache
+    {
+        CachedParam attack, release, band, gain;
+    };
+    struct MidiCache
+    {
+        CachedParam type, cc, smooth;
+    };
 
-    std::array<BandCache, kMaxBands> bandCache {};
-    std::array<CachedParam, kMaxCrossovers> crossoverCache {};
+    std::array<BandCache, kMaxBands> bandCache{};
+    std::array<CachedParam, kMaxCrossovers> crossoverCache{};
     CachedParam inGainCache, outGainCache, globalMixCache, autoGainCache, numBandsCache, stereoModeCache;
-    std::array<LfoCache, kNumXLFOs> lfoCache {};
-    std::array<EgCache, kNumEnvGenerators> egCache {};
-    std::array<EfCache, kNumEnvFollowers> efCache {};
+    std::array<LfoCache, kNumXLFOs> lfoCache{};
+    std::array<EgCache, kNumEnvGenerators> egCache{};
+    std::array<EfCache, kNumEnvFollowers> efCache{};
     CachedParam xyXCache, xyYCache;
-    std::array<MidiCache, kNumMidiSources> midiCache {};
-    std::array<CachedParam, kNumMacros> macroCache {};
+    std::array<MidiCache, kNumMidiSources> midiCache{};
+    std::array<CachedParam, kNumMacros> macroCache{};
     void resolveParameters(int numSamples) noexcept;
     void applyMidiMappings(const juce::MidiBuffer& midi);
     juce::ValueTree captureFullState() const;

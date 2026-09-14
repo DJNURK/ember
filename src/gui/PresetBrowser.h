@@ -64,11 +64,18 @@ namespace ember::gui
     wherever the focus is, Return loads the highlighted preset, Escape closes —
     or, while a save/rename/delete prompt is open, confirms and cancels it.
 */
-class PresetBrowser final : public juce::Component
+class PresetBrowser final : public juce::Component, public juce::KeyListener
 {
 public:
     explicit PresetBrowser(EmberAudioProcessor& processorToUse);
     ~PresetBrowser() override;
+
+    /** Puts the PresetManager's callbacks back the way they were found, early.
+        The destructor does this anyway; call it first when the browser's
+        deletion is being deferred to the message queue, so the manager is never
+        left holding a callback into an object that is only still alive because
+        a delete is pending. Idempotent. */
+    void detachFromManager();
 
     //==========================================================================
     /** The browser wants to go away: Escape, the Close button, a click on the
@@ -92,6 +99,12 @@ public:
     void parentSizeChanged() override;
     void visibilityChanged() override;
     bool keyPressed(const juce::KeyPress&) override;
+
+    /** juce::KeyListener, attached to the search field: a single-line
+        juce::TextEditor swallows the arrow keys (they move the caret), so the
+        list navigation has to be intercepted ahead of it. */
+    bool keyPressed(const juce::KeyPress&, juce::Component* originatingComponent) override;
+
     void mouseDown(const juce::MouseEvent&) override;
     void mouseMove(const juce::MouseEvent&) override;
     void mouseExit(const juce::MouseEvent&) override;
@@ -168,6 +181,7 @@ private:
     PresetManager& manager;
 
     std::function<void()> previousListChanged, previousPresetLoaded;
+    bool callbacksInstalled{false};
 
     // Model state.
     juce::StringArray categoryNames;                     // "All" first, then the manager's own
@@ -250,8 +264,7 @@ public:
     public:
         explicit ChevronButton(bool pointsRight);
 
-        void paintButton(juce::Graphics&, bool shouldDrawButtonAsHighlighted,
-                         bool shouldDrawButtonAsDown) override;
+        void paintButton(juce::Graphics&, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
 
     private:
         bool right;
@@ -268,8 +281,7 @@ public:
 
         void setPresetText(const juce::String& presetName, const juce::String& presetCategory, bool isModified);
 
-        void paintButton(juce::Graphics&, bool shouldDrawButtonAsHighlighted,
-                         bool shouldDrawButtonAsDown) override;
+        void paintButton(juce::Graphics&, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
 
     private:
         juce::String name, category;

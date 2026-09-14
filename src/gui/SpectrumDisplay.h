@@ -53,9 +53,7 @@
 */
 namespace ember::gui
 {
-class SpectrumDisplay : public juce::Component,
-                        public juce::TooltipClient,
-                        private juce::Timer
+class SpectrumDisplay : public juce::Component, public juce::TooltipClient, private juce::Timer
 {
 public:
     /** @param processorToUse  kept by reference; the editor owns both and
@@ -156,6 +154,10 @@ private:
         from its neighbours — the same rule the engine enforces, so what the
         user drags is exactly what the crossover ends up being. */
     float clampCrossover(int index, float hz) const;
+
+    /** Where modulation has actually put an edge, given the value the user
+        edits. Equal to `baseHz` when nothing is routed to that crossover. */
+    float modulatedFrequencyFor(int index, float baseHz) const;
 
     void setCrossover(int index, float hz);
     void updateHover(juce::Point<float> position);

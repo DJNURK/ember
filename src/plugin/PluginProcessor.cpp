@@ -71,7 +71,7 @@ void EmberAudioProcessor::buildParameterCache()
         CachedParam c;
         c.param = apvts.getParameter(id);
         c.modIndex = getModulationTargetIndex(id);
-        jassert(c.param != nullptr);   // a typo'd id would silently do nothing
+        jassert(c.param != nullptr); // a typo'd id would silently do nothing
         return c;
     };
 
@@ -107,29 +107,38 @@ void EmberAudioProcessor::buildParameterCache()
     for (int i = 0; i < kNumXLFOs; ++i)
     {
         auto& c = lfoCache[static_cast<size_t>(i)];
-        c.rate = cache(pid::lfoRate(i));     c.sync = cache(pid::lfoSync(i));
-        c.phase = cache(pid::lfoPhase(i));   c.smooth = cache(pid::lfoSmooth(i));
-        c.steps = cache(pid::lfoSteps(i));   c.depth = cache(pid::lfoDepth(i));
+        c.rate = cache(pid::lfoRate(i));
+        c.sync = cache(pid::lfoSync(i));
+        c.phase = cache(pid::lfoPhase(i));
+        c.smooth = cache(pid::lfoSmooth(i));
+        c.steps = cache(pid::lfoSteps(i));
+        c.depth = cache(pid::lfoDepth(i));
     }
     for (int i = 0; i < kNumEnvGenerators; ++i)
     {
         auto& c = egCache[static_cast<size_t>(i)];
-        c.attack = cache(pid::egAttack(i));       c.decay = cache(pid::egDecay(i));
-        c.sustain = cache(pid::egSustain(i));     c.release = cache(pid::egRelease(i));
-        c.threshold = cache(pid::egThreshold(i)); c.trigger = cache(pid::egTrigger(i));
+        c.attack = cache(pid::egAttack(i));
+        c.decay = cache(pid::egDecay(i));
+        c.sustain = cache(pid::egSustain(i));
+        c.release = cache(pid::egRelease(i));
+        c.threshold = cache(pid::egThreshold(i));
+        c.trigger = cache(pid::egTrigger(i));
     }
     for (int i = 0; i < kNumEnvFollowers; ++i)
     {
         auto& c = efCache[static_cast<size_t>(i)];
-        c.attack = cache(pid::efAttack(i)); c.release = cache(pid::efRelease(i));
-        c.band = cache(pid::efBand(i));     c.gain = cache(pid::efGain(i));
+        c.attack = cache(pid::efAttack(i));
+        c.release = cache(pid::efRelease(i));
+        c.band = cache(pid::efBand(i));
+        c.gain = cache(pid::efGain(i));
     }
     xyXCache = cache(pid::xyX);
     xyYCache = cache(pid::xyY);
     for (int i = 0; i < kNumMidiSources; ++i)
     {
         auto& c = midiCache[static_cast<size_t>(i)];
-        c.type = cache(pid::midiType(i)); c.cc = cache(pid::midiCC(i));
+        c.type = cache(pid::midiType(i));
+        c.cc = cache(pid::midiCC(i));
         c.smooth = cache(pid::midiSmooth(i));
     }
     for (int i = 0; i < kNumMacros; ++i)
@@ -215,7 +224,7 @@ void EmberAudioProcessor::pushSourceParameters() noexcept
         ep.threshold = juce::Decibels::decibelsToGain(c.threshold.raw());
         ep.detectorBand = -1;
         ep.trigger = static_cast<EgTriggerMode>(juce::jlimit(0, static_cast<int>(EgTriggerMode::Count) - 1,
-                                                            static_cast<int>(std::lround(c.trigger.raw()))));
+                                                             static_cast<int>(std::lround(c.trigger.raw()))));
         modulation.setEnvelopeGeneratorParameters(i, ep);
     }
 
@@ -241,8 +250,8 @@ void EmberAudioProcessor::pushSourceParameters() noexcept
     {
         const auto& c = midiCache[static_cast<size_t>(i)];
         MidiSourceParams mp;
-        mp.kind = static_cast<MidiSourceKind>(juce::jlimit(0, static_cast<int>(MidiSourceKind::Count) - 1,
-                                                          static_cast<int>(std::lround(c.type.raw()))));
+        mp.kind = static_cast<MidiSourceKind>(
+            juce::jlimit(0, static_cast<int>(MidiSourceKind::Count) - 1, static_cast<int>(std::lround(c.type.raw()))));
         mp.ccNumber = juce::jlimit(0, 127, static_cast<int>(std::lround(c.cc.raw())));
         mp.smoothingMs = juce::jlimit(0.0f, 500.0f, c.smooth.raw());
         modulation.setMidiSourceParameters(i, mp);

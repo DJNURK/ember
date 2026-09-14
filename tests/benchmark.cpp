@@ -122,7 +122,9 @@ Result runProcessor(int numBands, int osChoiceIndex, double sampleRate, int bloc
     uint32_t s = 0x2468u;
     auto noise = [&s]() noexcept
     {
-        s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+        s ^= s << 13;
+        s ^= s >> 17;
+        s ^= s << 5;
         return static_cast<float>(static_cast<int32_t>(s)) / 2147483648.0f * 0.25f;
     };
 
@@ -130,7 +132,8 @@ Result runProcessor(int numBands, int osChoiceIndex, double sampleRate, int bloc
     for (int i = 0; i < 50; ++i)
     {
         for (int ch = 0; ch < 2; ++ch)
-            for (int j = 0; j < blockSize; ++j) buf.setSample(ch, j, noise());
+            for (int j = 0; j < blockSize; ++j)
+                buf.setSample(ch, j, noise());
         proc.processBlock(buf, midi);
     }
 
@@ -138,14 +141,15 @@ Result runProcessor(int numBands, int osChoiceIndex, double sampleRate, int bloc
     for (int i = 0; i < totalBlocks; ++i)
     {
         for (int ch = 0; ch < 2; ++ch)
-            for (int j = 0; j < blockSize; ++j) buf.setSample(ch, j, noise());
+            for (int j = 0; j < blockSize; ++j)
+                buf.setSample(ch, j, noise());
         proc.processBlock(buf, midi);
     }
     const auto end = std::chrono::steady_clock::now();
 
     const double elapsed = std::chrono::duration<double>(end - start).count();
     const double audio = (totalBlocks * static_cast<double>(blockSize)) / sampleRate;
-    return { audio, elapsed, 100.0 * elapsed / audio };
+    return {audio, elapsed, 100.0 * elapsed / audio};
 }
 
 int main()

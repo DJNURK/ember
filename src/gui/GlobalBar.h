@@ -300,16 +300,13 @@ private:
     /** `base` px at the strip's own scale, clamped to a sane range. */
     int scaled(float base, int minimum, int maximum) const;
 
-    bool shows(Optional item) const noexcept
-    {
-        return optionalVisible[static_cast<size_t>(item)];
-    }
+    bool shows(Optional item) const noexcept { return optionalVisible[static_cast<size_t>(item)]; }
 
     //==========================================================================
     EmberAudioProcessor& processor;
 
     LabelledKnob inputKnob, outputKnob, mixKnob;
-    EmberToggle autoGainToggle{"Auto Gain", ToggleLook::led};
+    EmberToggle autoGainToggle{{}, ToggleLook::pill};
 
     BandCountSelector bandCount;
 
@@ -333,6 +330,7 @@ private:
     {
         juce::Rectangle<int> bounds;
         juce::String text;
+        bool centred{false}; ///< knob captions centre over the knob; the rest run left
     };
 
     std::vector<Caption> captions;

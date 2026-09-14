@@ -24,7 +24,12 @@ target_sources(ember_dsp PRIVATE
     plugin/PluginProcessor.cpp
     plugin/PluginEditor.cpp
     gui/EmberLookAndFeel.cpp
-    gui/Widgets.cpp)
+    gui/Widgets.cpp
+    gui/SpectrumDisplay.cpp
+    gui/BandPanel.cpp
+    gui/GlobalBar.cpp
+    gui/ModPanel.cpp
+    gui/PresetBrowser.cpp)
 
 target_include_directories(ember_dsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 

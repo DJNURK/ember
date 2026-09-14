@@ -247,8 +247,8 @@ bool SpectrumDisplay::refreshParameters()
 
     if (numBandsParam != nullptr)
     {
-        const int bands = juce::jlimit(
-            kMinBands, kMaxBands, juce::roundToInt(numBandsParam->convertFrom0to1(numBandsParam->getValue())));
+        const int bands = juce::jlimit(kMinBands, kMaxBands,
+                                       juce::roundToInt(numBandsParam->convertFrom0to1(numBandsParam->getValue())));
 
         if (bands != numBands)
         {
@@ -265,23 +265,14 @@ bool SpectrumDisplay::refreshParameters()
         if (parameter == nullptr)
             continue;
 
-        const float normalised = parameter->getValue();
-        float hz = juce::jlimit(minFrequency, maxFrequency, parameter->convertFrom0to1(normalised));
+        float hz = juce::jlimit(minFrequency, maxFrequency, parameter->convertFrom0to1(parameter->getValue()));
 
         // Keep the edges ascending and a third of an octave apart exactly as the
         // engine does, so a region boundary is always a real band boundary.
         if (i > 0)
             hz = juce::jlimit(minFrequency, maxFrequency, juce::jmax(hz, crossoverHz[index - 1] * kMinCrossoverRatio));
 
-        // Crossovers are modulation destinations; when something is sweeping one
-        // the divider stays on the value the user edits and the live position is
-        // drawn as a ghost beside it.
-        const float offset = processor.getModulationDepth(crossoverIds[index]);
-        const float modulated =
-            std::abs(offset) > 1.0e-4f
-                ? juce::jlimit(minFrequency, maxFrequency,
-                               parameter->convertFrom0to1(juce::jlimit(0.0f, 1.0f, normalised + offset)))
-                : hz;
+        const float modulated = modulatedFrequencyFor(i, hz);
 
         if (std::abs(hz - crossoverHz[index]) > 0.01f || std::abs(modulated - modulatedHz[index]) > 0.01f)
             changed = true;
@@ -323,8 +314,8 @@ bool SpectrumDisplay::refreshHeat()
             // Drive is what the band is ASKED to do; its level is what it is
             // actually doing. A hard-driven band with nothing going through it
             // glows faintly, one with signal in it glows properly.
-            const float drive = juce::jlimit(0.0f, 1.0f, driveParams[index]->getValue()
-                                                             + processor.getModulationDepth(driveIds[index]));
+            const float drive = juce::jlimit(
+                0.0f, 1.0f, driveParams[index]->getValue() + processor.getModulationDepth(driveIds[index]));
             const float levelDb =
                 juce::Decibels::gainToDecibels(juce::jmax(0.0f, processor.getBandLevel(band)), -60.0f);
             const float level = juce::jlimit(0.0f, 1.0f, (levelDb + 60.0f) / 60.0f);
@@ -466,29 +457,33 @@ void SpectrumDisplay::paintBandRegions(juce::Graphics& g, float scale) const
         const auto colour = EmberColours::band(band);
         const float heat = bandHeat[static_cast<size_t>(band)];
 
-        // Intensity carries the band's heat; the selected band is lifted clear of
-        // the others whatever it is doing.
-        const float alpha = (selected ? 0.20f : 0.06f) + heat * (selected ? 0.28f : 0.18f)
-                            + (hovered && !selected ? 0.04f : 0.0f);
+        // Intensity carries the band's heat, and the selected band is lifted
+        // clear of the others whatever it is doing — but a region is a wash the
+        // curve has to stay readable through, never a block of colour.
+        const float alpha =
+            (selected ? 0.12f : 0.045f) + heat * (selected ? 0.15f : 0.11f) + (hovered && !selected ? 0.03f : 0.0f);
 
         g.setGradientFill(juce::ColourGradient(colour.withAlpha(alpha), region.getCentreX(), region.getY(),
-                                               colour.withAlpha(alpha * 0.16f), region.getCentreX(),
-                                               region.getBottom(), false));
+                                               colour.withAlpha(alpha * 0.3f), region.getCentreX(), region.getBottom(),
+                                               false));
         g.fillRect(region);
 
+        // The tab is what actually marks the selection: full strength and twice
+        // the height, where an unselected band's only glows with its heat.
+        const float thisTabHeight = selected ? tabHeight * 1.8f : tabHeight;
         g.setColour(colour.withAlpha(selected ? 1.0f : juce::jlimit(0.0f, 1.0f, 0.32f + heat * 0.5f)));
-        g.fillRect(region.withHeight(tabHeight));
+        g.fillRect(region.withHeight(thisTabHeight));
 
         if (selected)
         {
-            g.setColour(colour.withAlpha(0.28f));
+            g.setColour(colour.withAlpha(0.22f));
             g.drawRect(region.reduced(0.5f), 1.0f);
         }
 
         if (region.getWidth() > labelHeight * 1.8f && region.getHeight() > labelHeight * 4.0f)
         {
             const auto labelArea =
-                juce::Rectangle<float>(region.getX() + 4.0f * scale, region.getY() + tabHeight + 2.0f * scale,
+                juce::Rectangle<float>(region.getX() + 4.0f * scale, region.getY() + thisTabHeight + 2.0f * scale,
                                        region.getWidth() - 8.0f * scale, labelHeight);
 
             g.setFont(font);
@@ -552,8 +547,8 @@ void SpectrumDisplay::paintGrid(juce::Graphics& g, float scale) const
         const auto textArea = juce::Rectangle<float>(x - width * 0.5f, axisArea.getY(), width, axisArea.getHeight());
 
         // Skip a label rather than let two collide on a narrow window.
-        if (textArea.getX() <= lastLabelRight || textArea.getX() < 0.0f
-            || textArea.getRight() > static_cast<float>(getWidth()))
+        if (textArea.getX() <= lastLabelRight || textArea.getX() < 0.0f ||
+            textArea.getRight() > static_cast<float>(getWidth()))
             continue;
 
         g.setColour(EmberColours::textDisabled);
@@ -627,8 +622,8 @@ void SpectrumDisplay::buildCurvePath(juce::Path& path, const std::vector<float>&
 void SpectrumDisplay::paintCrossovers(juce::Graphics& g, float scale) const
 {
     const int dividers = numBands - 1;
-    const float handleWidth = juce::jmax(5.0f, 7.0f * scale);
-    const float handleHeight = juce::jmin(juce::jmax(10.0f, 15.0f * scale), plotArea.getHeight() * 0.5f);
+    const float handleWidth = juce::jmax(7.0f, 9.0f * scale);
+    const float handleHeight = juce::jmin(juce::jmax(14.0f, 20.0f * scale), plotArea.getHeight() * 0.5f);
 
     for (int i = 0; i < dividers; ++i)
     {
@@ -648,27 +643,34 @@ void SpectrumDisplay::paintCrossovers(juce::Graphics& g, float scale) const
 
         const float thickness = highlighted ? juce::jmax(1.5f, 1.6f * scale) : juce::jmax(1.0f, 1.1f * scale);
 
-        g.setColour(highlighted ? EmberColours::accent : EmberColours::outlineStrong.withAlpha(0.8f));
+        // A dark halo under a light line: the edge then reads with the same
+        // weight over a bright band region as it does over the empty top of the
+        // display, which a single flat line does not.
+        g.setColour(EmberColours::backgroundDeep.withAlpha(0.5f));
+        g.fillRect(juce::Rectangle<float>(x - thickness * 0.5f - 1.0f, plotArea.getY(), thickness + 2.0f,
+                                          plotArea.getHeight()));
+
+        g.setColour(highlighted ? EmberColours::accent : EmberColours::textSecondary.withAlpha(0.72f));
         g.fillRect(juce::Rectangle<float>(x - thickness * 0.5f, plotArea.getY(), thickness, plotArea.getHeight()));
 
-        if (handleHeight < 6.0f)
+        if (handleHeight < 8.0f)
             continue;
 
         const auto handle =
             juce::Rectangle<float>(handleWidth, handleHeight)
                 .withCentre(juce::Point<float>(x, plotArea.getBottom() - handleHeight * 0.5f - 2.0f * scale));
 
-        g.setColour(highlighted ? EmberColours::accent : EmberColours::panelRaised);
+        g.setColour(highlighted ? EmberColours::accent : EmberColours::outlineStrong);
         g.fillRoundedRectangle(handle, handleWidth * 0.45f);
-        g.setColour(highlighted ? EmberColours::accent.brighter(0.25f) : EmberColours::outlineStrong);
+        g.setColour(highlighted ? EmberColours::accent.brighter(0.3f) : EmberColours::textSecondary.withAlpha(0.85f));
         g.drawRoundedRectangle(handle.reduced(0.5f), handleWidth * 0.45f, 1.0f);
 
-        const float gripOffset = handleWidth * 0.22f;
-        const float gripHeight = handleHeight * 0.44f;
+        const float gripOffset = handleWidth * 0.2f;
+        const float gripHeight = handleHeight * 0.4f;
         const float gripTop = handle.getCentreY() - gripHeight * 0.5f;
 
-        g.setColour(highlighted ? EmberColours::backgroundDeep.withAlpha(0.75f)
-                                : EmberColours::textDisabled.withAlpha(0.9f));
+        g.setColour(highlighted ? EmberColours::backgroundDeep.withAlpha(0.8f)
+                                : EmberColours::textPrimary.withAlpha(0.7f));
         g.fillRect(juce::Rectangle<float>(x - gripOffset - 0.5f, gripTop, 1.0f, gripHeight));
         g.fillRect(juce::Rectangle<float>(x + gripOffset - 0.5f, gripTop, 1.0f, gripHeight));
     }
@@ -684,13 +686,13 @@ void SpectrumDisplay::paintDragReadout(juce::Graphics& g, float scale) const
     const float boxWidth = juce::GlyphArrangement::getStringWidth(font, text) + 16.0f * scale;
     const float boxHeight = font.getHeight() + 8.0f * scale;
 
-    if (boxWidth > plotArea.getWidth() || boxHeight > plotArea.getHeight())
+    if (boxWidth + 8.0f > plotArea.getWidth() || boxHeight > plotArea.getHeight())
         return;
 
     const float x = xForFrequency(crossoverHz[static_cast<size_t>(draggedDivider)]);
 
     auto box = juce::Rectangle<float>(boxWidth, boxHeight)
-                   .withCentre(juce::Point<float>(x, plotArea.getY() + boxHeight * 0.5f + 5.0f * scale));
+                   .withCentre(juce::Point<float>(x, plotArea.getY() + boxHeight * 0.5f + 9.0f * scale));
 
     box.setX(juce::jlimit(plotArea.getX() + 2.0f, plotArea.getRight() - boxWidth - 2.0f, box.getX()));
 
@@ -780,6 +782,29 @@ float SpectrumDisplay::clampCrossover(int index, float hz) const
     return juce::jlimit(low, high, hz);
 }
 
+float SpectrumDisplay::modulatedFrequencyFor(int index, float baseHz) const
+{
+    if (index < 0 || index >= kMaxCrossovers)
+        return baseHz;
+
+    auto* parameter = crossoverParams[static_cast<size_t>(index)];
+
+    if (parameter == nullptr)
+        return baseHz;
+
+    // Crossovers are modulation destinations. The divider itself stays on the
+    // value the user edits; where modulation has moved the real edge, that is
+    // drawn as a ghost beside it.
+    const float offset = processor.getModulationDepth(crossoverIds[static_cast<size_t>(index)]);
+
+    if (std::abs(offset) <= 1.0e-4f)
+        return baseHz;
+
+    const float normalised = juce::jlimit(0.0f, 1.0f, parameter->convertTo0to1(baseHz) + offset);
+
+    return juce::jlimit(minFrequency, maxFrequency, parameter->convertFrom0to1(normalised));
+}
+
 void SpectrumDisplay::setCrossover(int index, float hz)
 {
     if (index < 0 || index >= kMaxCrossovers)
@@ -795,7 +820,12 @@ void SpectrumDisplay::setCrossover(int index, float hz)
     // Through the parameter, not the value tree: this is what puts the move in
     // front of the host's automation and the undo manager.
     parameter->setValueNotifyingHost(parameter->convertTo0to1(target));
+
+    // Move the displayed state with it rather than waiting for the next timer
+    // tick, or a drag repaints its edge in the new place and its ghost in the
+    // old one.
     crossoverHz[static_cast<size_t>(index)] = target;
+    modulatedHz[static_cast<size_t>(index)] = modulatedFrequencyFor(index, target);
 }
 
 void SpectrumDisplay::updateHover(juce::Point<float> position)
@@ -809,8 +839,9 @@ void SpectrumDisplay::updateHover(juce::Point<float> position)
     hoveredDivider = divider;
     hoveredBand = band;
 
-    setMouseCursor(divider >= 0 ? juce::MouseCursor::LeftRightResizeCursor
-                                : (band >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor));
+    setMouseCursor(divider >= 0
+                       ? juce::MouseCursor::LeftRightResizeCursor
+                       : (band >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor));
     repaint();
 }
 
@@ -928,21 +959,21 @@ void SpectrumDisplay::mouseDoubleClick(const juce::MouseEvent& e)
     if (parameter == nullptr)
         return;
 
-    const float target = clampCrossover(divider, parameter->convertFrom0to1(parameter->getDefaultValue()));
-
     // A double-click arrives between this divider's mouseDown and mouseUp, so a
     // gesture is already open; opening a second one would nest them.
-    if (draggedDivider != divider)
+    const bool needsGesture = draggedDivider != divider;
+
+    if (needsGesture)
         parameter->beginChangeGesture();
 
-    parameter->setValueNotifyingHost(parameter->convertTo0to1(target));
+    setCrossover(divider, parameter->convertFrom0to1(parameter->getDefaultValue()));
 
-    if (draggedDivider != divider)
+    if (needsGesture)
         parameter->endChangeGesture();
 
-    crossoverHz[static_cast<size_t>(divider)] = target;
+    // A drag continuing out of the double-click starts from the reset value.
     dragStartX = e.position.x;
-    dragStartHz = target;
+    dragStartHz = crossoverHz[static_cast<size_t>(divider)];
     repaint();
 }
 
@@ -952,19 +983,17 @@ juce::String SpectrumDisplay::getTooltip()
     const int divider = draggedDivider >= 0 ? draggedDivider : hoveredDivider;
 
     if (divider >= 0 && divider < kMaxCrossovers)
-        return "Crossover " + juce::String(divider + 1) + " \xe2\x80\x94 "
-             + formatFrequency(crossoverHz[static_cast<size_t>(divider)])
-             + "\nDrag to move, shift-drag for fine control, double-click to reset.";
+        return "Crossover " + juce::String(divider + 1) + " \xe2\x80\x94 " +
+               formatFrequency(crossoverHz[static_cast<size_t>(divider)]) +
+               "\nDrag to move, shift-drag for fine control, double-click to reset.";
 
     if (hoveredBand >= 0 && hoveredBand < numBands)
     {
-        const float low =
-            hoveredBand == 0 ? minFrequency : crossoverHz[static_cast<size_t>(hoveredBand - 1)];
-        const float high = hoveredBand == numBands - 1 ? maxFrequency
-                                                       : crossoverHz[static_cast<size_t>(hoveredBand)];
+        const float low = hoveredBand == 0 ? minFrequency : crossoverHz[static_cast<size_t>(hoveredBand - 1)];
+        const float high = hoveredBand == numBands - 1 ? maxFrequency : crossoverHz[static_cast<size_t>(hoveredBand)];
 
-        return "Band " + juce::String(hoveredBand + 1) + " \xe2\x80\x94 " + formatFrequency(low) + " to "
-             + formatFrequency(high) + "\nClick to edit this band.";
+        return "Band " + juce::String(hoveredBand + 1) + " \xe2\x80\x94 " + formatFrequency(low) + " to " +
+               formatFrequency(high) + "\nClick to edit this band.";
     }
 
     return "Input and output spectrum. Click a band to edit it, drag a divider to move a crossover.";
