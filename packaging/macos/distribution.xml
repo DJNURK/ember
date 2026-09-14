@@ -2,11 +2,11 @@
 <!--
     productbuild distribution file for the Ember installer.
 
-    build-pkg.sh copies this file into a temporary directory, replaces every
-    __EMBER_VERSION__ with the version being built, and drops the <license>
-    line if the repository has no LICENSE file. Running productbuild against
-    this file directly also works; the title then shows the literal
-    placeholder, and LICENSE.txt must exist in the --resources directory.
+    build-pkg.sh copies this file into a temporary directory, substitutes the
+    version placeholder below, and drops the licence element if the repository
+    has no LICENSE file. Running productbuild against this file directly also
+    works; the title then shows the literal placeholder, and LICENSE.txt must
+    exist in the resources directory passed to productbuild.
 -->
 <installer-gui-script minSpecVersion="2">
     <title>Ember __EMBER_VERSION__</title>

@@ -290,12 +290,12 @@ jobs:
 
           printf '%s' "$APPLE_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/app-cert.p12"
           security import "$RUNNER_TEMP/app-cert.p12" -k "$KEYCHAIN" \
-            -P "${APPLE_CERT_PASSWORD:-}" -A -T /usr/bin/codesign -T /usr/bin/productsign
+            -P "${APPLE_CERT_PASSWORD:-}" -T /usr/bin/codesign -T /usr/bin/productsign
 
           if [ -n "${APPLE_INSTALLER_CERT_P12_BASE64:-}" ]; then
             printf '%s' "$APPLE_INSTALLER_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/installer-cert.p12"
             security import "$RUNNER_TEMP/installer-cert.p12" -k "$KEYCHAIN" \
-              -P "${APPLE_CERT_PASSWORD:-}" -A -T /usr/bin/codesign -T /usr/bin/productsign
+              -P "${APPLE_CERT_PASSWORD:-}" -T /usr/bin/codesign -T /usr/bin/productsign
           fi
 
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
@@ -744,10 +744,10 @@ jobs:
             "dist/Ember-$VERSION-macOS.zip"
             "dist/Ember-$VERSION-Linux.tar.gz"
           )
-          DRAFT_FLAG=()
-          [ "$DRAFT" = "true" ] && DRAFT_FLAG=(--draft)
-          PRERELEASE_FLAG=()
-          case "$VERSION" in *-*) PRERELEASE_FLAG=(--prerelease) ;; esac
+          FLAGS=()
+          if [ "$DRAFT" = "true" ]; then FLAGS+=(--draft); fi
+          # 1.0.0-rc1 and friends are prereleases; 1.0.0 is not.
+          case "$VERSION" in *-*) FLAGS+=(--prerelease) ;; esac
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "release $TAG exists — updating it"
@@ -757,7 +757,7 @@ jobs:
             gh release create "$TAG" "${ASSETS[@]}" \
               --title "Ember $VERSION" \
               --notes-file "$EMBER_NOTES" \
-              "${DRAFT_FLAG[@]}" "${PRERELEASE_FLAG[@]}"
+              ${FLAGS[@]+"${FLAGS[@]}"}
           fi
           gh release view "$TAG" --json name,isDraft,assets \
             --jq '{name, isDraft, assets: [.assets[].name]}'

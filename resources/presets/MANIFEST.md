@@ -769,8 +769,8 @@ They are also worth re-running by eye if presets are re-voiced.
 
 | Style | Presets |
 |---|---|
-| Clean Tube | 06, 07, 08, 12, 13, 14, 20, 27, 28 |
-| Warm Tube | 01, 02, 08, 10, 16, 17, 22, 30, 32, 33 |
+| Clean Tube | 06, 07, 08, 12, 13, 14, 19, 20, 27, 28 |
+| Warm Tube | 01, 02, 07, 08, 10, 14, 16, 17, 22, 30, 32, 33 |
 | Subtle Tube | 04, 07, 09, 14, 15, 22, 24, 27, 28, 35 |
 | Broken Tube | 29, 34 |
 | Clean Tape | 04, 16, 18, 25, 28, 33 |
@@ -829,15 +829,18 @@ Preset 28 is the only one that sets a different **offline** factor (16×).
 | MIDI Source 1–4 | 21 (1) |
 | Macro 1–8 | 05 (1), 17 (2), 29 (3), 31 (4), 32 (5), 33 (6), 34 (7) |
 
-All six `ModSourceType` values are exercised. 14 of 35 presets ship routings; the heaviest preset
-(31 and 33) carries 3–4 connections, far below the 64 preallocated slots.
+All six `ModSourceType` values are exercised. 15 of 35 presets ship routings; the heaviest presets
+(31 and 33) carry 3 and 4 connections, far below the 64 preallocated slots. Macro 8 is deliberately
+left free in every preset so there is always an empty macro to assign.
 
 ### Category rules honoured
 
 - Mix Bus: all five presets have auto-gain **ON**, drive ≤ 6 dB, band mix ≤ 35 %, and use no
   destructive style.
-- Creative: 6 of 7 have auto-gain **OFF** (level is a creative choice there), and every
-  destructive style in the plugin appears in this category.
+- Creative: all seven have auto-gain **OFF** (output level is a creative choice there, and
+  auto-gain would fight the deliberate level drops), and every destructive style in the plugin
+  appears in this category. The only two non-Creative presets with auto-gain off are 05 and 17,
+  both of which are parallel-blend presets where the same reasoning applies.
 - No preset exceeds any parameter range; every feedback frequency lies inside its own band.
 
 ---
@@ -856,9 +859,20 @@ All six `ModSourceType` values are exercised. 14 of 35 presets ship routings; th
 4. **The XY Controller is a single flat modulation source** (`kNumXYControllers == 1`), so preset
    32 routes it once. If the engine ends up exposing X and Y as two separate flat sources, that
    preset can be extended with a Y-axis routing to Band 2 feedback amount and Macro 5 freed up.
-5. **Presets should store the plugin version** (1.0.0) and the preset's category, so the browser
-   can group them and a future migration can find old files.
-6. Suggested XML root and naming, for consistency with the `AudioProcessorValueTreeState` state
-   that `PluginProcessor` already writes:
-   `<EmberPreset name="..." category="..." version="1.0.0">` wrapping the APVTS state tree plus
-   the modulation connection list.
+5. **Match the existing XML shape.** `resources/presets/Init.xml` already establishes the format,
+   and this manifest defers to it rather than proposing a competing one:
+
+   ```xml
+   <EMBER_PRESET name="Kick Weight and Click" category="Drums" pluginVersion="1.0.0">
+     <!-- APVTS state tree, then the modulation connection list -->
+   </EMBER_PRESET>
+   ```
+
+   Use the exact category strings from the table above — `Drums`, `Bass`, `Vocals`, `Guitar`,
+   `Mix Bus`, `Creative` — so the browser can group them. (`Init.xml` uses `category="Factory"`
+   because it is not part of the six-category library.)
+6. **The generator is `ember_makepresets`**, which reads this file. If it is taught to parse the
+   per-band tables directly, the column order here is fixed and machine-readable: band index,
+   range, style, drive, mix, level, pan, width, feedback, feedback frequency, dynamics, low, mid,
+   high. The `Range (Hz)` column is derived from the crossover list and should be ignored on read;
+   `—` appears only in `FB (Hz)`.

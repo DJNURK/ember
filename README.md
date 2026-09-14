@@ -258,8 +258,8 @@ while the tree is mid-change.
 │   ├── macos/              .pkg sources
 │   └── linux/              tarball + install.sh sources
 ├── resources/
-│   ├── fonts/  icons/      GUI assets compiled in as binary data
-│   └── presets/            factory presets
+│   ├── fonts/  icons/      GUI assets
+│   └── presets/            factory presets, compiled in as binary data
 ├── scripts/
 │   ├── build.sh            one-command build (macOS / Linux)
 │   ├── build.ps1           one-command build (Windows)
@@ -277,7 +277,7 @@ while the tree is mid-change.
 └── .github/workflows/      CI: build matrix, tests, pluginval, release
 ```
 
-The CMake targets are `Ember` (the plugin, producing `Ember_VST3`, `Ember_AU` and
+The main CMake targets are `Ember` (the plugin, producing `Ember_VST3`, `Ember_AU` and
 `Ember_Standalone`), `ember_dsp` (the host-free DSP library), `ember_tests`,
 `ember_benchmark` and `ember_render`. The DSP lives in its own library with no GUI and no
 plugin wrapper precisely so it can be exercised headlessly.

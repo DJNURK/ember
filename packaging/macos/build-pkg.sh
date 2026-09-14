@@ -133,7 +133,10 @@ build_component() {
     local src="$1" install_location="$2" identifier="$3" out_name="$4" root
     root="$WORK/root/$out_name"
     mkdir -p "$root"
-    ditto "$src" "$root/$(basename -- "$src")"
+    # --noqtn: never carry a com.apple.quarantine flag from the build machine
+    # into the payload. Code signatures live inside the bundles, not in xattrs,
+    # so dropping quarantine is safe and keeps installed plug-ins unflagged.
+    ditto --noqtn "$src" "$root/$(basename -- "$src")"
     info "pkgbuild $out_name  ->  $install_location"
     pkgbuild --quiet \
         --root "$root" \

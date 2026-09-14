@@ -15,9 +15,10 @@ namespace
     misbehaving modulation source cannot turn into an unbounded fold count. */
 constexpr float kMaxPreGain = 128.0f;
 
-/** Pure safety net on the wavefolder's input: a band that somehow arrives at
-    +/-128 still folds a bounded number of times instead of grinding through
-    thousands of triangle periods per sample. Normal material never reaches it. */
+/** Pure safety net on the wavefolder's input: a band that somehow arrives
+    enormous still folds a bounded number of times instead of grinding through
+    thousands of triangle periods per sample. With the drive mapping below this
+    needs a band level above +/-12 to engage, so normal material never sees it. */
 constexpr float kMaxFoldInput = 256.0f;
 
 /**
