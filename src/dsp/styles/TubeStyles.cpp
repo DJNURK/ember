@@ -67,13 +67,13 @@ inline float deadZone(float x, float threshold) noexcept
 
 // ---------------------------------------------------------------- style tuning
 // Clean Tube
-constexpr float kCleanBias     = 0.18f;
-constexpr float kCleanInner    = 0.75f;
+constexpr float kCleanBias = 0.18f;
+constexpr float kCleanInner = 0.75f;
 constexpr float kCleanInvInner = 1.0f / kCleanInner;
 
 // Warm Tube
-constexpr float kWarmShelfHz     = 220.0f;
-constexpr float kWarmShelfQ      = 0.6f;
+constexpr float kWarmShelfHz = 220.0f;
+constexpr float kWarmShelfQ = 0.6f;
 /** Low-band boost at 0 dB drive: DC gain is `1 + kWarmShelfMin` (+2.3 dB).
 
     This one is gain-match critical, not just taste. `StyleCalibrator` measures
@@ -87,37 +87,37 @@ constexpr float kWarmShelfQ      = 0.6f;
     `kWarmShelfRange` was raised by the same amount, so the endpoint is still
     1.30 and the thick, bass-driven character at high drive is exactly as it
     was. Raise this and re-run "[gainmatch]" before assuming it is free. */
-constexpr float kWarmShelfMin    = 0.30f;
-constexpr float kWarmShelfRange  = 1.00f;   ///< to 1.30 at 40 dB drive (~+7.2 dB total)
-constexpr float kWarmBiasBase    = 0.30f;
-constexpr float kWarmBiasRange   = 0.25f;
-constexpr float kWarmInner       = 0.9f;
-constexpr float kWarmInvInner    = 1.0f / kWarmInner;
-constexpr float kWarmSqueeze     = 0.8f;    ///< second, gentler stage: rounds the knee further
-constexpr float kWarmInvSqueeze  = 1.0f / kWarmSqueeze;
+constexpr float kWarmShelfMin = 0.30f;
+constexpr float kWarmShelfRange = 1.00f; ///< to 1.30 at 40 dB drive (~+7.2 dB total)
+constexpr float kWarmBiasBase = 0.30f;
+constexpr float kWarmBiasRange = 0.25f;
+constexpr float kWarmInner = 0.9f;
+constexpr float kWarmInvInner = 1.0f / kWarmInner;
+constexpr float kWarmSqueeze = 0.8f; ///< second, gentler stage: rounds the knee further
+constexpr float kWarmInvSqueeze = 1.0f / kWarmSqueeze;
 
 // Subtle Tube
 /** Drive is scaled in dB, not linearly: `driveLin^0.35` is the same as using
     only 35 % of the knob's decibels, so the top of the range lands around 14 dB
     and the curve never leaves its gentle region. A linear fraction would still
     be 20x at the top and clip like everything else. */
-constexpr float kSubtleDriveExp   = 0.35f;
-constexpr float kSubtleBias       = 0.10f;
-constexpr float kSubtleInner      = 0.5f;
-constexpr float kSubtleInvInner   = 1.0f / kSubtleInner;
+constexpr float kSubtleDriveExp = 0.35f;
+constexpr float kSubtleBias = 0.10f;
+constexpr float kSubtleInner = 0.5f;
+constexpr float kSubtleInvInner = 1.0f / kSubtleInner;
 
 // Broken Tube
-constexpr float kBrokenBiasBase   = 0.12f;
-constexpr float kBrokenLfoDepth   = 0.30f;
-constexpr float kBrokenEnvDepth   = 0.45f;
-constexpr float kBrokenDriftMin   = 0.35f;  ///< drift depth at 0 dB drive, scaled up with amount
+constexpr float kBrokenBiasBase = 0.12f;
+constexpr float kBrokenLfoDepth = 0.30f;
+constexpr float kBrokenEnvDepth = 0.45f;
+constexpr float kBrokenDriftMin = 0.35f; ///< drift depth at 0 dB drive, scaled up with amount
 constexpr float kBrokenDriftRange = 0.65f;
-constexpr double kBrokenLfoHz     = 0.13;   ///< one wander every ~7.7 s
+constexpr double kBrokenLfoHz = 0.13; ///< one wander every ~7.7 s
 constexpr float kBrokenEnvFastSec = 0.050f;
 constexpr float kBrokenEnvSlowSec = 0.400f;
-constexpr float kBrokenCrossBase  = 0.020f; ///< dead zone half-width, relative to band level
+constexpr float kBrokenCrossBase = 0.020f; ///< dead zone half-width, relative to band level
 constexpr float kBrokenCrossRange = 0.060f;
-constexpr float kBrokenCrossMin   = 1.0e-4f;
+constexpr float kBrokenCrossMin = 1.0e-4f;
 } // namespace
 
 // ==================================================================== base
@@ -291,7 +291,7 @@ void BrokenTubeStyle::prepare(double oversampledSampleRate, [[maybe_unused]] int
         env.setTimeConstant(kBrokenEnvSlowSec);
     }
 
-    lfoInc = 2.0 * kBrokenLfoHz / sampleRate;   // phase spans 2 units per cycle
+    lfoInc = 2.0 * kBrokenLfoHz / sampleRate; // phase spans 2 units per cycle
 
     reset();
 }
@@ -327,7 +327,7 @@ void BrokenTubeStyle::process(float* const* channelData, int numChannels, int nu
     // every drive setting; doing it this way just saves a multiply.
     const float threshold = juce::jmax(kBrokenCrossMin, kBrokenCrossBase + kBrokenCrossRange * amount);
 
-    float* samples[kMaxChannels] {};
+    float* samples[kMaxChannels]{};
 
     for (int ch = 0; ch < channels; ++ch)
     {
@@ -336,14 +336,14 @@ void BrokenTubeStyle::process(float* const* channelData, int numChannels, int nu
         // One bad buffer must not be able to park the drift off in NaN for the
         // rest of the session.
         const size_t idx = static_cast<size_t>(ch);
-        if (! (dsputil::isFinite(envFast[idx].getState()) && dsputil::isFinite(envSlow[idx].getState())))
+        if (!(dsputil::isFinite(envFast[idx].getState()) && dsputil::isFinite(envSlow[idx].getState())))
         {
             envFast[idx].reset();
             envSlow[idx].reset();
         }
     }
 
-    if (! std::isfinite(lfoPhase))
+    if (!std::isfinite(lfoPhase))
         lfoPhase = 0.0;
 
     // Samples outer, channels inner: the oscillator is the valve's own supply
@@ -373,7 +373,7 @@ void BrokenTubeStyle::process(float* const* channelData, int numChannels, int nu
             // Heavily smoothed: two cascaded one-poles, so the drift creeps
             // rather than tracking the waveform.
             const float envelope = envSlow[idx].process(envFast[idx].process(std::abs(crossed)));
-            const float envTerm = envelope / (1.0f + envelope);   // bounded in [0, 1)
+            const float envTerm = envelope / (1.0f + envelope); // bounded in [0, 1)
 
             const float bias = kBrokenBiasBase + lfoDepth * lfo + envDepth * envTerm;
 

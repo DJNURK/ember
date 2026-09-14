@@ -55,13 +55,19 @@ public:
     void reset (float initialValue = 0.0f) noexcept { value = dsputil::sanitise (initialValue); }
 
     /** Move `numSamples` of audio time towards `target` with a `timeMs`
-        exponential. A non-positive time (or block) snaps. */
+        exponential. A non-positive time snaps; a non-positive BLOCK does not
+        advance at all (no time has passed, so the value cannot have moved —
+        snapping there would let a zero-length call jump a 500 ms smoother
+        straight to its target). */
     float process (float target, float timeMs, int numSamples) noexcept
     {
+        if (numSamples <= 0)
+            return value;
+
         const float safeTarget = dsputil::sanitise (target);
         const float seconds    = juce::jmax (0.0f, timeMs) * 0.001f;
 
-        if (seconds <= 0.0f || numSamples <= 0)
+        if (seconds <= 0.0f)
         {
             value = safeTarget;
             return value;
@@ -111,11 +117,17 @@ struct XLfoParams
     Multi-point shape LFO. Bipolar: output is [-1, +1] * depth.
 
     Free-running or host-synced. When synced AND the transport is rolling the
-    phase is DERIVED from the ppq position rather than integrated, so the shape
-    stays locked to the timeline through loops, locates and tempo changes; when
-    the transport is stopped it free-runs at the synced rate so the GUI still
-    shows movement. Phase is kept in double precision and wrapped every block,
-    so it never drifts and never loses resolution over a long session.
+    phase is RE-DERIVED from the ppq position every time the host reports a new
+    one, so the shape stays locked to the timeline through loops, locates and
+    tempo changes. Hosts report ppq once per BUFFER, not once per control block,
+    so between two reports the phase is integrated at the synced rate instead of
+    standing still — otherwise a synced LFO would be frozen for the whole buffer
+    and step at the buffer boundary, which is exactly the staircase the
+    control-block chunking exists to avoid. The next report re-locks it, so the
+    interpolation can never accumulate drift. When the transport is stopped it
+    free-runs at the synced rate so the GUI still shows movement. Phase is kept
+    in double precision and wrapped every block, so it never drifts and never
+    loses resolution over a long session.
 */
 class XLfo
 {
@@ -174,6 +186,8 @@ private:
     ControlSmoother smoother;
     double          sr { 44100.0 };
     double          phase { 0.0 };      ///< 0 .. 1, before the phase offset
+    double          lastPpq { 0.0 };    ///< last ppq the host reported, for sync
+    bool            havePpq { false };
     float           currentValue { 0.0f };
 };
 

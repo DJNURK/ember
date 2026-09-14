@@ -32,18 +32,17 @@ inline void sanitiseChannelState(ampdetail::AmpChannelState& cs, int numStages) 
     {
         cs.stages[s].mid.sanitiseState();
 
-        if (! dsputil::isFinite(cs.stages[s].lowCut.getState()))
+        if (!dsputil::isFinite(cs.stages[s].lowCut.getState()))
             cs.stages[s].lowCut.reset();
     }
 
-    if (! dsputil::isFinite(cs.post.getState()))
+    if (!dsputil::isFinite(cs.post.getState()))
         cs.post.reset();
 }
 } // namespace
 
 // ====================================================================== base
-void AmpStyleBase::prepare(double oversampledSampleRate,
-                           [[maybe_unused]] int maxBlockSize,
+void AmpStyleBase::prepare(double oversampledSampleRate, [[maybe_unused]] int maxBlockSize,
                            [[maybe_unused]] int numChannels)
 {
     jassert(oversampledSampleRate > 0.0);
@@ -75,12 +74,11 @@ void AmpStyleBase::updateCoefficients(double sampleRate) noexcept
     const double sr = (sampleRate >= 8000.0 && sampleRate <= 1.0e7) ? sampleRate : 44100.0;
     const float nyquistLimit = static_cast<float>(sr) * 0.45f;
 
-    const float midF  = juce::jlimit(20.0f,  nyquistLimit, voicing.midHz);
-    const float lowF  = juce::jlimit(10.0f,  nyquistLimit,
-                                     voicing.lowCutHz > 0.0f ? voicing.lowCutHz : 20.0f);
+    const float midF = juce::jlimit(20.0f, nyquistLimit, voicing.midHz);
+    const float lowF = juce::jlimit(10.0f, nyquistLimit, voicing.lowCutHz > 0.0f ? voicing.lowCutHz : 20.0f);
     const float postF = juce::jlimit(200.0f, nyquistLimit, voicing.postLowpassHz);
 
-    const float lowTau  = onePoleTimeConstantFor(lowF);
+    const float lowTau = onePoleTimeConstantFor(lowF);
     const float postTau = onePoleTimeConstantFor(postF);
 
     for (auto& cs : channels)
@@ -119,26 +117,25 @@ void AmpStyleBase::process(float* const* channelData, int numChannels, int numSa
     if (std::abs(params.sampleRate - preparedSampleRate) > 1.0)
         updateCoefficients(params.sampleRate);
 
-    const int numCh     = juce::jmin(numChannels, ampdetail::kMaxAmpChannels);
+    const int numCh = juce::jmin(numChannels, ampdetail::kMaxAmpChannels);
     const int numStages = juce::jlimit(1, ampdetail::kMaxAmpStages, voicing.numStages);
 
     // ------------------------------------------------- block-rate parameters
     const float sanitisedDrive = dsputil::sanitise(params.driveLin);
-    const float driveLin = juce::jlimit(kMinDriveLin, kMaxDriveLin,
-                                        sanitisedDrive > 0.0f ? sanitisedDrive : 1.0f);
+    const float driveLin = juce::jlimit(kMinDriveLin, kMaxDriveLin, sanitisedDrive > 0.0f ? sanitisedDrive : 1.0f);
     const float amount = juce::jlimit(0.0f, 1.0f, dsputil::sanitise(params.amount01));
 
-    float stageGain[ampdetail::kMaxAmpStages] { 1.0f, 1.0f, 1.0f, 1.0f };
+    float stageGain[ampdetail::kMaxAmpStages]{1.0f, 1.0f, 1.0f, 1.0f};
 
     for (int s = 0; s < numStages; ++s)
-        stageGain[s] = juce::jlimit(0.01f, kMaxStageGain,
-                                    voicing.stageTrim[s] * std::pow(driveLin, voicing.stageDriveExp[s]));
+        stageGain[s] =
+            juce::jlimit(0.01f, kMaxStageGain, voicing.stageTrim[s] * std::pow(driveLin, voicing.stageDriveExp[s]));
 
-    const float bias   = voicing.biasAtFullDrive * amount;
+    const float bias = voicing.biasAtFullDrive * amount;
     const float midMix = voicing.midMixMin + (voicing.midMixMax - voicing.midMixMin) * amount;
     const float lowCutDepth = juce::jlimit(0.0f, 1.0f, voicing.lowCutAmount);
 
-    const bool useBias   = bias > 1.0e-4f;
+    const bool useBias = bias > 1.0e-4f;
     const bool useLowCut = voicing.lowCutHz > 0.0f && lowCutDepth > 1.0e-4f;
 
     // ----------------------------------------------------------- the cascade
@@ -199,18 +196,18 @@ CleanAmpStyle::CleanAmpStyle()
     voicing.stageTrim[3] = 1.0f;
 
     voicing.stageDriveExp[0] = 0.58f;
-    voicing.stageDriveExp[1] = 0.42f;   // sum 1.00: small-signal gain tracks drive
+    voicing.stageDriveExp[1] = 0.42f; // sum 1.00: small-signal gain tracks drive
     voicing.stageDriveExp[2] = 0.0f;
     voicing.stageDriveExp[3] = 0.0f;
 
-    voicing.biasAtFullDrive = 0.0f;     // symmetric: odd harmonics only
+    voicing.biasAtFullDrive = 0.0f; // symmetric: odd harmonics only
 
-    voicing.midHz     = 900.0f;
-    voicing.midQ      = 0.55f;
+    voicing.midHz = 900.0f;
+    voicing.midQ = 0.55f;
     voicing.midMixMin = 0.06f;
     voicing.midMixMax = 0.18f;
 
-    voicing.lowCutHz     = 0.0f;        // full-range low end
+    voicing.lowCutHz = 0.0f; // full-range low end
     voicing.lowCutAmount = 0.0f;
 
     voicing.postLowpassHz = 13000.0f;
@@ -230,19 +227,19 @@ CrunchStyle::CrunchStyle()
 
     voicing.stageDriveExp[0] = 0.40f;
     voicing.stageDriveExp[1] = 0.36f;
-    voicing.stageDriveExp[2] = 0.34f;   // sum 1.10: a touch hotter than drive
+    voicing.stageDriveExp[2] = 0.34f; // sum 1.10: a touch hotter than drive
     voicing.stageDriveExp[3] = 0.0f;
 
     voicing.biasAtFullDrive = 0.20f;
 
-    voicing.midHz     = 1100.0f;
-    voicing.midQ      = 0.85f;
+    voicing.midHz = 1100.0f;
+    voicing.midQ = 0.85f;
     voicing.midMixMin = 0.20f;
     voicing.midMixMax = 0.45f;
 
     // Gentle tightening between stages. Three stages compound it, so the depth
     // per stage stays small: about -5 dB at 40 Hz overall, -2 dB at 100 Hz.
-    voicing.lowCutHz     = 70.0f;
+    voicing.lowCutHz = 70.0f;
     voicing.lowCutAmount = 0.25f;
 
     voicing.postLowpassHz = 9000.0f;
@@ -264,19 +261,19 @@ LeadStyle::LeadStyle()
     voicing.stageDriveExp[0] = 0.34f;
     voicing.stageDriveExp[1] = 0.30f;
     voicing.stageDriveExp[2] = 0.29f;
-    voicing.stageDriveExp[3] = 0.27f;   // sum 1.20
+    voicing.stageDriveExp[3] = 0.27f; // sum 1.20
 
     voicing.biasAtFullDrive = 0.14f;
 
-    voicing.midHz     = 1400.0f;
-    voicing.midQ      = 1.05f;
+    voicing.midHz = 1400.0f;
+    voicing.midQ = 1.05f;
     voicing.midMixMin = 0.32f;
     voicing.midMixMax = 0.60f;
 
     // Four stages compound the high-pass, so a shallow shelf per stage is
     // already a firm tightening: about -11 dB at 40 Hz, -5 dB at 100 Hz, and
     // barely 2 dB by 200 Hz. Deeper than this deletes a low band outright.
-    voicing.lowCutHz     = 90.0f;
+    voicing.lowCutHz = 90.0f;
     voicing.lowCutAmount = 0.35f;
 
     voicing.postLowpassHz = 7500.0f;

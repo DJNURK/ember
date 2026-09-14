@@ -21,6 +21,26 @@ constexpr float kMaxPreGain = 128.0f;
     needs a band level above +/-12 to engage, so normal material never sees it. */
 constexpr float kMaxFoldInput = 256.0f;
 
+/** The same safety net for the hard clipper, and the reason it is so much
+    wider than the folder's.
+
+    `kMaxPreGain` is 128, so a finite input above ~2.6e36 — which `sanitise`
+    happily passes, because it is finite — overflows the pre-gain multiply to
+    +/-inf. `adaa::process1` degrades gracefully when it is handed one (the
+    quotient goes non-finite, so it falls back to the midpoint evaluation and
+    still returns +/-1), but it also writes that inf into the caller's ADAA
+    state; if the spike lands on the last sample of a block the state is
+    sanitised to 0 at the block boundary and the first sample of the NEXT block
+    is then averaged from 0 instead of from the spike. Clamping the product
+    closes that off. The folder already does exactly this.
+
+    1e6 rather than the folder's 256 because hard clip's antiderivative is
+    |x| - 1/2, so the ADAA quotient keeps reading the magnitude even where the
+    shaper itself has saturated: clamping to 256 would move a segment that
+    spans zero by up to 0.4%, whereas clamping to 1e6 moves it by 1.3e-6
+    (-118 dB) and still leaves 3e32 of headroom under the multiply. */
+constexpr float kMaxClipInput = 1.0e6f;
+
 /**
     Fold-count exponent.
 
@@ -43,8 +63,14 @@ constexpr float kFoldAdaaEps = 1.0e-4f;
 
 /** Rate-reduction end points, in Hz, shared by Decimate and Bitcrush.
     200 kHz is the "off" end: every sample-and-hold image sits above 175 kHz,
-    so it is stripped by the oversampler's decimation filter at every factor,
-    and at 1x-4x the increment simply clamps to 1.0 (true bypass). */
+    so it is stripped by the oversampler's decimation filter at every factor.
+
+    Wherever the OVERSAMPLED rate is at or below 200 kHz the increment simply
+    clamps to 1.0 and the hold is a true bypass — that is every 1x
+    configuration (44.1 k to 192 k), 2x up to a 96 kHz host, and 4x up to a
+    48 kHz host. Above that the hold is real but inaudible: measured through
+    BandChain at 0 drive, the in-band residual is entirely the half-hold-period
+    group delay, not distortion. */
 constexpr double kHoldRateTopHz = 200000.0;
 
 // ---------------------------------------------------------------- wavefolder
@@ -76,8 +102,9 @@ double foldShaper (double x) noexcept
 
     where H is `adaa::foldF1`'s piecewise-quadratic partial integral. Written
     this way there is no large-minus-large cancellation at all, and the phase
-    reduction is done in double so that a deeply driven signal (|x| up to 64)
-    still yields an F1 accurate to a float ulp — which matters, because
+    reduction is done in double so that a deeply driven signal (|x| up to
+    `kMaxFoldInput`, i.e. 256) still yields an F1 accurate to a float ulp —
+    which matters, because
     `process1` divides the difference of two F1 values by a step that can be as
     small as `kFoldAdaaEps`.
 
@@ -266,7 +293,8 @@ void HardClipStyle::process (float* const* channelData, int numChannels, int num
 
         for (int n = 0; n < numSamples; ++n)
         {
-            const float x = dsputil::sanitise (data[n]) * gain;
+            const float driven = dsputil::sanitise (data[n]) * gain;
+            const float x = juce::jlimit (-kMaxClipInput, kMaxClipInput, driven);
             data[n] = dsputil::sanitise (adaa::process1 (x, state, adaa::hardClipF, adaa::hardClipF1));
         }
 

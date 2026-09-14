@@ -5,139 +5,139 @@
     <PARAM id="autoGain" value="0.0"/>
     <PARAM id="band1Bypass" value="0.0"/>
     <PARAM id="band1Drive" value="9.0"/>
-    <PARAM id="band1Dynamics" value="10.00000190734863"/>
+    <PARAM id="band1Dynamics" value="10.0"/>
     <PARAM id="band1Feedback" value="0.0"/>
-    <PARAM id="band1FeedbackFreq" value="199.9999847412109"/>
-    <PARAM id="band1Level" value="-1.000000476837158"/>
+    <PARAM id="band1FeedbackFreq" value="200.0"/>
+    <PARAM id="band1Level" value="-1.0"/>
     <PARAM id="band1Mix" value="35.0"/>
-    <PARAM id="band1Pan" value="1.490116119384766e-6"/>
+    <PARAM id="band1Pan" value="0.0"/>
     <PARAM id="band1Solo" value="0.0"/>
     <PARAM id="band1Style" value="3.0"/>
-    <PARAM id="band1ToneHigh" value="-2.682209014892578e-7"/>
-    <PARAM id="band1ToneLow" value="-2.000000238418579"/>
-    <PARAM id="band1ToneMid" value="-2.682209014892578e-7"/>
+    <PARAM id="band1ToneHigh" value="0.0"/>
+    <PARAM id="band1ToneLow" value="-2.0"/>
+    <PARAM id="band1ToneMid" value="0.0"/>
     <PARAM id="band1Width" value="90.0"/>
     <PARAM id="band2Bypass" value="0.0"/>
     <PARAM id="band2Drive" value="14.0"/>
-    <PARAM id="band2Dynamics" value="1.490116119384766e-6"/>
+    <PARAM id="band2Dynamics" value="0.0"/>
     <PARAM id="band2Feedback" value="0.0"/>
-    <PARAM id="band2FeedbackFreq" value="199.9999847412109"/>
-    <PARAM id="band2Level" value="-2.000000476837158"/>
+    <PARAM id="band2FeedbackFreq" value="200.0"/>
+    <PARAM id="band2Level" value="-2.0"/>
     <PARAM id="band2Mix" value="65.0"/>
-    <PARAM id="band2Pan" value="1.490116119384766e-6"/>
+    <PARAM id="band2Pan" value="0.0"/>
     <PARAM id="band2Solo" value="0.0"/>
     <PARAM id="band2Style" value="16.0"/>
-    <PARAM id="band2ToneHigh" value="-2.000000238418579"/>
-    <PARAM id="band2ToneLow" value="-2.000000238418579"/>
-    <PARAM id="band2ToneMid" value="0.9999997019767761"/>
+    <PARAM id="band2ToneHigh" value="-2.0"/>
+    <PARAM id="band2ToneLow" value="-2.0"/>
+    <PARAM id="band2ToneMid" value="1.0"/>
     <PARAM id="band2Width" value="100.0"/>
     <PARAM id="band3Bypass" value="0.0"/>
     <PARAM id="band3Drive" value="16.0"/>
-    <PARAM id="band3Dynamics" value="1.490116119384766e-6"/>
+    <PARAM id="band3Dynamics" value="0.0"/>
     <PARAM id="band3Feedback" value="0.0"/>
-    <PARAM id="band3FeedbackFreq" value="199.9999847412109"/>
-    <PARAM id="band3Level" value="-4.000000476837158"/>
+    <PARAM id="band3FeedbackFreq" value="200.0"/>
+    <PARAM id="band3Level" value="-4.0"/>
     <PARAM id="band3Mix" value="55.0"/>
-    <PARAM id="band3Pan" value="1.490116119384766e-6"/>
+    <PARAM id="band3Pan" value="0.0"/>
     <PARAM id="band3Solo" value="0.0"/>
     <PARAM id="band3Style" value="15.0"/>
     <PARAM id="band3ToneHigh" value="-5.0"/>
-    <PARAM id="band3ToneLow" value="-2.682209014892578e-7"/>
-    <PARAM id="band3ToneMid" value="-2.682209014892578e-7"/>
+    <PARAM id="band3ToneLow" value="0.0"/>
+    <PARAM id="band3ToneMid" value="0.0"/>
     <PARAM id="band3Width" value="80.0"/>
     <PARAM id="band4Bypass" value="0.0"/>
     <PARAM id="band4Drive" value="0.0"/>
-    <PARAM id="band4Dynamics" value="1.490116119384766e-6"/>
+    <PARAM id="band4Dynamics" value="0.0"/>
     <PARAM id="band4Feedback" value="0.0"/>
-    <PARAM id="band4FeedbackFreq" value="199.9999847412109"/>
-    <PARAM id="band4Level" value="-5.364418029785156e-7"/>
+    <PARAM id="band4FeedbackFreq" value="200.0"/>
+    <PARAM id="band4Level" value="-0.0"/>
     <PARAM id="band4Mix" value="100.0"/>
-    <PARAM id="band4Pan" value="1.490116119384766e-6"/>
+    <PARAM id="band4Pan" value="0.0"/>
     <PARAM id="band4Solo" value="0.0"/>
     <PARAM id="band4Style" value="0.0"/>
-    <PARAM id="band4ToneHigh" value="-2.682209014892578e-7"/>
-    <PARAM id="band4ToneLow" value="-2.682209014892578e-7"/>
-    <PARAM id="band4ToneMid" value="-2.682209014892578e-7"/>
+    <PARAM id="band4ToneHigh" value="-0.0"/>
+    <PARAM id="band4ToneLow" value="-0.0"/>
+    <PARAM id="band4ToneMid" value="-0.0"/>
     <PARAM id="band4Width" value="100.0"/>
     <PARAM id="band5Bypass" value="0.0"/>
     <PARAM id="band5Drive" value="0.0"/>
-    <PARAM id="band5Dynamics" value="1.490116119384766e-6"/>
+    <PARAM id="band5Dynamics" value="0.0"/>
     <PARAM id="band5Feedback" value="0.0"/>
-    <PARAM id="band5FeedbackFreq" value="199.9999847412109"/>
-    <PARAM id="band5Level" value="-5.364418029785156e-7"/>
+    <PARAM id="band5FeedbackFreq" value="200.0"/>
+    <PARAM id="band5Level" value="-0.0"/>
     <PARAM id="band5Mix" value="100.0"/>
-    <PARAM id="band5Pan" value="1.490116119384766e-6"/>
+    <PARAM id="band5Pan" value="0.0"/>
     <PARAM id="band5Solo" value="0.0"/>
     <PARAM id="band5Style" value="0.0"/>
-    <PARAM id="band5ToneHigh" value="-2.682209014892578e-7"/>
-    <PARAM id="band5ToneLow" value="-2.682209014892578e-7"/>
-    <PARAM id="band5ToneMid" value="-2.682209014892578e-7"/>
+    <PARAM id="band5ToneHigh" value="-0.0"/>
+    <PARAM id="band5ToneLow" value="-0.0"/>
+    <PARAM id="band5ToneMid" value="-0.0"/>
     <PARAM id="band5Width" value="100.0"/>
     <PARAM id="band6Bypass" value="0.0"/>
     <PARAM id="band6Drive" value="0.0"/>
-    <PARAM id="band6Dynamics" value="1.490116119384766e-6"/>
+    <PARAM id="band6Dynamics" value="0.0"/>
     <PARAM id="band6Feedback" value="0.0"/>
-    <PARAM id="band6FeedbackFreq" value="199.9999847412109"/>
-    <PARAM id="band6Level" value="-5.364418029785156e-7"/>
+    <PARAM id="band6FeedbackFreq" value="200.0"/>
+    <PARAM id="band6Level" value="-0.0"/>
     <PARAM id="band6Mix" value="100.0"/>
-    <PARAM id="band6Pan" value="1.490116119384766e-6"/>
+    <PARAM id="band6Pan" value="0.0"/>
     <PARAM id="band6Solo" value="0.0"/>
     <PARAM id="band6Style" value="0.0"/>
-    <PARAM id="band6ToneHigh" value="-2.682209014892578e-7"/>
-    <PARAM id="band6ToneLow" value="-2.682209014892578e-7"/>
-    <PARAM id="band6ToneMid" value="-2.682209014892578e-7"/>
+    <PARAM id="band6ToneHigh" value="-0.0"/>
+    <PARAM id="band6ToneLow" value="-0.0"/>
+    <PARAM id="band6ToneMid" value="-0.0"/>
     <PARAM id="band6Width" value="100.0"/>
     <PARAM id="dither" value="0.0"/>
-    <PARAM id="ef1Attack" value="5.000001430511475"/>
+    <PARAM id="ef1Attack" value="5.0"/>
     <PARAM id="ef1Band" value="0.0"/>
-    <PARAM id="ef1Gain" value="-5.364418029785156e-7"/>
-    <PARAM id="ef1Release" value="100.0000076293945"/>
-    <PARAM id="ef2Attack" value="5.000001430511475"/>
+    <PARAM id="ef1Gain" value="-0.0"/>
+    <PARAM id="ef1Release" value="100.0"/>
+    <PARAM id="ef2Attack" value="5.0"/>
     <PARAM id="ef2Band" value="0.0"/>
-    <PARAM id="ef2Gain" value="-5.364418029785156e-7"/>
-    <PARAM id="ef2Release" value="100.0000076293945"/>
-    <PARAM id="ef3Attack" value="5.000001430511475"/>
+    <PARAM id="ef2Gain" value="-0.0"/>
+    <PARAM id="ef2Release" value="100.0"/>
+    <PARAM id="ef3Attack" value="5.0"/>
     <PARAM id="ef3Band" value="0.0"/>
-    <PARAM id="ef3Gain" value="-5.364418029785156e-7"/>
-    <PARAM id="ef3Release" value="100.0000076293945"/>
-    <PARAM id="ef4Attack" value="5.000001430511475"/>
+    <PARAM id="ef3Gain" value="-0.0"/>
+    <PARAM id="ef3Release" value="100.0"/>
+    <PARAM id="ef4Attack" value="5.0"/>
     <PARAM id="ef4Band" value="0.0"/>
-    <PARAM id="ef4Gain" value="-5.364418029785156e-7"/>
-    <PARAM id="ef4Release" value="100.0000076293945"/>
-    <PARAM id="eg1Attack" value="9.999996185302734"/>
+    <PARAM id="ef4Gain" value="-0.0"/>
+    <PARAM id="ef4Release" value="100.0"/>
+    <PARAM id="eg1Attack" value="10.0"/>
     <PARAM id="eg1Decay" value="200.0"/>
     <PARAM id="eg1Release" value="300.0"/>
     <PARAM id="eg1Sustain" value="50.0"/>
-    <PARAM id="eg1Threshold" value="-23.99999809265137"/>
+    <PARAM id="eg1Threshold" value="-24.0"/>
     <PARAM id="eg1Trigger" value="0.0"/>
-    <PARAM id="eg2Attack" value="9.999996185302734"/>
+    <PARAM id="eg2Attack" value="10.0"/>
     <PARAM id="eg2Decay" value="200.0"/>
     <PARAM id="eg2Release" value="300.0"/>
     <PARAM id="eg2Sustain" value="50.0"/>
-    <PARAM id="eg2Threshold" value="-23.99999809265137"/>
+    <PARAM id="eg2Threshold" value="-24.0"/>
     <PARAM id="eg2Trigger" value="0.0"/>
-    <PARAM id="inGain" value="-5.364418029785156e-7"/>
+    <PARAM id="inGain" value="0.0"/>
     <PARAM id="lfo1Depth" value="100.0"/>
     <PARAM id="lfo1Phase" value="0.0"/>
-    <PARAM id="lfo1Rate" value="2.000000238418579"/>
+    <PARAM id="lfo1Rate" value="2.0"/>
     <PARAM id="lfo1Smooth" value="0.0"/>
     <PARAM id="lfo1Steps" value="0.0"/>
     <PARAM id="lfo1Sync" value="0.0"/>
     <PARAM id="lfo2Depth" value="100.0"/>
     <PARAM id="lfo2Phase" value="0.0"/>
-    <PARAM id="lfo2Rate" value="2.000000238418579"/>
+    <PARAM id="lfo2Rate" value="2.0"/>
     <PARAM id="lfo2Smooth" value="0.0"/>
     <PARAM id="lfo2Steps" value="0.0"/>
     <PARAM id="lfo2Sync" value="0.0"/>
     <PARAM id="lfo3Depth" value="100.0"/>
     <PARAM id="lfo3Phase" value="0.0"/>
-    <PARAM id="lfo3Rate" value="2.000000238418579"/>
+    <PARAM id="lfo3Rate" value="2.0"/>
     <PARAM id="lfo3Smooth" value="0.0"/>
     <PARAM id="lfo3Steps" value="0.0"/>
     <PARAM id="lfo3Sync" value="0.0"/>
     <PARAM id="lfo4Depth" value="100.0"/>
     <PARAM id="lfo4Phase" value="0.0"/>
-    <PARAM id="lfo4Rate" value="0.7000001668930054"/>
+    <PARAM id="lfo4Rate" value="0.7"/>
     <PARAM id="lfo4Smooth" value="0.0"/>
     <PARAM id="lfo4Steps" value="8.0"/>
     <PARAM id="lfo4Sync" value="0.0"/>
@@ -150,28 +150,28 @@
     <PARAM id="macro7" value="25.0"/>
     <PARAM id="macro8" value="0.0"/>
     <PARAM id="midi1CC" value="1.0"/>
-    <PARAM id="midi1Smooth" value="20.00000381469727"/>
+    <PARAM id="midi1Smooth" value="20.0"/>
     <PARAM id="midi1Type" value="0.0"/>
     <PARAM id="midi2CC" value="1.0"/>
-    <PARAM id="midi2Smooth" value="20.00000381469727"/>
+    <PARAM id="midi2Smooth" value="20.0"/>
     <PARAM id="midi2Type" value="0.0"/>
     <PARAM id="midi3CC" value="1.0"/>
-    <PARAM id="midi3Smooth" value="20.00000381469727"/>
+    <PARAM id="midi3Smooth" value="20.0"/>
     <PARAM id="midi3Type" value="0.0"/>
     <PARAM id="midi4CC" value="1.0"/>
-    <PARAM id="midi4Smooth" value="20.00000381469727"/>
+    <PARAM id="midi4Smooth" value="20.0"/>
     <PARAM id="midi4Type" value="0.0"/>
     <PARAM id="mix" value="100.0"/>
     <PARAM id="numBands" value="3.0"/>
     <PARAM id="osFactor" value="0.0"/>
     <PARAM id="osOffline" value="0.0"/>
-    <PARAM id="outGain" value="2.999999284744263"/>
+    <PARAM id="outGain" value="3.0"/>
     <PARAM id="stereoMode" value="0.0"/>
-    <PARAM id="xover1" value="300.0000305175781"/>
+    <PARAM id="xover1" value="300.0"/>
     <PARAM id="xover2" value="2500.0"/>
-    <PARAM id="xover3" value="4150.90966796875"/>
-    <PARAM id="xover4" value="6892.0234375"/>
-    <PARAM id="xover5" value="11443.2705078125"/>
+    <PARAM id="xover3" value="4151.0"/>
+    <PARAM id="xover4" value="6892.0"/>
+    <PARAM id="xover5" value="11443.0"/>
     <PARAM id="xoverMode" value="0.0"/>
     <PARAM id="xyX" value="50.0"/>
     <PARAM id="xyY" value="50.0"/>

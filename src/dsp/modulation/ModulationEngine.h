@@ -281,7 +281,8 @@ private:
         int      targetIndex { -1 };
         float    amount { 0.0f };
         ModCurve curve { ModCurve::Linear };
-        float    smoothCoeff { 0.0f };
+        float    smoothCoeff { 0.0f };  ///< one-pole multiplier for a NOMINAL 32-sample block
+        float    smoothSeconds { 0.0f };///< the time constant itself, for odd block lengths
         bool     enabled { false };
     };
 

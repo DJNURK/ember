@@ -22,9 +22,9 @@ constexpr float kMinCrossoverRatio = 1.02f;
 /** Linear-phase prototypes are ~10 ms per side. Long enough for a usable
     transition width down to ~60 Hz, short enough that the reported latency
     stays inside what every host comfortably compensates. */
-constexpr double kFirHalfSeconds   = 0.010;
-constexpr int    kMinFirHalfLength = 192;
-constexpr int    kMaxFirHalfLength = 4096;
+constexpr double kFirHalfSeconds = 0.010;
+constexpr int kMinFirHalfLength = 192;
+constexpr int kMaxFirHalfLength = 4096;
 
 /** Kaiser beta ~8.6 gives roughly a -90 dB stopband, well under the -100 dB
     residual the null test asks of the *sum* (which is exact by construction). */
@@ -45,7 +45,7 @@ double besselI0(double x) noexcept
 {
     const double half = 0.5 * x;
     double term = 1.0;
-    double sum  = 1.0;
+    double sum = 1.0;
 
     for (int k = 1; k < 64; ++k)
     {
@@ -109,26 +109,25 @@ int fftOrderFor(int minimumSize) noexcept
 struct Crossover::Impl
 {
     // ------------------------------------------------------------- topology
-    double sampleRate   { 44100.0 };
-    int    maxBlockSize { 0 };
-    int    numChannels  { 0 };
-    bool   prepared     { false };
+    double sampleRate{44100.0};
+    int maxBlockSize{0};
+    int numChannels{0};
+    bool prepared{false};
 
-    CrossoverMode mode { CrossoverMode::MinimumPhaseLR4 };
-    int numBands { 1 };
+    CrossoverMode mode{CrossoverMode::MinimumPhaseLR4};
+    int numBands{1};
 
-    std::array<float, static_cast<size_t>(kMaxCrossovers)> freqs
-        { { 100.0f, 300.0f, 900.0f, 2500.0f, 7000.0f } };
+    std::array<float, static_cast<size_t>(kMaxCrossovers)> freqs{{100.0f, 300.0f, 900.0f, 2500.0f, 7000.0f}};
 
     /** What the filters and FIR prototypes are actually tuned to right now, so
         an unchanged edge never pays for a redesign. */
-    std::array<float, static_cast<size_t>(kMaxCrossovers)> appliedFreqs { {} };
+    std::array<float, static_cast<size_t>(kMaxCrossovers)> appliedFreqs{{}};
 
     /** Edges whose linear-phase prototype no longer matches `appliedFreqs`.
         Only ever set while MinimumPhaseLR4 is the active mode, where the
         prototypes are not read by anything; flushed by prepare() and by the
         switch into LinearPhase, both of which are off-the-audio-thread calls. */
-    std::array<bool, static_cast<size_t>(kMaxCrossovers)> firDirty { {} };
+    std::array<bool, static_cast<size_t>(kMaxCrossovers)> firDirty{{}};
 
     // ------------------------------------------------------------ LR4 state
     using LrFilter = juce::dsp::LinkwitzRileyFilter<float>;
@@ -136,37 +135,35 @@ struct Crossover::Impl
     std::array<LrFilter, static_cast<size_t>(kMaxCrossovers)> splitters;
 
     /** `allpass[b][j]` compensates band `b` for crossover `j` (only j > b used). */
-    std::array<std::array<LrFilter, static_cast<size_t>(kMaxCrossovers)>,
-               static_cast<size_t>(kMaxBands)> allpass;
+    std::array<std::array<LrFilter, static_cast<size_t>(kMaxCrossovers)>, static_cast<size_t>(kMaxBands)> allpass;
 
     // --------------------------------------------------- linear-phase state
     std::unique_ptr<juce::dsp::FFT> fft;
-    int firLength { 0 };   ///< odd
-    int firLatency { 0 };  ///< (firLength - 1) / 2
-    int fftSize   { 0 };
-    int hopSize   { 0 };   ///< fftSize - firLength + 1
-    int tailLength { 0 };  ///< firLength - 1
+    int firLength{0};  ///< odd
+    int firLatency{0}; ///< (firLength - 1) / 2
+    int fftSize{0};
+    int hopSize{0};    ///< fftSize - firLength + 1
+    int tailLength{0}; ///< firLength - 1
 
     std::vector<double> window;       ///< firLength Kaiser coefficients
     std::vector<double> tapScratch;   ///< firLength design taps
-    std::vector<float>  designScratch;///< 2 * fftSize, design side only
-    std::vector<float>  irSpectra;    ///< kMaxCrossovers * 2 * fftSize
-    std::vector<float>  fwdScratch;   ///< 2 * fftSize, audio thread
-    std::vector<float>  mulScratch;   ///< 2 * fftSize, audio thread
-    std::vector<float>  olaTail;      ///< kMaxCrossovers * numChannels * tailLength
-    std::vector<float>  delayRing;    ///< numChannels * firLatency
-    std::vector<int>    delayPos;     ///< numChannels
+    std::vector<float> designScratch; ///< 2 * fftSize, design side only
+    std::vector<float> irSpectra;     ///< kMaxCrossovers * 2 * fftSize
+    std::vector<float> fwdScratch;    ///< 2 * fftSize, audio thread
+    std::vector<float> mulScratch;    ///< 2 * fftSize, audio thread
+    std::vector<float> olaTail;       ///< kMaxCrossovers * numChannels * tailLength
+    std::vector<float> delayRing;     ///< numChannels * firLatency
+    std::vector<int> delayPos;        ///< numChannels
 
     // ----------------------------------------------------------------------
     void prepare(double newSampleRate, int newMaxBlockSize, int newNumChannels)
     {
-        sampleRate   = newSampleRate > 0.0 ? newSampleRate : 44100.0;
+        sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
         maxBlockSize = juce::jmax(1, newMaxBlockSize);
-        numChannels  = juce::jlimit(1, 32, newNumChannels);
+        numChannels = juce::jlimit(1, 32, newNumChannels);
 
-        const juce::dsp::ProcessSpec spec { sampleRate,
-                                            static_cast<juce::uint32>(maxBlockSize),
-                                            static_cast<juce::uint32>(numChannels) };
+        const juce::dsp::ProcessSpec spec{sampleRate, static_cast<juce::uint32>(maxBlockSize),
+                                          static_cast<juce::uint32>(numChannels)};
 
         for (auto& f : splitters)
         {
@@ -200,14 +197,14 @@ struct Crossover::Impl
         into LinearPhase, which the header already documents as expensive. */
     void refreshPrototypes() noexcept
     {
-        if (! prepared)
+        if (!prepared)
             return;
 
         for (int i = 0; i < kMaxCrossovers; ++i)
         {
             const size_t idx = static_cast<size_t>(i);
 
-            if (! firDirty[idx])
+            if (!firDirty[idx])
                 continue;
 
             designLowpass(i, appliedFreqs[idx]);
@@ -235,7 +232,7 @@ struct Crossover::Impl
         const int half = juce::jlimit(kMinFirHalfLength, kMaxFirHalfLength,
                                       static_cast<int>(std::lround(sampleRate * kFirHalfSeconds)));
 
-        firLength  = 2 * half + 1;
+        firLength = 2 * half + 1;
         firLatency = half;
         tailLength = firLength - 1;
 
@@ -254,9 +251,8 @@ struct Crossover::Impl
         mulScratch.assign(spectrumFloats, 0.0f);
         irSpectra.assign(static_cast<size_t>(kMaxCrossovers) * spectrumFloats, 0.0f);
 
-        olaTail.assign(static_cast<size_t>(kMaxCrossovers)
-                           * static_cast<size_t>(numChannels)
-                           * static_cast<size_t>(tailLength),
+        olaTail.assign(static_cast<size_t>(kMaxCrossovers) * static_cast<size_t>(numChannels) *
+                           static_cast<size_t>(tailLength),
                        0.0f);
 
         delayRing.assign(static_cast<size_t>(numChannels) * static_cast<size_t>(firLatency), 0.0f);
@@ -270,8 +266,7 @@ struct Crossover::Impl
         {
             const double r = (static_cast<double>(n) - centre) / centre;
             const double arg = 1.0 - r * r;
-            window[static_cast<size_t>(n)] =
-                besselI0(kKaiserBeta * std::sqrt(arg > 0.0 ? arg : 0.0)) / denom;
+            window[static_cast<size_t>(n)] = besselI0(kKaiserBeta * std::sqrt(arg > 0.0 ? arg : 0.0)) / denom;
         }
     }
 
@@ -285,8 +280,7 @@ struct Crossover::Impl
 
         jassert(index >= 0 && index < kMaxCrossovers);
 
-        const double fcNorm = juce::jlimit(1.0e-5, 0.4999,
-                                           static_cast<double>(cutoffHz) / sampleRate);
+        const double fcNorm = juce::jlimit(1.0e-5, 0.4999, static_cast<double>(cutoffHz) / sampleRate);
         const double centre = 0.5 * static_cast<double>(firLength - 1);
 
         double* taps = tapScratch.data();
@@ -329,8 +323,7 @@ struct Crossover::Impl
         rate and therefore the whole design has moved. */
     void applyFrequencies(bool force) noexcept
     {
-        const float ceilingHz = juce::jmin(kMaxCrossoverHz,
-                                           static_cast<float>(sampleRate * 0.49));
+        const float ceilingHz = juce::jmin(kMaxCrossoverHz, static_cast<float>(sampleRate * 0.49));
         const float floorHz = juce::jmin(kMinCrossoverHz, ceilingHz);
 
         for (int i = 0; i < kMaxCrossovers; ++i)
@@ -338,18 +331,17 @@ struct Crossover::Impl
             const size_t idx = static_cast<size_t>(i);
             float f = freqs[idx];
 
-            if (! std::isfinite(f))
+            if (!std::isfinite(f))
                 f = floorHz;
 
             f = juce::jlimit(floorHz, ceilingHz, f);
 
             if (i > 0)
-                f = juce::jlimit(floorHz, ceilingHz,
-                                 juce::jmax(f, freqs[idx - 1] * kMinCrossoverRatio));
+                f = juce::jlimit(floorHz, ceilingHz, juce::jmax(f, freqs[idx - 1] * kMinCrossoverRatio));
 
             freqs[idx] = f;
 
-            if (! force && std::abs(f - appliedFreqs[idx]) <= 1.0e-4f)
+            if (!force && std::abs(f - appliedFreqs[idx]) <= 1.0e-4f)
                 continue;
 
             appliedFreqs[idx] = f;
@@ -365,7 +357,7 @@ struct Crossover::Impl
             // pure audio-thread waste (at 192 kHz, five moving edges cost more
             // than a whole 32-sample control block). Defer it instead: the
             // switch into LinearPhase flushes whatever went stale.
-            if (! prepared)
+            if (!prepared)
                 continue;
 
             if (mode == CrossoverMode::LinearPhase)
@@ -381,8 +373,7 @@ struct Crossover::Impl
     }
 
     // -------------------------------------------------------------- process
-    void processLR4(const juce::AudioBuffer<float>& input,
-                    std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut,
+    void processLR4(const juce::AudioBuffer<float>& input, std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut,
                     int numSamples, int nCh) noexcept
     {
         const int nb = numBands;
@@ -391,7 +382,7 @@ struct Crossover::Impl
         for (int ch = 0; ch < nCh; ++ch)
         {
             const float* src = input.getReadPointer(ch);
-            float* dst[kMaxBands] {};
+            float* dst[kMaxBands]{};
 
             for (int b = 0; b < nb; ++b)
                 dst[b] = bandOut[static_cast<size_t>(b)].getWritePointer(ch);
@@ -441,7 +432,7 @@ struct Crossover::Impl
         const float* ir = irSpectra.data() + static_cast<size_t>(j) * spectrumFloats;
         float* work = mulScratch.data();
 
-        const int numBins = fftSize / 2;   // bins 0 .. fftSize/2 inclusive
+        const int numBins = fftSize / 2; // bins 0 .. fftSize/2 inclusive
 
         for (int k = 0; k <= numBins; ++k)
         {
@@ -450,16 +441,15 @@ struct Crossover::Impl
             const float br = ir[2 * k];
             const float bi = ir[2 * k + 1];
 
-            work[2 * k]     = ar * br - ai * bi;
+            work[2 * k] = ar * br - ai * bi;
             work[2 * k + 1] = ar * bi + ai * br;
         }
 
         fft->performRealOnlyInverseTransform(work);
 
-        float* tail = olaTail.data()
-                      + (static_cast<size_t>(j) * static_cast<size_t>(numChannels)
-                         + static_cast<size_t>(ch))
-                            * static_cast<size_t>(tailLength);
+        float* tail =
+            olaTail.data() + (static_cast<size_t>(j) * static_cast<size_t>(numChannels) + static_cast<size_t>(ch)) *
+                                 static_cast<size_t>(tailLength);
 
         const int overlap = juce::jmin(chunk, tailLength);
 
@@ -484,8 +474,7 @@ struct Crossover::Impl
     }
 
     void processLinearPhase(const juce::AudioBuffer<float>& input,
-                            std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut,
-                            int numSamples, int nCh) noexcept
+                            std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut, int numSamples, int nCh) noexcept
     {
         const int nb = numBands;
         const int nx = nb - 1;
@@ -499,8 +488,7 @@ struct Crossover::Impl
 
             if (firLatency > 0)
             {
-                float* ring = delayRing.data()
-                              + static_cast<size_t>(ch) * static_cast<size_t>(firLatency);
+                float* ring = delayRing.data() + static_cast<size_t>(ch) * static_cast<size_t>(firLatency);
                 int p = delayPos[static_cast<size_t>(ch)];
 
                 for (int i = 0; i < numSamples; ++i)
@@ -536,10 +524,7 @@ struct Crossover::Impl
                 fft->performRealOnlyForwardTransform(fwd, true);
 
                 for (int j = 0; j < nx; ++j)
-                    convolveChunk(j, ch,
-                                  fwd,
-                                  bandOut[static_cast<size_t>(j)].getWritePointer(ch) + pos,
-                                  chunk);
+                    convolveChunk(j, ch, fwd, bandOut[static_cast<size_t>(j)].getWritePointer(ch) + pos, chunk);
 
                 pos += chunk;
             }
@@ -557,8 +542,7 @@ struct Crossover::Impl
         }
     }
 
-    void process(const juce::AudioBuffer<float>& input,
-                 std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut,
+    void process(const juce::AudioBuffer<float>& input, std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut,
                  int numSamples) noexcept
     {
         const int nb = juce::jlimit(kMinBands, kMaxBands, numBands);
@@ -570,8 +554,7 @@ struct Crossover::Impl
         // early and leave the caller's band buffers holding whatever was in
         // them, which is exactly what the pass-through fallback below exists to
         // avoid. Fall back to the input's own channel count until prepared.
-        int nCh = prepared ? juce::jmin(input.getNumChannels(), numChannels)
-                           : input.getNumChannels();
+        int nCh = prepared ? juce::jmin(input.getNumChannels(), numChannels) : input.getNumChannels();
 
         for (int b = 0; b < nb; ++b)
         {
@@ -583,7 +566,7 @@ struct Crossover::Impl
         if (ns <= 0 || nCh <= 0)
             return;
 
-        if (! prepared)
+        if (!prepared)
         {
             for (int b = 0; b < nb; ++b)
                 bandOut[static_cast<size_t>(b)].clear(0, ns);
@@ -612,9 +595,9 @@ struct Crossover::Impl
         // and restart rather than emitting silence-plus-NaN forever.
         bool poisoned = false;
 
-        for (int b = 0; b < nb && ! poisoned; ++b)
+        for (int b = 0; b < nb && !poisoned; ++b)
             for (int ch = 0; ch < nCh; ++ch)
-                if (! std::isfinite(bandOut[static_cast<size_t>(b)].getSample(ch, ns - 1)))
+                if (!std::isfinite(bandOut[static_cast<size_t>(b)].getSample(ch, ns - 1)))
                 {
                     poisoned = true;
                     break;
@@ -649,8 +632,7 @@ void Crossover::setMode(CrossoverMode mode)
     if (mode == impl->mode)
         return;
 
-    impl->mode = (mode == CrossoverMode::LinearPhase) ? CrossoverMode::LinearPhase
-                                                      : CrossoverMode::MinimumPhaseLR4;
+    impl->mode = (mode == CrossoverMode::LinearPhase) ? CrossoverMode::LinearPhase : CrossoverMode::MinimumPhaseLR4;
 
     // Any prototype that went stale while the LR4 path was live is rebuilt
     // here, where the header already sanctions the cost.
@@ -686,8 +668,7 @@ void Crossover::setCrossoverFrequencies(const float* freqs, int numEdges) noexce
     impl->applyFrequencies(false);
 }
 
-void Crossover::process(const juce::AudioBuffer<float>& input,
-                        std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut,
+void Crossover::process(const juce::AudioBuffer<float>& input, std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut,
                         int numSamples) noexcept
 {
     impl->process(input, bandOut, numSamples);

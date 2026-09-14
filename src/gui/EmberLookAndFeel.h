@@ -48,27 +48,27 @@ namespace ember::gui
 struct EmberColours
 {
     // ---- surfaces, darkest to lightest -------------------------------------
-    static const juce::Colour backgroundDeep;  ///< behind everything; the editor's fill
-    static const juce::Colour background;      ///< default component background
-    static const juce::Colour panelSunken;     ///< wells: meters, displays, text fields
-    static const juce::Colour panel;           ///< a card / grouped region
-    static const juce::Colour panelRaised;     ///< a control sitting on a card
+    static const juce::Colour backgroundDeep; ///< behind everything; the editor's fill
+    static const juce::Colour background;     ///< default component background
+    static const juce::Colour panelSunken;    ///< wells: meters, displays, text fields
+    static const juce::Colour panel;          ///< a card / grouped region
+    static const juce::Colour panelRaised;    ///< a control sitting on a card
 
     // ---- lines -------------------------------------------------------------
-    static const juce::Colour outline;         ///< hairlines and control borders
-    static const juce::Colour outlineStrong;   ///< region separators, focused borders
-    static const juce::Colour track;           ///< unfilled slider/knob track
+    static const juce::Colour outline;       ///< hairlines and control borders
+    static const juce::Colour outlineStrong; ///< region separators, focused borders
+    static const juce::Colour track;         ///< unfilled slider/knob track
 
     // ---- text --------------------------------------------------------------
-    static const juce::Colour textPrimary;     ///< values, button labels
-    static const juce::Colour textSecondary;   ///< captions, units, secondary rows
-    static const juce::Colour textDisabled;    ///< greyed-out controls
+    static const juce::Colour textPrimary;   ///< values, button labels
+    static const juce::Colour textSecondary; ///< captions, units, secondary rows
+    static const juce::Colour textDisabled;  ///< greyed-out controls
 
     // ---- the one accent ----------------------------------------------------
-    static const juce::Colour accent;          ///< warm amber, #FF8A3D
-    static const juce::Colour accentDim;       ///< the same hue, held back
-    static const juce::Colour accentGlow;      ///< highlight wash / hover fills
-    static const juce::Colour warning;         ///< clipping, destructive menu items
+    static const juce::Colour accent;     ///< warm amber, #FF8A3D
+    static const juce::Colour accentDim;  ///< the same hue, held back
+    static const juce::Colour accentGlow; ///< highlight wash / hover fills
+    static const juce::Colour warning;    ///< clipping, destructive menu items
 
     // ---- per-band ramp -----------------------------------------------------
     /** Number of distinct band hues; matches `ember::kMaxBands`. */
@@ -80,19 +80,19 @@ struct EmberColours
         blue-white flame tip, so the low band reads as the heaviest and the air
         band as the coolest without any legend. The middle of the ramp sits on
         the accent hue, which is why the two never fight. */
-    static juce::Colour band (int bandIndex) noexcept;
+    static juce::Colour band(int bandIndex) noexcept;
 
     /** The band colour held back for fills and inactive states. */
-    static juce::Colour bandDim (int bandIndex) noexcept;
+    static juce::Colour bandDim(int bandIndex) noexcept;
 };
 
 //==============================================================================
 /** How an Ember toggle is drawn. Set with `EmberStyleProps::setToggleLook`. */
 enum class ToggleLook
 {
-    pill = 0,  ///< sliding capsule switch, text to the right
-    led,       ///< small round lamp, text to the right
-    check      ///< square tick box, text to the right
+    pill = 0, ///< sliding capsule switch, text to the right
+    led,      ///< small round lamp, text to the right
+    check     ///< square tick box, text to the right
 };
 
 //==============================================================================
@@ -134,13 +134,13 @@ struct EmberFonts
 {
     enum class Role
     {
-        display = 0,  ///< the plugin name, once
-        title,        ///< panel titles
-        section,      ///< small-caps group headers
-        body,         ///< running text, menu items
-        label,        ///< control captions
-        value,        ///< numeric readouts
-        micro         ///< meter scales, footnotes
+        display = 0, ///< the plugin name, once
+        title,       ///< panel titles
+        section,     ///< small-caps group headers
+        body,        ///< running text, menu items
+        label,       ///< control captions
+        value,       ///< numeric readouts
+        micro        ///< meter scales, footnotes
     };
 
     /** The height the scale is authored against. */
@@ -180,15 +180,15 @@ struct EmberFonts
 */
 struct RotaryGeometry
 {
-    juce::Point<float> centre;       ///< centre of the knob
-    float outerRadius { 0.0f };      ///< radius of the largest circle that fits
-    float modRingRadius { 0.0f };    ///< centre-line radius of the modulation ring
-    float modRingThickness { 0.0f }; ///< stroke width for the modulation ring
-    float arcRadius { 0.0f };        ///< centre-line radius of track and value arcs
-    float trackThickness { 0.0f };   ///< stroke width of the unfilled track
-    float valueThickness { 0.0f };   ///< stroke width of the filled value arc
-    float bodyRadius { 0.0f };       ///< radius of the knob cap the pointer sits on
-    float pointerThickness { 0.0f }; ///< stroke width of the pointer line
+    juce::Point<float> centre;    ///< centre of the knob
+    float outerRadius{0.0f};      ///< radius of the largest circle that fits
+    float modRingRadius{0.0f};    ///< centre-line radius of the modulation ring
+    float modRingThickness{0.0f}; ///< stroke width for the modulation ring
+    float arcRadius{0.0f};        ///< centre-line radius of track and value arcs
+    float trackThickness{0.0f};   ///< stroke width of the unfilled track
+    float valueThickness{0.0f};   ///< stroke width of the filled value arc
+    float bodyRadius{0.0f};       ///< radius of the knob cap the pointer sits on
+    float pointerThickness{0.0f}; ///< stroke width of the pointer line
 
     /** Square area the knob body occupies, for hit-testing or extra decoration. */
     juce::Rectangle<float> bodyBounds() const noexcept;
@@ -230,7 +230,8 @@ public:
     static void drawWell(juce::Graphics& g, juce::Rectangle<float> area, float cornerSize);
 
     /** A one-pixel (device-independent) separator line. */
-    static void drawHairline(juce::Graphics& g, juce::Rectangle<float> area, juce::Colour colour, bool vertical = false);
+    static void drawHairline(juce::Graphics& g, juce::Rectangle<float> area, juce::Colour colour,
+                             bool vertical = false);
 
     /** Rotary geometry for a slider area — see `RotaryGeometry`. */
     static RotaryGeometry rotaryGeometry(juce::Rectangle<float> sliderArea) noexcept;
@@ -271,8 +272,8 @@ public:
     /** Honours `EmberStyleProps::setToggleLook`; defaults to the pill switch. */
     void drawToggleButton(juce::Graphics&, juce::ToggleButton&, bool shouldDrawButtonAsHighlighted,
                           bool shouldDrawButtonAsDown) override;
-    void drawTickBox(juce::Graphics&, juce::Component&, float x, float y, float w, float h, bool ticked,
-                     bool isEnabled, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
+    void drawTickBox(juce::Graphics&, juce::Component&, float x, float y, float w, float h, bool ticked, bool isEnabled,
+                     bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
 
     void drawComboBox(juce::Graphics&, int width, int height, bool isButtonDown, int buttonX, int buttonY, int buttonW,
                       int buttonH, juce::ComboBox&) override;
@@ -304,7 +305,7 @@ public:
                        int thumbStartPosition, int thumbSize, bool isMouseOver, bool isMouseDown) override;
 
 private:
-    float uiScale { 1.0f };
+    float uiScale{1.0f};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EmberLookAndFeel)
 };

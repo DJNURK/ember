@@ -8,7 +8,7 @@ namespace ember
 namespace ampdetail
 {
 inline constexpr int kMaxAmpChannels = 2;
-inline constexpr int kMaxAmpStages   = 4;
+inline constexpr int kMaxAmpStages = 4;
 
 /**
     The fixed voicing of one amp cascade.
@@ -26,42 +26,42 @@ inline constexpr int kMaxAmpStages   = 4;
 */
 struct AmpVoicing
 {
-    int numStages { 2 };
+    int numStages{2};
 
-    float stageTrim     [kMaxAmpStages] { 1.0f, 1.0f, 1.0f, 1.0f };
-    float stageDriveExp [kMaxAmpStages] { 0.5f, 0.5f, 0.0f, 0.0f };
+    float stageTrim[kMaxAmpStages]{1.0f, 1.0f, 1.0f, 1.0f};
+    float stageDriveExp[kMaxAmpStages]{0.5f, 0.5f, 0.0f, 0.0f};
 
     /** Asymmetry of the stage shaper at full drive; 0 = symmetric. */
-    float biasAtFullDrive { 0.0f };
+    float biasAtFullDrive{0.0f};
 
     /** Inter-stage mid shaping: a resonant band lifted back into the signal.
         The mix interpolates from `midMixMin` at 0 dB drive to `midMixMax` at
         40 dB, so the voice gets more forward the harder it is pushed. */
-    float midHz      { 800.0f };
-    float midQ       { 0.7f };
-    float midMixMin  { 0.10f };
-    float midMixMax  { 0.20f };
+    float midHz{800.0f};
+    float midQ{0.7f};
+    float midMixMin{0.10f};
+    float midMixMax{0.20f};
 
     /** Inter-stage one-pole high-pass, to keep the lows from turning to mush as
         the stages pile up. `lowCutHz` <= 0 disables it entirely. */
-    float lowCutHz     { 0.0f };
-    float lowCutAmount { 0.0f };   ///< 0 .. 1 depth of the high-pass
+    float lowCutHz{0.0f};
+    float lowCutAmount{0.0f}; ///< 0 .. 1 depth of the high-pass
 
     /** Final one-pole roll-off standing in for the speaker/output stage. */
-    float postLowpassHz { 14000.0f };
+    float postLowpassHz{14000.0f};
 };
 
 /** Per-channel, per-stage recursive state. */
 struct AmpStageState
 {
-    dsputil::SvfTPT  mid;
+    dsputil::SvfTPT mid;
     dsputil::OnePole lowCut;
 };
 
 /** All recursive state for one channel. Fixed size: nothing is ever allocated. */
 struct AmpChannelState
 {
-    AmpStageState    stages[kMaxAmpStages];
+    AmpStageState stages[kMaxAmpStages];
     dsputil::OnePole post;
 };
 } // namespace ampdetail
@@ -90,7 +90,7 @@ public:
     StyleCategory getCategory() const noexcept override { return StyleCategory::Amp; }
 
 protected:
-    ampdetail::AmpVoicing voicing {};
+    ampdetail::AmpVoicing voicing{};
 
 private:
     /** Recomputes every filter coefficient. Called from `prepare`, and from
@@ -98,13 +98,13 @@ private:
         sample. Realtime-safe (no allocation, no locks). */
     void updateCoefficients(double sampleRate) noexcept;
 
-    ampdetail::AmpChannelState channels[ampdetail::kMaxAmpChannels] {};
+    ampdetail::AmpChannelState channels[ampdetail::kMaxAmpChannels]{};
 
     /** The rate the coefficients were last built *for*, as the caller asked for
         it — including a value `updateCoefficients` had to substitute a fallback
         for. Only used to detect a change, so it must record the request, not the
         fallback, or an out-of-range rate would rebuild on every block. */
-    double preparedSampleRate { 44100.0 };
+    double preparedSampleRate{44100.0};
 };
 
 /** Two gentle stages and mild mid shaping: stays clean until pushed hard. */

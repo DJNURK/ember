@@ -31,9 +31,9 @@ public:
     void process(float* const* channelData, int numChannels, int numSamples,
                  const StyleParams& params) noexcept override;
 
-    const char* getName() const noexcept override       { return "Smudge"; }
+    const char* getName() const noexcept override { return "Smudge"; }
     StyleCategory getCategory() const noexcept override { return StyleCategory::Rectify; }
-    bool usesAdaa() const noexcept override             { return true; }
+    bool usesAdaa() const noexcept override { return true; }
 
 private:
     /** Previous driven input sample, one per channel — the ADAA kernel's state. */
@@ -62,9 +62,9 @@ public:
     void process(float* const* channelData, int numChannels, int numSamples,
                  const StyleParams& params) noexcept override;
 
-    const char* getName() const noexcept override       { return "Rectify"; }
+    const char* getName() const noexcept override { return "Rectify"; }
     StyleCategory getCategory() const noexcept override { return StyleCategory::Rectify; }
-    bool usesAdaa() const noexcept override             { return true; }
+    bool usesAdaa() const noexcept override { return true; }
 
 private:
     /** Previous driven input sample, one per channel — the ADAA kernel's state. */

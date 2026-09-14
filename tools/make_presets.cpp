@@ -650,9 +650,11 @@ std::array<float, kMaxCrossovers> resolveCrossovers (const std::vector<float>& u
         const double last = used.back();
         const double ratio = std::pow (kTopHz / last, 1.0 / (numFree + 1));
 
+        // Whole Hz: a generated placeholder edge has no business claiming
+        // sub-hertz precision at 9 kHz, and it keeps the stored number exact.
         for (int j = 0; j < numFree; ++j)
             out[static_cast<size_t> (numUsed + j)] =
-                static_cast<float> (last * std::pow (ratio, j + 1));
+                static_cast<float> (std::round (last * std::pow (ratio, j + 1)));
     }
 
     return out;
@@ -691,8 +693,14 @@ float defaultValueOf (juce::AudioProcessorValueTreeState& apvts, const juce::Str
     return 0.0f;
 }
 
-void setParam (juce::AudioProcessorValueTreeState& apvts, const juce::String& presetName,
-               const juce::String& id, float value)
+/** A value the preset asked for, in the parameter's own units. Setting goes
+    through the real parameter (which is what proves the id exists and the value
+    is legal); the exact number is remembered here so the emitted XML can carry
+    it verbatim instead of the value that survives a normalise round trip. */
+using ExactValues = std::map<std::string, double>;
+
+void setParam (juce::AudioProcessorValueTreeState& apvts, ExactValues& exact,
+               const juce::String& presetName, const juce::String& id, float value)
 {
     auto* param = apvts.getParameter (id);
 
@@ -713,6 +721,87 @@ void setParam (juce::AudioProcessorValueTreeState& apvts, const juce::String& pr
 
     const auto clamped = juce::jlimit (range.start, range.end, value);
     param->setValueNotifyingHost (param->convertTo0to1 (clamped));
+    exact[id.toStdString()] = static_cast<double> (clamped);
+}
+
+/** Removes the float dust that a normalise round trip leaves behind.
+
+    APVTS stores `convertFrom0to1 (convertTo0to1 (v))`, so a 200 Hz default
+    comes back as 199.9999847412109 and a 0 dB default as -2.68e-7. Both load to
+    the identical setting, but a factory file should read as the number the
+    manifest states, and a reader should not have to wonder whether the dust
+    means something.
+
+    Rounding is to the precision the parameter itself expresses: a control that
+    steps in hundredths cannot mean more than two decimals, so -2.68e-7 is dust
+    and belongs at zero. The skewed ranges (frequencies, times) declare no
+    interval, and there six significant digits is already far finer than the
+    control. The result is re-clamped, so tidying can never push a value out of
+    range. */
+/** `value` rounded to `decimals` places (negative rounds to tens, hundreds...).
+
+    The power of ten is built by repeated multiplication rather than `std::pow`,
+    which is not required to return an exact 100.0 for `pow (10, 2)` and whose
+    last-bit error is enough to turn a tidy 9179.03 into 9179.030000000001. */
+double roundToDecimals (double value, int decimals)
+{
+    double power = 1.0;
+
+    for (int i = std::abs (decimals); --i >= 0;)
+        power *= 10.0;
+
+    return decimals >= 0 ? std::round (value * power) / power
+                         : std::round (value / power) * power;
+}
+
+double tidyValue (double value, const juce::NormalisableRange<float>& range)
+{
+    double tidied = value;
+
+    if (! std::isfinite (tidied))
+        return static_cast<double> (range.start);
+
+    if (range.interval > 0.0f)
+    {
+        const auto decimals = static_cast<int> (
+            std::ceil (-std::log10 (static_cast<double> (range.interval))));
+        tidied = roundToDecimals (tidied, juce::jmax (0, decimals));
+    }
+    else if (tidied != 0.0)
+    {
+        // Six significant digits, expressed as a decimal place count.
+        const auto magnitude = static_cast<int> (std::floor (std::log10 (std::abs (tidied))));
+        tidied = roundToDecimals (tidied, 5 - magnitude);
+    }
+
+    return juce::jlimit (static_cast<double> (range.start), static_cast<double> (range.end), tidied);
+}
+
+/** The APVTS state, with every value tidied and every value the preset asked
+    for restored verbatim. Operates on the copy, so no listener writes the
+    round-tripped numbers back. */
+juce::ValueTree tidiedState (juce::AudioProcessorValueTreeState& apvts, const ExactValues& exact)
+{
+    auto state = apvts.copyState();
+
+    for (int i = 0; i < state.getNumChildren(); ++i)
+    {
+        auto child = state.getChild (i);
+        const auto id = child.getProperty ("id").toString();
+        auto* param = apvts.getParameter (id);
+
+        if (param == nullptr)
+            continue;
+
+        const auto& range = param->getNormalisableRange();
+        const auto found = exact.find (id.toStdString());
+        const double raw = found != exact.end() ? found->second
+                                                : static_cast<double> (child.getProperty ("value"));
+
+        child.setProperty ("value", tidyValue (raw, range), nullptr);
+    }
+
+    return state;
 }
 
 /** The style choice INDEX for a manifest style name, looked up in the real
@@ -754,10 +843,11 @@ juce::String renderPreset (const Preset& preset, const std::map<std::string, int
     LayoutHost host;
     auto& apvts = host.apvts;
     const auto& name = preset.name;
+    ExactValues exact;
 
-    const auto set = [&apvts, &name] (const juce::String& id, float value)
+    const auto set = [&apvts, &exact, &name] (const juce::String& id, float value)
     {
-        setParam (apvts, name, id, value);
+        setParam (apvts, exact, name, id, value);
     };
 
     // ------------------------------------------------------------- global
@@ -827,7 +917,7 @@ juce::String renderPreset (const Preset& preset, const std::map<std::string, int
 
     // The APVTS state tree type is the source of truth for the parameter block
     // name, so it can never drift from what PresetManager looks for.
-    if (auto stateXml = apvts.copyState().createXml())
+    if (auto stateXml = tidiedState (apvts, exact).createXml())
         root.addChildElement (stateXml.release());
     else
         fail (name + ": the APVTS state produced no XML");
@@ -858,9 +948,9 @@ juce::String renderPreset (const Preset& preset, const std::map<std::string, int
                 continue;
             }
 
-            const float amount = m.amountPercent / 100.0f;
+            const double amount = static_cast<double> (m.amountPercent) / 100.0;
 
-            if (amount < -1.0f || amount > 1.0f)
+            if (amount < -1.0 || amount > 1.0)
             {
                 fail (name + ": modulation amount " + juce::String (m.amountPercent, 1)
                       + " % is outside +/-100 %");
@@ -870,7 +960,7 @@ juce::String renderPreset (const Preset& preset, const std::map<std::string, int
             auto* connection = modNode->createNewChildElement (ModStateIds::connection.toString());
             connection->setAttribute (ModStateIds::source,    source);
             connection->setAttribute (ModStateIds::target,    found->second);
-            connection->setAttribute (ModStateIds::amount,    static_cast<double> (amount));
+            connection->setAttribute (ModStateIds::amount,    amount);
             connection->setAttribute (ModStateIds::curve,     static_cast<int> (m.curve));
             connection->setAttribute (ModStateIds::smoothing, static_cast<double> (m.smoothingMs));
             connection->setAttribute (ModStateIds::enabled,   1);
@@ -894,7 +984,7 @@ juce::String renderInitPreset()
     root.setAttribute ("category", "Factory");
     root.setAttribute ("pluginVersion", EMBER_VERSION_STRING);
 
-    if (auto stateXml = host.apvts.copyState().createXml())
+    if (auto stateXml = tidiedState (host.apvts, {}).createXml())
         root.addChildElement (stateXml.release());
     else
         fail ("Init: the APVTS state produced no XML");
@@ -945,6 +1035,34 @@ juce::File resolveOutputDirectory (int argc, char** argv)
 
 int main (int argc, char** argv)
 {
+    // TEMP-AUDIT: --dump-targets prints the source and target tables so an
+    // auditor can resolve an emitted index back to a name instead of eyeballing.
+    if (argc > 1 && juce::String (argv[1]) == "--dump-targets")
+    {
+        LayoutHost h;
+        int n = 0;
+
+        for (auto* param : h.getParameters())
+            if (auto* withID = dynamic_cast<juce::AudioProcessorParameterWithID*> (param))
+                if (pid::isModulatable (withID->paramID))
+                    std::printf ("TARGET %d %s\n", n++, withID->paramID.toRawUTF8());
+
+        for (int i = 0; i < kNumModSources; ++i)
+            std::printf ("SOURCE %d %s\n", i, modSourceDisplayName (i).toRawUTF8());
+
+        // And every preset's routings, resolved.
+        for (const auto& preset : buildPresetBank())
+            for (const auto& m : preset.mods)
+                std::printf ("ROUTE %s | src=%d (%s) | tgt=%s | amt=%.4f | curve=%d | smooth=%.1f\n",
+                             preset.fileName.toRawUTF8(),
+                             flatSourceIndex (m.sourceType, m.sourceOrdinal),
+                             modSourceDisplayName (flatSourceIndex (m.sourceType, m.sourceOrdinal)).toRawUTF8(),
+                             m.targetId.toRawUTF8(), m.amountPercent / 100.0, static_cast<int> (m.curve),
+                             m.smoothingMs);
+
+        return 0;
+    }
+
     const auto outputDir = resolveOutputDirectory (argc, argv);
 
     if (outputDir == juce::File())

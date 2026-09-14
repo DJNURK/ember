@@ -24,23 +24,64 @@ constexpr std::uint32_t kNoiseSeed = 0xE3B12F5u;
 
 /** Samples discarded before the measurement window opens, so that envelope
     followers, magnetisation memories and filter states have settled and are not
-    measured mid-transient. ~10 ms at 96 kHz. */
-constexpr int kWarmupSamples = 4096;
+    measured mid-transient.
 
-/** Measurement window. 6144 samples is 64 ms at 96 kHz. Long enough that the
-    estimate no longer depends much on which stretch of noise it saw — halving
-    it to 4096 doubles the spread of the gain match across independent test
-    signals, from 0.29 dB to 0.66 dB — and short enough that the whole 19 x 41
-    table still builds in well under a tenth of a second. */
-// Pink noise puts most of its energy at low frequencies, so a short window has
-// not heard enough cycles of the components that actually drive a saturator and
-// two realisations of the same stimulus can differ by around a decibel through
-// the same style. 32768 samples is where the measurement stops moving: it makes
-// the table a property of the style rather than of one noise burst, which is
-// what lets tests/test_styles.cpp verify it with an independently seeded signal.
+    Settling is a property of TIME, not of a sample count, so this cannot be a
+    constant: the table is built at the OVERSAMPLED rate, which spans 44.1 kHz
+    (no oversampling) to 3.072 MHz (192 kHz host at 16x). A fixed 4096 samples
+    is 92.9 ms at 44.1 kHz but only 1.33 ms at 3.072 MHz, and a style whose
+    state moves in tens of milliseconds is then measured entirely inside its own
+    attack transient. Measured on this repository's styles, that is worth up to
+    5.7 dB: Warm Tape's magnetisation memory at 40 dB drive wants +6.87 dB of
+    compensation at 3.072 MHz and a 4096-sample warm-up reports +1.22 dB.
+    Lengthening only the warm-up converges monotonically onto the long-run
+    value (+1.22, +2.13, +3.38, +4.86, +6.11, +6.71, +6.88 dB as it doubles),
+    which is what identifies the warm-up rather than the window as the cause.
+
+    So: hold the warm-up DURATION that 96 kHz got, floored at the historical
+    4096 samples and capped so the build cost stays bounded. Rates at or below
+    96 kHz are unchanged, bit for bit. */
+constexpr int kMinWarmupSamples = 4096;
+constexpr double kWarmupSeconds = 4096.0 / 96000.0;   // 42.7 ms
+
+/** Ceiling on the warm-up, purely to bound build time. 131072 samples is
+    exactly `kWarmupSeconds` at 3.072 MHz — the highest oversampled rate the
+    plugin can reach — so within the shipped configuration space the cap never
+    actually binds; it only stops an absurd `oversampledSampleRate` from turning
+    prepare into an unbounded amount of work. */
+constexpr int kMaxWarmupSamples = 131072;
+
+/** Measurement window, in samples. Long enough that the estimate no longer
+    depends much on which stretch of noise it saw — halving it to 4096 doubles
+    the spread of the gain match across independent test signals, from 0.29 dB
+    to 0.66 dB.
+
+    Unlike the warm-up this one is legitimately a sample count rather than a
+    duration: the stimulus is flat noise, so 32768 samples carry the same number
+    of independent observations whatever the rate. 32768 is where the
+    measurement stops moving, which makes the table a property of the style
+    rather than of one noise burst, and is what lets tests/test_styles.cpp
+    verify it with an independently seeded signal.
+
+    The one style this does not fully serve is Decimate, whose sample-and-hold
+    collapses the window to a handful of independent values at high drive: it
+    scatters by about 1 dB at 96 kHz and 3.8 dB at 3.072 MHz, and only a window
+    8x longer brings that under 0.5 dB. Buying it would multiply an already
+    ~0.3 s build by ten, so it is left as a documented limit of the estimator
+    rather than paid for by every other style. */
 constexpr int kMeasureSamples = 32768;
 
-constexpr int kStimulusSamples = kWarmupSamples + kMeasureSamples;
+/** Warm-up for one oversampled rate: `kWarmupSeconds` of settling time, never
+    shorter than the historical floor and never longer than the cost cap. */
+int warmupSamplesForRate(double rate) noexcept
+{
+    const double byDuration = std::ceil(rate * kWarmupSeconds);
+
+    return static_cast<int>(juce::jlimit(static_cast<double>(kMinWarmupSamples),
+                                         static_cast<double>(kMaxWarmupSamples),
+                                         std::isfinite(byDuration) ? byDuration
+                                                                   : static_cast<double>(kMinWarmupSamples)));
+}
 
 /** Nominal operating level (-18 dBFS RMS, the usual alignment level). Gain
     compensation for a nonlinearity is only meaningful at a stated input level;
@@ -113,15 +154,15 @@ private:
     48 kHz at 2x (where it is not). Weighting the whole band evenly measures the
     style over its entire operating range rather than over a guess about how
     much of that range the host will actually excite. */
-std::vector<float> makeStimulus()
+std::vector<float> makeStimulus(int numSamples)
 {
-    std::vector<float> signal(static_cast<std::size_t>(kStimulusSamples), 0.0f);
+    std::vector<float> signal(static_cast<std::size_t>(juce::jmax(1, numSamples)), 0.0f);
 
     Xorshift32 rng { kNoiseSeed };
 
     double mean = 0.0;
 
-    for (int i = 0; i < kStimulusSamples; ++i)
+    for (int i = 0; i < numSamples; ++i)
     {
         const float v = rng.nextBipolar();
         signal[static_cast<std::size_t>(i)] = v;
@@ -130,7 +171,7 @@ std::vector<float> makeStimulus()
 
     // Strip the residual DC of a finite noise burst: asymmetric and rectifying
     // styles would otherwise be measured against an offset no real signal has.
-    mean /= static_cast<double>(kStimulusSamples);
+    mean /= static_cast<double>(numSamples);
 
     double sumSquares = 0.0;
 
@@ -140,7 +181,7 @@ std::vector<float> makeStimulus()
         sumSquares += static_cast<double>(v) * static_cast<double>(v);
     }
 
-    const double rms = std::sqrt(sumSquares / static_cast<double>(kStimulusSamples));
+    const double rms = std::sqrt(sumSquares / static_cast<double>(numSamples));
     const double target = static_cast<double>(juce::Decibels::decibelsToGain(kStimulusLevelDb));
     const float scale = (rms > kSilenceFloor) ? static_cast<float>(target / rms) : 1.0f;
 
@@ -178,6 +219,7 @@ double windowRms(const float* data, int start, int count) noexcept
 float measureCompensationDb(StyleID id, float driveDb, double rate,
                             const std::vector<float>& stimulus,
                             std::vector<float>& scratch,
+                            int warmupSamples,
                             double inputRms)
 {
     auto style = createSaturationStyle(id);
@@ -185,7 +227,9 @@ float measureCompensationDb(StyleID id, float driveDb, double rate,
     if (style == nullptr)                       // the factory promises non-null
         return 0.0f;                            // but never trust it silently
 
-    style->prepare(rate, kStimulusSamples, 1);
+    const int stimulusSamples = static_cast<int>(stimulus.size());
+
+    style->prepare(rate, stimulusSamples, 1);
     style->reset();
 
     std::copy(stimulus.begin(), stimulus.end(), scratch.begin());
@@ -197,9 +241,9 @@ float measureCompensationDb(StyleID id, float driveDb, double rate,
     params.amount01   = juce::jlimit(0.0f, 1.0f, driveDb / StyleCalibrator::kMaxDriveDb);
 
     float* channels[1] = { scratch.data() };
-    style->process(channels, 1, kStimulusSamples, params);
+    style->process(channels, 1, stimulusSamples, params);
 
-    const double outRms = windowRms(scratch.data(), kWarmupSamples, kMeasureSamples);
+    const double outRms = windowRms(scratch.data(), warmupSamples, kMeasureSamples);
 
     // Silent, or NaN/Inf somewhere in the window: there is nothing to match, so
     // leave the level alone instead of inventing a correction.
@@ -224,10 +268,16 @@ StyleCalibrator::StyleCalibrator(double oversampledSampleRate)
                                                         ? oversampledSampleRate
                                                         : 44100.0);
 
-    const std::vector<float> stimulus = makeStimulus();
-    const double inputRms = windowRms(stimulus.data(), kWarmupSamples, kMeasureSamples);
+    // Warm-up scales with the rate so that every rate gets the same settling
+    // TIME; the measurement window does not, because it is counted in
+    // independent observations of flat noise. See the constants above.
+    const int warmupSamples   = warmupSamplesForRate(rate);
+    const int stimulusSamples = warmupSamples + kMeasureSamples;
 
-    std::vector<float> scratch(static_cast<std::size_t>(kStimulusSamples), 0.0f);
+    const std::vector<float> stimulus = makeStimulus(stimulusSamples);
+    const double inputRms = windowRms(stimulus.data(), warmupSamples, kMeasureSamples);
+
+    std::vector<float> scratch(static_cast<std::size_t>(stimulusSamples), 0.0f);
 
     for (int s = 0; s < kNumStyles; ++s)
     {
@@ -238,7 +288,7 @@ StyleCalibrator::StyleCalibrator(double oversampledSampleRate)
             const float driveDb = juce::jmin(kMaxDriveDb, static_cast<float>(d) * kDriveStepDb);
 
             tableDb[static_cast<std::size_t>(s)][static_cast<std::size_t>(d)]
-                = measureCompensationDb(id, driveDb, rate, stimulus, scratch, inputRms);
+                = measureCompensationDb(id, driveDb, rate, stimulus, scratch, warmupSamples, inputRms);
         }
     }
 }
@@ -281,9 +331,13 @@ float StyleCalibrator::compensationGain(StyleID id, float driveDb) const noexcep
 const StyleCalibrator& StyleCalibrator::getForSampleRate(double oversampledSampleRate)
 {
     // NOT REALTIME-SAFE. This allocates, takes a lock and, on a cache miss,
-    // runs several million samples of DSP. It must only ever be called from
-    // prepareToPlay / prepare() on the message or prepare thread — NEVER from
-    // processBlock or any other audio-thread code.
+    // runs 19 x 41 = 779 measurements of (warm-up + 32768) samples each. That
+    // is 28.7 M samples and about 0.28 s on an M-series core at 96 kHz, rising
+    // with the warm-up to roughly 1.2 s at 3.072 MHz — NOT the "few ms" the
+    // header claims. It must only ever be called from prepareToPlay /
+    // prepare() on the message or prepare thread — NEVER from processBlock or
+    // any other audio-thread code, and callers should expect prepare to block
+    // for that long the first time a given oversampled rate is seen.
     //
     // The lock exists because an offline renderer or a test can prepare several
     // instances concurrently; the cache is shared process-wide because the

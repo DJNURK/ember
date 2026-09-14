@@ -212,7 +212,33 @@ void FeedbackLoop::reset() noexcept
 
 void FeedbackLoop::setParameters(float amount01, float frequency) noexcept
 {
-    amount = juce::jlimit(0.0f, 1.0f, amount01);
+    const float newAmount = juce::jlimit(0.0f, 1.0f, amount01);
+
+    // Entering bypass. process() then stops reading and writing the line
+    // altogether, so whatever audio is in it is frozen for as long as the knob
+    // stays down — and is read back at full gain the moment it comes up again,
+    // however long later. Measured through the engine: 2 s of signal, feedback
+    // to 0, 2 s of digital silence (the output settles to -100 dBFS), feedback
+    // back to 100 % -> a -21.5 dBFS burst with nothing going in, 38 dB above
+    // the project's own "silence in, nothing above -60 dBFS out" gate. The
+    // smoothing test misses it because it slams the knob with silence going in,
+    // so the line never holds anything.
+    //
+    // Flushing here is one-shot, allocation-free and bounded: the line is one
+    // period of the lowest tuning (20 Hz), so 0.40 us at 48 kHz x2 and 8.74 us
+    // at the worst supported internal rate (192 kHz x16 = 3.072 MHz, 1.2 MB for
+    // both channels) — 5.2 % of a single 32-sample control block, once per
+    // knob-to-zero rather than once per block.
+    if (amount > 0.0f && newAmount <= 0.0f)
+    {
+        for (auto& line : delayLine)
+            std::fill(line.begin(), line.end(), 0.0f);
+
+        svfIc1.fill(0.0f);
+        svfIc2.fill(0.0f);
+    }
+
+    amount = newAmount;
 
     const float nyquistLimit = static_cast<float>(sampleRate) * 0.45f;
     freq = juce::jlimit(kMinFeedbackHz, juce::jmin(kMaxFeedbackHz, nyquistLimit), frequency);
@@ -354,8 +380,19 @@ void Dynamics::setAmount(float bipolarAmount) noexcept
 void Dynamics::process(float* const* channels, int numChannels, int numSamples) noexcept
 {
     // Exactly 0 is a true bypass: the buffer is not touched at all, so a band
-    // with the knob centred is bit-identical to no dynamics stage.
-    if (juce::exactlyEqual(amount, 0.0f) || channels == nullptr || numSamples <= 0 || numChannels <= 0)
+    // with the knob centred is bit-identical to no dynamics stage. The meter
+    // still has to follow the knob, though — returning early without clearing
+    // it leaves the GUI reading whatever reduction was last applied, for the
+    // rest of the session (measured: pinned at -25.45 dB after the knob came
+    // back to centre). A zero-length or channel-less call is a different thing
+    // and must leave the last real reading alone.
+    if (juce::exactlyEqual(amount, 0.0f))
+    {
+        gainReductionDb = 0.0f;
+        return;
+    }
+
+    if (channels == nullptr || numSamples <= 0 || numChannels <= 0)
         return;
 
     // --- block constants -------------------------------------------------
@@ -495,6 +532,14 @@ void Dynamics::process(float* const* channels, int numChannels, int numSamples) 
     }
 
     // Meter value: one conversion per block, never per sample.
+    //
+    // NOTE: gainReductionDb is a plain float declared in BandFx.h, written here
+    // on the audio thread and read on the message thread by the GUI meter
+    // (src/gui/Widgets.h, via BandChain/EmberEngine::getBandGainReductionDb).
+    // That is a data race; the project's own rule is "GUI reads parameter
+    // values through std::atomic" (docs/PLAN.md), which EmberEngine::bandLevels
+    // follows and this does not. Fixing it means changing the member's type in
+    // BandFx.h, which this pass does not own.
     gainReductionDb = juce::Decibels::gainToDecibels(juce::jmin(1.0f, worstGain), -60.0f);
 }
 

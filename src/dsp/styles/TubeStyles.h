@@ -44,8 +44,8 @@ protected:
     /** `amount01` sanitised and clamped to [0, 1]. */
     static float clampedAmount(const StyleParams& params) noexcept;
 
-    double sampleRate { 44100.0 };
-    int preparedChannels { kMaxChannels };
+    double sampleRate{44100.0};
+    int preparedChannels{kMaxChannels};
 };
 
 /**
@@ -95,7 +95,7 @@ public:
     const char* getName() const noexcept override { return "Warm Tube"; }
 
 private:
-    std::array<dsputil::SvfTPT, kMaxChannels> shelfLowpass {};
+    std::array<dsputil::SvfTPT, kMaxChannels> shelfLowpass{};
 };
 
 /**
@@ -155,9 +155,9 @@ public:
     const char* getName() const noexcept override { return "Broken Tube"; }
 
 private:
-    std::array<dsputil::OnePole, kMaxChannels> envFast {};
-    std::array<dsputil::OnePole, kMaxChannels> envSlow {};
-    double lfoPhase { 0.0 };   ///< [-1, 1), one full cycle per 2 units
-    double lfoInc { 0.0 };
+    std::array<dsputil::OnePole, kMaxChannels> envFast{};
+    std::array<dsputil::OnePole, kMaxChannels> envSlow{};
+    double lfoPhase{0.0}; ///< [-1, 1), one full cycle per 2 units
+    double lfoInc{0.0};
 };
 } // namespace ember

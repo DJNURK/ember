@@ -70,6 +70,8 @@ void XLfo::prepare (double sampleRate) noexcept
 void XLfo::reset() noexcept
 {
     phase        = 0.0;
+    lastPpq      = 0.0;
+    havePpq      = false;
     currentValue = 0.0f;
     smoother.reset (0.0f);
 }
@@ -210,7 +212,12 @@ float XLfo::evaluate (const Shape& shape, float phase01) const noexcept
 
 float XLfo::tick (int numSamples, double bpm, double ppqPosition, bool isPlaying) noexcept
 {
-    const double elapsed = numSamples > 0 ? static_cast<double> (numSamples) : 0.0;
+    // No time has passed, so nothing may move: the shared source contract says
+    // a non-positive block returns the current value without advancing.
+    if (numSamples <= 0)
+        return currentValue;
+
+    const double elapsed = static_cast<double> (numSamples);
 
     if (params.tempoSync)
     {
@@ -219,10 +226,26 @@ float XLfo::tick (int numSamples, double bpm, double ppqPosition, bool isPlaying
         if (isPlaying && std::isfinite (ppqPosition))
         {
             // Locked to the timeline: loops and locates land on the same phase.
-            phase = wrap01 (ppqPosition / beats);
+            // The host only reports ppq once per buffer, so re-derive whenever
+            // it moves and integrate at the synced rate in between — otherwise
+            // the LFO is frozen for the whole buffer and steps at its edge.
+            if (! havePpq || std::abs (ppqPosition - lastPpq) > 0.0)
+            {
+                phase   = wrap01 (ppqPosition / beats);
+                lastPpq = ppqPosition;
+                havePpq = true;
+            }
+            else
+            {
+                const double tempo = (std::isfinite (bpm) && bpm > 1.0) ? bpm : 120.0;
+                phase = wrap01 (phase + ((tempo / 60.0) / beats) * elapsed / sr);
+            }
         }
         else
         {
+            // Stopped: free-run, and re-lock on the next rolling report.
+            havePpq = false;
+
             const double tempo = (std::isfinite (bpm) && bpm > 1.0) ? bpm : 120.0;
             phase = wrap01 (phase + ((tempo / 60.0) / beats) * elapsed / sr);
         }
@@ -301,6 +324,14 @@ void EnvelopeGenerator::allNotesOff() noexcept
 
 float EnvelopeGenerator::tick (int numSamples, float detectorValue) noexcept
 {
+    // A non-positive block covers no audio time. Running the segment code with
+    // a zero-sample coefficient would snap each segment straight to its target
+    // and walk attack -> decay -> sustain in a single call, so return the
+    // current level untouched. Any pending MIDI retrigger stays pending and is
+    // honoured by the next real block.
+    if (numSamples <= 0)
+        return level;
+
     const float detector = juce::jlimit (0.0f, 4.0f, dsputil::sanitise (detectorValue));
 
     // ---- gate -------------------------------------------------------------
@@ -435,6 +466,9 @@ void EnvelopeFollower::setParameters (const EnvelopeFollowerParams& newParams) n
 
 float EnvelopeFollower::tick (int numSamples, const float* perBandRms, int numBands) noexcept
 {
+    if (numSamples <= 0)
+        return level;   // no audio time passed: do not snap to the new detector
+
     float rms = 0.0f;
 
     if (perBandRms != nullptr && numBands > 0)
@@ -485,7 +519,30 @@ void XyController::reset() noexcept
 {
     smoothedX.reset (params.x);
     smoothedY.reset (params.y);
-    currentValue = 0.0f;
+
+    // Keep getValue() consistent with the axis the smoothers were reset to;
+    // leaving it at 0 made the source report 0 for one block after every
+    // reset and then step to the pad position on the first tick.
+    switch (params.axis)
+    {
+        case XyAxis::Y:
+            currentValue = params.y;
+            break;
+
+        case XyAxis::Radius:
+        {
+            const float dx = params.x - 0.5f;
+            const float dy = params.y - 0.5f;
+            currentValue = juce::jlimit (0.0f, 1.0f, std::sqrt (dx * dx + dy * dy) * 2.0f);
+            break;
+        }
+
+        case XyAxis::X:
+        case XyAxis::Count:
+        default:
+            currentValue = params.x;
+            break;
+    }
 }
 
 void XyController::setParameters (const XyControllerParams& newParams) noexcept

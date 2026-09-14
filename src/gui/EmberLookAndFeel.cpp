@@ -9,24 +9,24 @@ namespace ember::gui
 // that runs along flame temperature: deep ember red at the bottom, blue-white
 // flame tip at the top.
 //==============================================================================
-const juce::Colour EmberColours::backgroundDeep { 0xff0a0a0c };
-const juce::Colour EmberColours::background { 0xff121215 };
-const juce::Colour EmberColours::panelSunken { 0xff0e0e11 };
-const juce::Colour EmberColours::panel { 0xff17171b };
-const juce::Colour EmberColours::panelRaised { 0xff1f1f24 };
+const juce::Colour EmberColours::backgroundDeep{0xff0a0a0c};
+const juce::Colour EmberColours::background{0xff121215};
+const juce::Colour EmberColours::panelSunken{0xff0e0e11};
+const juce::Colour EmberColours::panel{0xff17171b};
+const juce::Colour EmberColours::panelRaised{0xff1f1f24};
 
-const juce::Colour EmberColours::outline { 0xff2b2b32 };
-const juce::Colour EmberColours::outlineStrong { 0xff3c3c46 };
-const juce::Colour EmberColours::track { 0xff33333c };
+const juce::Colour EmberColours::outline{0xff2b2b32};
+const juce::Colour EmberColours::outlineStrong{0xff3c3c46};
+const juce::Colour EmberColours::track{0xff33333c};
 
-const juce::Colour EmberColours::textPrimary { 0xffe9e7e3 };
-const juce::Colour EmberColours::textSecondary { 0xff9a9aa5 };
-const juce::Colour EmberColours::textDisabled { 0xff585862 };
+const juce::Colour EmberColours::textPrimary{0xffe9e7e3};
+const juce::Colour EmberColours::textSecondary{0xff9a9aa5};
+const juce::Colour EmberColours::textDisabled{0xff585862};
 
-const juce::Colour EmberColours::accent { 0xffff8a3d };
-const juce::Colour EmberColours::accentDim { 0xffb05f2c };
-const juce::Colour EmberColours::accentGlow { 0x33ff8a3d };
-const juce::Colour EmberColours::warning { 0xffff4f45 };
+const juce::Colour EmberColours::accent{0xffff8a3d};
+const juce::Colour EmberColours::accentDim{0xffb05f2c};
+const juce::Colour EmberColours::accentGlow{0x33ff8a3d};
+const juce::Colour EmberColours::warning{0xffff4f45};
 
 namespace
 {
@@ -81,6 +81,22 @@ juce::ColourGradient surfaceGradient(juce::Rectangle<float> area, juce::Colour b
 float cornerFor(float height, float scale)
 {
     return juce::jlimit(2.0f, 8.0f * scale, height * 0.26f);
+}
+
+/** Lays out tooltip text. Goes through juce::TextLayout rather than
+    `drawFittedText` so that embedded newlines — which every Ember tooltip uses
+    to separate the value from the interaction hints — wrap correctly, and so
+    that measuring and drawing cannot disagree. */
+juce::TextLayout layoutTooltipText(const juce::String& text, const juce::Font& font, juce::Colour colour,
+                                   float maximumWidth)
+{
+    juce::AttributedString attributed;
+    attributed.setJustification(juce::Justification::centredLeft);
+    attributed.append(text, font, colour);
+
+    juce::TextLayout layout;
+    layout.createLayout(attributed, maximumWidth);
+    return layout;
 }
 } // namespace
 
@@ -139,13 +155,27 @@ float EmberFonts::sizeFor(Role role, float uiScale) noexcept
 
     switch (role)
     {
-        case Role::display: base = 25.0f; break;
-        case Role::title:   base = 16.5f; break;
-        case Role::section: base = 11.0f; break;
-        case Role::body:    base = 13.0f; break;
-        case Role::label:   base = 11.5f; break;
-        case Role::value:   base = 12.5f; break;
-        case Role::micro:   base = 9.5f;  break;
+    case Role::display:
+        base = 25.0f;
+        break;
+    case Role::title:
+        base = 16.5f;
+        break;
+    case Role::section:
+        base = 11.0f;
+        break;
+    case Role::body:
+        base = 13.0f;
+        break;
+    case Role::label:
+        base = 11.5f;
+        break;
+    case Role::value:
+        base = 12.5f;
+        break;
+    case Role::micro:
+        base = 9.5f;
+        break;
     }
 
     return base * juce::jmax(0.5f, uiScale);
@@ -157,18 +187,18 @@ juce::Font EmberFonts::get(Role role, float uiScale)
 
     switch (role)
     {
-        case Role::display:
-        case Role::title:
-        case Role::section:
-            bold = true;
-            break;
+    case Role::display:
+    case Role::title:
+    case Role::section:
+        bold = true;
+        break;
 
-        case Role::body:
-        case Role::label:
-        case Role::value:
-        case Role::micro:
-            bold = false;
-            break;
+    case Role::body:
+    case Role::label:
+    case Role::value:
+    case Role::micro:
+        bold = false;
+        break;
     }
 
     return sized(sizeFor(role, uiScale), bold);
@@ -407,9 +437,9 @@ void EmberLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int wid
     if (std::abs(valueAngle - anchorAngle) > 1.0e-3f)
     {
         g.setColour(accent);
-        g.strokePath(arcPath(geo.centre, geo.arcRadius, anchorAngle, valueAngle),
-                     juce::PathStrokeType(geo.valueThickness, juce::PathStrokeType::curved,
-                                          juce::PathStrokeType::rounded));
+        g.strokePath(
+            arcPath(geo.centre, geo.arcRadius, anchorAngle, valueAngle),
+            juce::PathStrokeType(geo.valueThickness, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 
     // --- pointer
@@ -434,7 +464,7 @@ void EmberLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int wid
 
     const bool enabled = slider.isEnabled();
     const auto accent = enabled ? EmberStyleProps::accentColourFor(slider) : EmberColours::textDisabled;
-    const bool horizontal = ! slider.isVertical();
+    const bool horizontal = !slider.isVertical();
 
     if (slider.isBar())
     {
@@ -457,13 +487,11 @@ void EmberLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int wid
         return;
     }
 
-    const float thickness =
-        juce::jlimit(3.0f, 7.0f, (horizontal ? area.getHeight() : area.getWidth()) * 0.22f);
-    const auto trackArea = horizontal
-                               ? juce::Rectangle<float>(area.getX(), area.getCentreY() - thickness * 0.5f,
-                                                        area.getWidth(), thickness)
-                               : juce::Rectangle<float>(area.getCentreX() - thickness * 0.5f, area.getY(), thickness,
-                                                        area.getHeight());
+    const float thickness = juce::jlimit(3.0f, 7.0f, (horizontal ? area.getHeight() : area.getWidth()) * 0.22f);
+    const auto trackArea =
+        horizontal
+            ? juce::Rectangle<float>(area.getX(), area.getCentreY() - thickness * 0.5f, area.getWidth(), thickness)
+            : juce::Rectangle<float>(area.getCentreX() - thickness * 0.5f, area.getY(), thickness, area.getHeight());
 
     g.setColour(EmberColours::track);
     g.fillRoundedRectangle(trackArea, thickness * 0.5f);
@@ -501,11 +529,9 @@ void EmberLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int wid
 
     auto drawThumb = [&](float position)
     {
-        const auto thumb = horizontal
-                               ? juce::Rectangle<float>(thumbShort, thumbLong)
-                                     .withCentre({ position, area.getCentreY() })
-                               : juce::Rectangle<float>(thumbLong, thumbShort)
-                                     .withCentre({ area.getCentreX(), position });
+        const auto thumb =
+            horizontal ? juce::Rectangle<float>(thumbShort, thumbLong).withCentre({position, area.getCentreY()})
+                       : juce::Rectangle<float>(thumbLong, thumbShort).withCentre({area.getCentreX(), position});
 
         g.setColour(enabled ? EmberColours::textPrimary : EmberColours::textDisabled);
         g.fillRoundedRectangle(thumb, thumbShort * 0.42f);
@@ -562,8 +588,8 @@ juce::Font EmberLookAndFeel::getSliderPopupFont(juce::Slider&)
 
 //==============================================================================
 void EmberLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& button,
-                                            const juce::Colour& backgroundColour,
-                                            bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
+                                            const juce::Colour& backgroundColour, bool shouldDrawButtonAsHighlighted,
+                                            bool shouldDrawButtonAsDown)
 {
     const auto area = button.getLocalBounds().toFloat().reduced(0.5f);
 
@@ -576,7 +602,7 @@ void EmberLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& but
 
     auto fill = backgroundColour;
 
-    if (! button.isEnabled())
+    if (!button.isEnabled())
         fill = fill.withMultipliedSaturation(0.25f).withMultipliedBrightness(0.7f);
     else if (shouldDrawButtonAsDown)
         fill = fill.brighter(0.22f);
@@ -586,9 +612,9 @@ void EmberLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& but
     g.setGradientFill(surfaceGradient(area, fill, 0.06f));
     g.fillRoundedRectangle(area, corner);
 
-    g.setColour(on && button.isEnabled() ? accent.withAlpha(0.85f)
-                                         : (shouldDrawButtonAsHighlighted ? EmberColours::outlineStrong
-                                                                          : EmberColours::outline));
+    g.setColour(on && button.isEnabled()
+                    ? accent.withAlpha(0.85f)
+                    : (shouldDrawButtonAsHighlighted ? EmberColours::outlineStrong : EmberColours::outline));
     g.drawRoundedRectangle(area, corner, 1.0f);
 }
 
@@ -601,7 +627,7 @@ void EmberLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& butto
     auto colour = button.findColour(button.getToggleState() ? juce::TextButton::textColourOnId
                                                             : juce::TextButton::textColourOffId);
 
-    if (! button.isEnabled())
+    if (!button.isEnabled())
         colour = EmberColours::textDisabled;
     else if (shouldDrawButtonAsDown || shouldDrawButtonAsHighlighted)
         colour = colour.brighter(0.25f);
@@ -637,59 +663,59 @@ void EmberLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& b
 
     switch (look)
     {
-        case ToggleLook::pill:
+    case ToggleLook::pill:
+    {
+        const float trackHeight = juce::jlimit(11.0f, 22.0f, area.getHeight() * 0.58f);
+        const float trackWidth = trackHeight * 1.85f;
+        const auto trackArea = juce::Rectangle<float>(trackWidth, trackHeight)
+                                   .withCentre({area.getX() + trackWidth * 0.5f, area.getCentreY()});
+
+        g.setColour(on ? accent.withAlpha(enabled ? 0.9f : 0.4f) : EmberColours::panelSunken);
+        g.fillRoundedRectangle(trackArea, trackHeight * 0.5f);
+        g.setColour(shouldDrawButtonAsHighlighted ? EmberColours::outlineStrong : EmberColours::outline);
+        g.drawRoundedRectangle(trackArea.reduced(0.5f), trackHeight * 0.5f, 1.0f);
+
+        const float knobRadius = trackHeight * 0.5f - 2.0f;
+        const float knobX = on ? trackArea.getRight() - knobRadius - 2.0f : trackArea.getX() + knobRadius + 2.0f;
+        const auto knob =
+            juce::Rectangle<float>(knobRadius * 2.0f, knobRadius * 2.0f).withCentre({knobX, trackArea.getCentreY()});
+
+        g.setColour(shouldDrawButtonAsDown ? EmberColours::textSecondary : EmberColours::textPrimary);
+        g.fillEllipse(knob);
+
+        textLeft = trackArea.getRight() + juce::jmax(5.0f, trackHeight * 0.35f);
+        break;
+    }
+
+    case ToggleLook::led:
+    {
+        const float diameter = juce::jlimit(7.0f, 14.0f, area.getHeight() * 0.44f);
+        const auto lamp = juce::Rectangle<float>(diameter, diameter)
+                              .withCentre({area.getX() + diameter * 0.5f + 1.0f, area.getCentreY()});
+
+        if (on && enabled)
         {
-            const float trackHeight = juce::jlimit(11.0f, 22.0f, area.getHeight() * 0.58f);
-            const float trackWidth = trackHeight * 1.85f;
-            const auto trackArea = juce::Rectangle<float>(trackWidth, trackHeight)
-                                       .withCentre({ area.getX() + trackWidth * 0.5f, area.getCentreY() });
-
-            g.setColour(on ? accent.withAlpha(enabled ? 0.9f : 0.4f) : EmberColours::panelSunken);
-            g.fillRoundedRectangle(trackArea, trackHeight * 0.5f);
-            g.setColour(shouldDrawButtonAsHighlighted ? EmberColours::outlineStrong : EmberColours::outline);
-            g.drawRoundedRectangle(trackArea.reduced(0.5f), trackHeight * 0.5f, 1.0f);
-
-            const float knobRadius = trackHeight * 0.5f - 2.0f;
-            const float knobX = on ? trackArea.getRight() - knobRadius - 2.0f : trackArea.getX() + knobRadius + 2.0f;
-            const auto knob = juce::Rectangle<float>(knobRadius * 2.0f, knobRadius * 2.0f)
-                                  .withCentre({ knobX, trackArea.getCentreY() });
-
-            g.setColour(shouldDrawButtonAsDown ? EmberColours::textSecondary : EmberColours::textPrimary);
-            g.fillEllipse(knob);
-
-            textLeft = trackArea.getRight() + juce::jmax(5.0f, trackHeight * 0.35f);
-            break;
+            g.setColour(accent.withAlpha(0.22f));
+            g.fillEllipse(lamp.expanded(diameter * 0.45f));
         }
 
-        case ToggleLook::led:
-        {
-            const float diameter = juce::jlimit(7.0f, 14.0f, area.getHeight() * 0.44f);
-            const auto lamp = juce::Rectangle<float>(diameter, diameter)
-                                  .withCentre({ area.getX() + diameter * 0.5f + 1.0f, area.getCentreY() });
+        g.setColour(on ? accent : EmberColours::panelSunken);
+        g.fillEllipse(lamp);
+        g.setColour(shouldDrawButtonAsHighlighted ? EmberColours::outlineStrong : EmberColours::outline);
+        g.drawEllipse(lamp.reduced(0.5f), 1.0f);
 
-            if (on && enabled)
-            {
-                g.setColour(accent.withAlpha(0.22f));
-                g.fillEllipse(lamp.expanded(diameter * 0.45f));
-            }
+        textLeft = lamp.getRight() + juce::jmax(5.0f, diameter * 0.5f);
+        break;
+    }
 
-            g.setColour(on ? accent : EmberColours::panelSunken);
-            g.fillEllipse(lamp);
-            g.setColour(shouldDrawButtonAsHighlighted ? EmberColours::outlineStrong : EmberColours::outline);
-            g.drawEllipse(lamp.reduced(0.5f), 1.0f);
-
-            textLeft = lamp.getRight() + juce::jmax(5.0f, diameter * 0.5f);
-            break;
-        }
-
-        case ToggleLook::check:
-        {
-            const float boxSize = juce::jlimit(11.0f, 20.0f, area.getHeight() * 0.62f);
-            drawTickBox(g, button, area.getX() + 1.0f, area.getCentreY() - boxSize * 0.5f, boxSize, boxSize, on,
-                        enabled, shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
-            textLeft = area.getX() + boxSize + juce::jmax(5.0f, boxSize * 0.35f);
-            break;
-        }
+    case ToggleLook::check:
+    {
+        const float boxSize = juce::jlimit(11.0f, 20.0f, area.getHeight() * 0.62f);
+        drawTickBox(g, button, area.getX() + 1.0f, area.getCentreY() - boxSize * 0.5f, boxSize, boxSize, on, enabled,
+                    shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
+        textLeft = area.getX() + boxSize + juce::jmax(5.0f, boxSize * 0.35f);
+        break;
+    }
     }
 
     const auto textArea = juce::Rectangle<float>(textLeft, area.getY(), area.getRight() - textLeft, area.getHeight());
@@ -698,7 +724,7 @@ void EmberLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& b
     {
         auto colour = button.findColour(juce::ToggleButton::textColourId);
 
-        if (! enabled)
+        if (!enabled)
             colour = EmberColours::textDisabled;
         else if (on)
             colour = EmberColours::textPrimary;
@@ -743,8 +769,7 @@ void EmberLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, bo
     g.fillRoundedRectangle(area.reduced(0.5f), corner);
 
     const bool highlighted = isButtonDown || box.isPopupActive() || box.hasKeyboardFocus(false);
-    g.setColour(! enabled ? EmberColours::outline
-                          : (highlighted ? accent.withAlpha(0.8f) : EmberColours::outline));
+    g.setColour(!enabled ? EmberColours::outline : (highlighted ? accent.withAlpha(0.8f) : EmberColours::outline));
     g.drawRoundedRectangle(area.reduced(0.5f), corner, 1.0f);
 
     // Chevron, sized from the button area JUCE hands us.
@@ -758,8 +783,8 @@ void EmberLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, bo
     chevron.lineTo(centre.x, centre.y + chevronWidth * 0.34f);
     chevron.lineTo(centre.x + chevronWidth * 0.5f, centre.y - chevronWidth * 0.26f);
 
-    g.setColour(! enabled ? EmberColours::textDisabled
-                          : (highlighted ? accent : box.findColour(juce::ComboBox::arrowColourId)));
+    g.setColour(!enabled ? EmberColours::textDisabled
+                         : (highlighted ? accent : box.findColour(juce::ComboBox::arrowColourId)));
     g.strokePath(chevron, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 }
 
@@ -775,8 +800,8 @@ void EmberLookAndFeel::positionComboBoxText(juce::ComboBox& box, juce::Label& la
 
     label.setBounds(inset, 1, juce::jmax(0, box.getWidth() - arrowWidth - inset), box.getHeight() - 2);
     label.setFont(getComboBoxFont(box));
-    label.setColour(juce::Label::textColourId, box.isEnabled() ? box.findColour(juce::ComboBox::textColourId)
-                                                               : EmberColours::textDisabled);
+    label.setColour(juce::Label::textColourId,
+                    box.isEnabled() ? box.findColour(juce::ComboBox::textColourId) : EmberColours::textDisabled);
 }
 
 //==============================================================================
@@ -811,7 +836,7 @@ void EmberLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectangl
 
     auto colour = textColour != nullptr ? *textColour : EmberColours::textPrimary;
 
-    if (! isActive)
+    if (!isActive)
         colour = EmberColours::textDisabled;
     else if (isHighlighted)
         colour = EmberColours::accent;
@@ -857,8 +882,7 @@ void EmberLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectangl
 
         g.setFont(shortcutFont);
         g.setColour(EmberColours::textSecondary);
-        g.drawFittedText(shortcutKeyText,
-                         textArea.removeFromRight(shortcutWidth).toNearestInt(),
+        g.drawFittedText(shortcutKeyText, textArea.removeFromRight(shortcutWidth).toNearestInt(),
                          juce::Justification::centredRight, 1, 1.0f);
         g.setColour(colour);
         g.setFont(getPopupMenuFont());
@@ -867,8 +891,8 @@ void EmberLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectangl
     g.drawFittedText(text, textArea.toNearestInt(), juce::Justification::centredLeft, 1, 0.85f);
 }
 
-void EmberLookAndFeel::getIdealPopupMenuItemSize(const juce::String& text, bool isSeparator,
-                                                 int standardMenuItemHeight, int& idealWidth, int& idealHeight)
+void EmberLookAndFeel::getIdealPopupMenuItemSize(const juce::String& text, bool isSeparator, int standardMenuItemHeight,
+                                                 int& idealWidth, int& idealHeight)
 {
     if (isSeparator)
     {
@@ -878,8 +902,7 @@ void EmberLookAndFeel::getIdealPopupMenuItemSize(const juce::String& text, bool 
     }
 
     const auto font = getPopupMenuFont();
-    idealHeight = standardMenuItemHeight > 0 ? standardMenuItemHeight
-                                             : juce::roundToInt(font.getHeight() * 1.9f);
+    idealHeight = standardMenuItemHeight > 0 ? standardMenuItemHeight : juce::roundToInt(font.getHeight() * 1.9f);
     idealWidth = juce::GlyphArrangement::getStringWidthInt(font, text) + idealHeight * 2;
 }
 
@@ -898,7 +921,7 @@ void EmberLookAndFeel::drawLabel(juce::Graphics& g, juce::Label& label)
 {
     g.fillAll(label.findColour(juce::Label::backgroundColourId));
 
-    if (! label.isBeingEdited())
+    if (!label.isBeingEdited())
     {
         const float alpha = label.isEnabled() ? 1.0f : 0.55f;
         const auto font = getLabelFont(label);
@@ -938,7 +961,7 @@ void EmberLookAndFeel::fillTextEditorBackground(juce::Graphics& g, int width, in
 
 void EmberLookAndFeel::drawTextEditorOutline(juce::Graphics& g, int width, int height, juce::TextEditor& editor)
 {
-    if (editor.isReadOnly() || ! editor.isEnabled())
+    if (editor.isReadOnly() || !editor.isEnabled())
         return;
 
     const juce::Rectangle<float> area(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
@@ -959,27 +982,23 @@ void EmberLookAndFeel::drawTooltip(juce::Graphics& g, const juce::String& text, 
     g.setColour(EmberColours::outlineStrong);
     g.drawRoundedRectangle(area.reduced(0.5f), 4.0f, 1.0f);
 
-    const auto font = EmberFonts::get(EmberFonts::Role::body, uiScale);
-    const int lines = juce::jmax(1, juce::roundToInt(static_cast<float>(height) / (font.getHeight() * 1.3f)));
-
-    g.setColour(EmberColours::textPrimary);
-    g.setFont(font);
-    g.drawFittedText(text, area.reduced(7.0f, 4.0f).toNearestInt(), juce::Justification::centredLeft, lines, 1.0f);
+    const auto textArea = area.reduced(8.0f, 5.0f);
+    const auto layout = layoutTooltipText(text, EmberFonts::get(EmberFonts::Role::body, uiScale),
+                                          EmberColours::textPrimary, juce::jmax(10.0f, textArea.getWidth()));
+    layout.draw(g, textArea);
 }
 
 juce::Rectangle<int> EmberLookAndFeel::getTooltipBounds(const juce::String& tipText, juce::Point<int> screenPos,
                                                         juce::Rectangle<int> parentArea)
 {
-    const auto font = EmberFonts::get(EmberFonts::Role::body, uiScale);
-    const int padX = 7;
-    const int padY = 4;
-    const int maxTextWidth = juce::jmax(80, juce::roundToInt(290.0f * uiScale));
-    const int textWidth = juce::GlyphArrangement::getStringWidthInt(font, tipText);
-    const int usedWidth = juce::jmin(maxTextWidth, juce::jmax(24, textWidth));
-    const int lines = juce::jmax(1, (textWidth + usedWidth - 1) / juce::jmax(1, usedWidth));
+    const int padX = 8;
+    const int padY = 5;
+    const float maxTextWidth = juce::jmax(120.0f, 300.0f * uiScale);
+    const auto layout = layoutTooltipText(tipText, EmberFonts::get(EmberFonts::Role::body, uiScale),
+                                          EmberColours::textPrimary, maxTextWidth);
 
-    const int w = usedWidth + padX * 2;
-    const int h = juce::roundToInt(font.getHeight() * 1.3f) * lines + padY * 2;
+    const int w = juce::roundToInt(std::ceil(layout.getWidth())) + padX * 2;
+    const int h = juce::roundToInt(std::ceil(layout.getHeight())) + padY * 2;
 
     return juce::Rectangle<int>(screenPos.x > parentArea.getCentreX() ? screenPos.x - (w + 12) : screenPos.x + 18,
                                 screenPos.y > parentArea.getCentreY() ? screenPos.y - (h + 6) : screenPos.y + 8, w, h)
@@ -987,9 +1006,9 @@ juce::Rectangle<int> EmberLookAndFeel::getTooltipBounds(const juce::String& tipT
 }
 
 //==============================================================================
-void EmberLookAndFeel::drawScrollbar(juce::Graphics& g, juce::ScrollBar& scrollbar, int x, int y, int width,
-                                     int height, bool isScrollbarVertical, int thumbStartPosition, int thumbSize,
-                                     bool isMouseOver, bool isMouseDown)
+void EmberLookAndFeel::drawScrollbar(juce::Graphics& g, juce::ScrollBar& scrollbar, int x, int y, int width, int height,
+                                     bool isScrollbarVertical, int thumbStartPosition, int thumbSize, bool isMouseOver,
+                                     bool isMouseDown)
 {
     juce::ignoreUnused(scrollbar);
 
@@ -1002,13 +1021,12 @@ void EmberLookAndFeel::drawScrollbar(juce::Graphics& g, juce::ScrollBar& scrollb
     if (thumbSize <= 0)
         return;
 
-    const auto thumb = isScrollbarVertical
-                           ? juce::Rectangle<float>(area.getX() + area.getWidth() * 0.25f,
-                                                    static_cast<float>(thumbStartPosition), area.getWidth() * 0.5f,
-                                                    static_cast<float>(thumbSize))
-                           : juce::Rectangle<float>(static_cast<float>(thumbStartPosition),
-                                                    area.getY() + area.getHeight() * 0.25f,
-                                                    static_cast<float>(thumbSize), area.getHeight() * 0.5f);
+    const auto thumb =
+        isScrollbarVertical
+            ? juce::Rectangle<float>(area.getX() + area.getWidth() * 0.25f, static_cast<float>(thumbStartPosition),
+                                     area.getWidth() * 0.5f, static_cast<float>(thumbSize))
+            : juce::Rectangle<float>(static_cast<float>(thumbStartPosition), area.getY() + area.getHeight() * 0.25f,
+                                     static_cast<float>(thumbSize), area.getHeight() * 0.5f);
 
     g.setColour(isMouseDown ? EmberColours::accent
                             : (isMouseOver ? EmberColours::textSecondary : EmberColours::outlineStrong));

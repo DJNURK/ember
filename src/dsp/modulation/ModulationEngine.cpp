@@ -114,6 +114,12 @@ void ModulationEngine::reset() noexcept
 
     for (auto& value : sourceValues)
         value.store (0.0f, std::memory_order_relaxed);
+
+    // A stale ppq left over from the previous transport position would make the
+    // first synced block after a reset jump to the wrong phase.
+    transportBpm     = 120.0;
+    transportPpq     = 0.0;
+    transportPlaying = false;
 }
 
 // -------------------------------------------------------- per-block inputs
@@ -257,6 +263,14 @@ void ModulationEngine::updateControlBlock (const float* perBandRms, int numBands
 
     std::fill (offsets.begin(), offsets.end(), 0.0f);
 
+    // The compiled coefficient assumes a nominal 32-sample block. A host that
+    // hands over 1-sample buffers would otherwise run every connection smoother
+    // 32x too fast, which turns a 5 ms glide into 0.16 ms of stepping; a
+    // non-positive block must not advance the smoothers at all. Both are off
+    // the fast path, so an exact 32-sample block still costs one int compare.
+    const bool nominalBlock = (numSamples == kControlBlockSize);
+    const bool advanceTime  = (numSamples > 0);
+
     int connectionIndex = 0;
 
     for (int i = 0; i < kNumModSources; ++i)
@@ -281,7 +295,21 @@ void ModulationEngine::updateControlBlock (const float* perBandRms, int numBands
                                                     : 0.0f;
 
             float& state = smoothState[static_cast<size_t> (juce::jlimit (0, kMaxModConnections - 1, conn.slot))];
-            state = dsputil::sanitise (contribution + conn.smoothCoeff * (state - contribution));
+
+            if (advanceTime)
+            {
+                float coeff;
+
+                if (nominalBlock)
+                    coeff = conn.smoothCoeff;
+                else if (conn.smoothSeconds <= 0.0f)
+                    coeff = 0.0f;
+                else
+                    coeff = std::exp (-static_cast<float> (numSamples)
+                                      / (static_cast<float> (sr) * conn.smoothSeconds));
+
+                state = dsputil::sanitise (contribution + coeff * (state - contribution));
+            }
 
             if (conn.targetIndex >= 0 && conn.targetIndex < numTargets)
                 offsets[static_cast<size_t> (conn.targetIndex)] += state;
@@ -613,11 +641,12 @@ void ModulationEngine::rebuildPlan()
         compiled.targetIndex = c.targetIndex;
         compiled.amount      = c.amount;
         compiled.curve       = c.curve;
-        compiled.enabled     = c.enabled;
-        compiled.smoothCoeff = (c.smoothingMs <= 0.0f)
-                                   ? 0.0f
-                                   : std::exp (-static_cast<float> (kControlBlockSize)
-                                               / (static_cast<float> (sr) * c.smoothingMs * 0.001f));
+        compiled.enabled       = c.enabled;
+        compiled.smoothSeconds = juce::jmax (0.0f, c.smoothingMs) * 0.001f;
+        compiled.smoothCoeff   = (compiled.smoothSeconds <= 0.0f)
+                                     ? 0.0f
+                                     : std::exp (-static_cast<float> (kControlBlockSize)
+                                                 / (static_cast<float> (sr) * compiled.smoothSeconds));
 
         // Stable insertion sort by the source's position in the evaluation
         // order, so the audio thread can walk sources and routings together.
