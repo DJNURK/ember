@@ -1,4 +1,4 @@
-# Ember — Design Decisions
+#Ember — Design Decisions
 
 Decisions made autonomously while implementing the spec, with rationale. Where the spec
 asked for something impossible or inadvisable, the closest sound alternative is described
@@ -66,19 +66,23 @@ is off by default.
 **D11 — Modulation at control rate 32 samples, linearly interpolated per sample.**
 Sources evaluate once per control block; each connection's contribution is ramped across
 the block so no zipper noise reaches the audio. 64 connection slots are preallocated
-(spec asks for ≥ 50); the graph is a flat source→target list evaluated in dependency order
-with cycle detection at edit time, so source-modulating-source works without recursion at
-audio rate.
+(spec asks for ≥ 50);
+the graph is a flat source→target list evaluated in dependency order with cycle detection at edit time,
+    so source - modulating -
+        source works without recursion at audio rate.
 
-**D12 — NaN/Inf and denormal policy.** `ScopedNoDenormals` at the top of `processBlock`;
-every feedback/recursive stage is sanitised per control block (non-finite state is reset
-to zero rather than propagating). A final output guard replaces non-finite samples with
-silence. This is cheap insurance against a single bad host buffer poisoning the state.
+                **D12 — NaN /
+            Inf and denormal policy.** `ScopedNoDenormals` at the top of `processBlock`;
+every feedback /
+        recursive stage is sanitised per control block(non - finite state is reset to zero rather than propagating)
+            .A final output guard replaces non
+    -
+    finite samples with silence.This is cheap insurance against a single bad host buffer poisoning the state.
 
-## Scope
+    ##Scope
 
-**D13 — iOS AUv3 is an off-by-default CMake option** (`EMBER_BUILD_AUV3`). It is a stretch
-goal per the spec; the target is wired but not part of the default release matrix.
+        ** D13 — iOS AUv3 is an off
+    - by - default CMake option**(`EMBER_BUILD_AUV3`).It is a stretch goal per the spec; the target is wired but not part of the default release matrix.
 VST3 does not exist on iOS/Android, as the spec notes.
 
 **D14 — AU registers as `kAudioUnitType_MusicEffect` (`aumf`), not `aufx`.**
@@ -146,3 +150,19 @@ and every folded image on exact bins, so the spectrum can be taken with no windo
 and no leakage. Measured alias floors at 16× with this method: Hard Clip
 −91 dB, Foldback −84 dB, Rectify −92 dB, Smudge −95 dB, relative to the
 fundamental — comfortably inside the specification's −80 dB gate.
+
+**D19 — The Dynamics sign convention is confirmed, not assumed.** The preset
+manifest asks whoever generates the XML to verify that a positive Dynamics value
+is compressive and to negate every preset's value if the DSP came out the other
+way round. `tests/test_feedback.cpp` now measures it: steady loud and steady
+quiet material are run through separately and the gain each receives is
+compared. A positive amount gives the loud signal measurably less gain than the
+quiet one, and a negative amount does the reverse, so the presets' signs stand as
+written.
+
+Worth recording how NOT to measure this, because the obvious method is wrong: the
+first attempt compared crest factor (peak over RMS) on bursty material and
+reported that "compression" *raised* it. Peak and RMS on such a signal are both
+dominated by the loud parts, so they move together under compression and the
+ratio barely responds — it discriminates almost nothing. Comparing gain against
+input level is the measurement that matches what the words mean.

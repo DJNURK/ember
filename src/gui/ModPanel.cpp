@@ -1834,37 +1834,15 @@ private:
 
             area.removeFromTop(4);
 
-            if (!shapeButtons.empty())
-            {
-                const int buttonHeight = juce::jlimit(15, 24, juce::roundToInt(19.0f * scale));
+            // ---- the control strip along the bottom: the source's switches
+            // and choice lists on the left, the shape presets on the right.
+            // One row, not two, because the display above it is the part that
+            // actually needs the height.
+            const bool hasControlRow = !comboBoxes.empty() || toggle != nullptr || !shapeButtons.empty();
+            const int controlHeight = hasControlRow ? juce::jlimit(17, 26, juce::roundToInt(21.0f * scale)) : 0;
 
-                if (area.getHeight() > buttonHeight * 3)
-                {
-                    auto buttonRow = area.removeFromTop(buttonHeight);
-                    const int buttonWidth =
-                        juce::jmin(juce::roundToInt(44.0f * scale),
-                                   buttonRow.getWidth() / juce::jmax(1, static_cast<int>(shapeButtons.size())));
-
-                    for (auto& button : shapeButtons)
-                    {
-                        button->setVisible(true);
-                        button->setBounds(buttonRow.removeFromLeft(buttonWidth).reduced(1, 0));
-                    }
-
-                    area.removeFromTop(4);
-                }
-                else
-                {
-                    for (auto& button : shapeButtons)
-                        button->setVisible(false);
-                }
-            }
-
-            // ---- the control strip at the bottom
-            const int comboHeight =
-                (!comboBoxes.empty() || toggle != nullptr) ? juce::jlimit(17, 26, juce::roundToInt(21.0f * scale)) : 0;
-            int knobHeight = juce::jlimit(34, 86, juce::roundToInt(static_cast<float>(area.getHeight()) * 0.46f));
-            knobHeight = juce::jmin(knobHeight, juce::jmax(0, area.getHeight() - comboHeight - 46));
+            int knobHeight = juce::jlimit(34, 86, juce::roundToInt(static_cast<float>(area.getHeight()) * 0.42f));
+            knobHeight = juce::jmin(knobHeight, juce::jmax(0, area.getHeight() - controlHeight - 52));
 
             if (!knobs.empty() && knobHeight > 20)
             {
@@ -1883,23 +1861,51 @@ private:
                     knob->setVisible(false);
             }
 
-            if (comboHeight > 0 && area.getHeight() > comboHeight)
+            const bool showControlRow = controlHeight > 0 && area.getHeight() > controlHeight + 16;
+
+            for (auto& button : shapeButtons)
+                button->setVisible(showControlRow);
+
+            if (toggle != nullptr)
+                toggle->setVisible(showControlRow);
+
+            for (auto& box : comboBoxes)
+                box->setVisible(showControlRow);
+
+            for (auto& caption : comboCaptions)
+                caption->setVisible(showControlRow);
+
+            if (showControlRow)
             {
-                auto comboRow = area.removeFromBottom(comboHeight);
+                auto controlRow = area.removeFromBottom(controlHeight);
                 area.removeFromBottom(4);
 
+                if (!shapeButtons.empty())
+                {
+                    const int count = static_cast<int>(shapeButtons.size());
+                    const int buttonWidth =
+                        juce::jlimit(22, juce::roundToInt(42.0f * scale),
+                                     juce::jmax(1, controlRow.getWidth() / juce::jmax(2, count * 2)));
+
+                    // Placed from the right, so the first preset still reads
+                    // leftmost in the group.
+                    for (int i = count - 1; i >= 0; --i)
+                        shapeButtons[static_cast<size_t>(i)]->setBounds(
+                            controlRow.removeFromRight(buttonWidth).reduced(1, 0));
+
+                    controlRow.removeFromRight(6);
+                }
+
                 const int cells = static_cast<int>(comboBoxes.size()) + (toggle != nullptr ? 1 : 0);
-                const int cellWidth = comboRow.getWidth() / juce::jmax(1, cells);
+                const int cellWidth = controlRow.getWidth() / juce::jmax(1, cells);
 
                 if (toggle != nullptr)
-                {
-                    toggle->setBounds(comboRow.removeFromLeft(cellWidth).reduced(2, 0));
-                }
+                    toggle->setBounds(controlRow.removeFromLeft(cellWidth).reduced(2, 0));
 
                 for (size_t i = 0; i < comboBoxes.size(); ++i)
                 {
-                    auto cell = comboRow.removeFromLeft(cellWidth).reduced(2, 0);
-                    const int captionWidth = juce::jlimit(28, 58, cell.getWidth() / 3);
+                    auto cell = controlRow.removeFromLeft(cellWidth).reduced(2, 0);
+                    const int captionWidth = juce::jlimit(24, 58, cell.getWidth() / 3);
 
                     comboCaptions[i]->setBounds(cell.removeFromLeft(captionWidth));
                     comboCaptions[i]->setFont(
@@ -2184,9 +2190,17 @@ public:
         rowViewport.setBounds(area);
 
         const int rowHeight = juce::jlimit(22, 36, juce::roundToInt(27.0f * scale));
-        const int contentWidth = juce::jmax(matrixMinimumWidth(scale), rowViewport.getMaximumVisibleWidth());
+        const int contentHeight = static_cast<int>(rows.size()) * rowHeight;
 
-        rowHolder.setSize(contentWidth, juce::jmax(rowHeight, static_cast<int>(rows.size()) * rowHeight));
+        // Worked out rather than asked for: `getMaximumVisibleWidth` only knows
+        // about the scrollbar the viewport is showing NOW, which is the one
+        // that belongs to the previous layout.
+        const bool needsVerticalBar = contentHeight > rowViewport.getHeight();
+        const int available = rowViewport.getWidth() - (needsVerticalBar ? rowViewport.getScrollBarThickness() : 0);
+
+        contentWidth = juce::jmax(matrixMinimumWidth(scale), available);
+
+        rowHolder.setSize(contentWidth, juce::jmax(rowHeight, contentHeight));
 
         for (int i = 0; i < static_cast<int>(rows.size()); ++i)
             rows[static_cast<size_t>(i)]->setBounds(0, i * rowHeight, contentWidth, rowHeight);
@@ -2196,9 +2210,7 @@ public:
     {
         // The column header lines up with the rows even when they are scrolled
         // sideways, so the titles never lie about what they label.
-        auto strip =
-            headerArea.withX(headerArea.getX() - rowViewport.getViewPositionX())
-                .withWidth(juce::jmax(matrixMinimumWidth(owner.uiScale()), rowViewport.getMaximumVisibleWidth()));
+        auto strip = headerArea.withX(headerArea.getX() - rowViewport.getViewPositionX()).withWidth(contentWidth);
 
         const auto columns = matrixColumns(strip.reduced(4, 0), owner.uiScale());
 
@@ -2436,6 +2448,7 @@ private:
     EmberButton clearButton{"Clear All", EmberButton::Style::danger};
 
     juce::Rectangle<int> headerArea;
+    int contentWidth{0};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MatrixView)
 };
@@ -2543,7 +2556,7 @@ bool ModPanel::changeConnectionRouting(int slot, int newSourceIndex, int newTarg
     if (!juce::isPositiveAndBelow(slot, engine.getNumConnections()))
         return false;
 
-    // A copy, not a reference: the original has to survive the removal below.
+    // A copy, not a reference: the original has to survive the rebuild below.
     const auto original = engine.getConnection(slot);
 
     auto updated = original;
@@ -2719,7 +2732,7 @@ int ModPanel::getPreferredHeight() const
     if (collapsed)
         return getHeaderHeight();
 
-    return getHeaderHeight() + juce::roundToInt(juce::jmax(160.0f, 210.0f * uiScale()));
+    return getHeaderHeight() + juce::roundToInt(juce::jmax(170.0f, 240.0f * uiScale()));
 }
 
 void ModPanel::refreshFromEngine()
