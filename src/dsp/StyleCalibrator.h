@@ -7,9 +7,17 @@ namespace ember
 /**
     Measured per-style output gain compensation.
 
-    Every style is driven with a fixed, deterministic pink-noise burst at 1 dB
-    drive steps from 0 to 40 dB; the RMS deviation from the input is stored and
-    interpolated at runtime. The band chain applies the result after the
+    Every style is driven with a fixed, deterministic FLAT-noise burst at
+    -18 dBFS RMS, at 1 dB drive steps from 0 to 40 dB; the RMS deviation from the
+    input is stored and interpolated at runtime.
+
+    The reference is flat rather than pink on purpose. Several styles roll off
+    above a few kHz, and pink noise carries little energy there, so a
+    pink-calibrated table measures a different quantity than the full-band
+    loudness the specification's gate is about — for the amp styles the two
+    differ by up to 4.7 dB. Flat is also the assumption-free choice: the
+    calibrator is handed only the oversampled rate and cannot tell a host
+    running at 96 kHz with no oversampling from 48 kHz at 2x. The band chain applies the result after the
     saturation stage, which is what makes two spec requirements true by
     construction instead of by hand-fitted constants:
 

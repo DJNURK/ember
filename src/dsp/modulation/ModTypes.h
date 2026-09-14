@@ -18,12 +18,12 @@ namespace ember
 */
 struct ModConnection
 {
-    int sourceIndex { -1 };          ///< 0 .. kNumModSources-1; -1 = empty slot
-    int targetIndex { -1 };          ///< index into the modulatable-parameter table
-    float amount { 0.0f };           ///< bipolar, -1 .. +1, in normalised target units
-    ModCurve curve { ModCurve::Linear };
-    float smoothingMs { 5.0f };      ///< 0 .. 500
-    bool enabled { true };
+    int sourceIndex{-1}; ///< 0 .. kNumModSources-1; -1 = empty slot
+    int targetIndex{-1}; ///< index into the modulatable-parameter table
+    float amount{0.0f};  ///< bipolar, -1 .. +1, in normalised target units
+    ModCurve curve{ModCurve::Linear};
+    float smoothingMs{5.0f}; ///< 0 .. 500
+    bool enabled{true};
 
     bool isActive() const noexcept { return sourceIndex >= 0 && targetIndex >= 0 && enabled; }
 };
@@ -31,9 +31,9 @@ struct ModConnection
 /** Identifies a modulation source for the GUI and for state. */
 struct ModSourceInfo
 {
-    ModSourceType type { ModSourceType::Macro };
-    int indexWithinType { 0 };
-    bool bipolar { false };          ///< true => source range is [-1, +1], else [0, 1]
+    ModSourceType type{ModSourceType::Macro};
+    int indexWithinType{0};
+    bool bipolar{false}; ///< true => source range is [-1, +1], else [0, 1]
 };
 
 /** Flat source index <-> (type, ordinal). The flat order is:

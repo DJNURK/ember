@@ -18,8 +18,7 @@ namespace ember
     and off, so a session full of instances with their windows closed does not
     pay for FFTs nobody is looking at.
 */
-class EmberAudioProcessorEditor : public juce::AudioProcessorEditor,
-                                  public juce::DragAndDropContainer
+class EmberAudioProcessorEditor : public juce::AudioProcessorEditor, public juce::DragAndDropContainer
 {
 public:
     explicit EmberAudioProcessorEditor(EmberAudioProcessor&);
@@ -34,7 +33,7 @@ private:
 
     // A single tooltip window for the whole editor; every control's
     // getTooltip() feeds it.
-    juce::TooltipWindow tooltips { this, 600 };
+    juce::TooltipWindow tooltips{this, 600};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EmberAudioProcessorEditor)
 };

@@ -21,6 +21,67 @@ namespace
     meaning changes in a way that must invalidate existing host automation. */
 constexpr int kVersionHint = 1;
 
+/** A boolean parameter that reports back what it actually is.
+
+    juce::AudioParameterBool::setValue stores the incoming normalised float
+    verbatim, so setValue(0.82f) leaves getValue() returning 0.82 even though the
+    parameter means "true". The APVTS round trip does not preserve that: the
+    state stores the DENORMALISED value, which snaps to 1, so saving and
+    reloading turns 0.82 into 1.0 and the parameter looks as though it was not
+    restored. pluginval's state test sets random normalised values and catches
+    exactly this at strictness 10.
+
+    AudioParameterBool::setValue is private, so it cannot simply be wrapped.
+    This is the same parameter with one behavioural difference: the value is
+    snapped on the way in, so what you read back is what the parameter is and
+    the save/restore round trip is exact. */
+class EmberBoolParameter final : public juce::RangedAudioParameter
+{
+public:
+    EmberBoolParameter(const juce::ParameterID& parameterId, const juce::String& parameterName, bool defaultValue,
+                       juce::AudioParameterBoolAttributes attributes = {})
+        : juce::RangedAudioParameter(parameterId, parameterName,
+                                     attributes.getAudioProcessorParameterWithIDAttributes()),
+          range(0.0f, 1.0f, 1.0f), value(defaultValue ? 1.0f : 0.0f), defaultNormalised(defaultValue ? 1.0f : 0.0f),
+          stringFromBool(attributes.getStringFromValueFunction()),
+          boolFromString(attributes.getValueFromStringFunction())
+    {
+    }
+
+    bool get() const noexcept { return value.load() >= 0.5f; }
+    explicit operator bool() const noexcept { return get(); }
+
+    const juce::NormalisableRange<float>& getNormalisableRange() const override { return range; }
+    float getValue() const override { return value.load(); }
+    void setValue(float newValue) override { value.store(newValue >= 0.5f ? 1.0f : 0.0f); }
+    float getDefaultValue() const override { return defaultNormalised; }
+    int getNumSteps() const override { return 2; }
+    bool isDiscrete() const override { return true; }
+    bool isBoolean() const override { return true; }
+
+    juce::String getText(float normalised, int maximumLength) const override
+    {
+        const bool b = normalised >= 0.5f;
+        auto text = stringFromBool != nullptr ? stringFromBool(b, maximumLength) : (b ? "On" : "Off");
+        return maximumLength > 0 ? text.substring(0, maximumLength) : text;
+    }
+
+    float getValueForText(const juce::String& text) const override
+    {
+        if (boolFromString != nullptr)
+            return boolFromString(text) ? 1.0f : 0.0f;
+        return text.equalsIgnoreCase("on") || text.equalsIgnoreCase("true") || text.getFloatValue() >= 0.5f ? 1.0f
+                                                                                                            : 0.0f;
+    }
+
+private:
+    juce::NormalisableRange<float> range;
+    std::atomic<float> value;
+    float defaultNormalised;
+    std::function<juce::String(bool, int)> stringFromBool;
+    std::function<bool(const juce::String&)> boolFromString;
+};
+
 /** Clamp a caller-supplied ordinal so a bad index yields a deterministic ID
     instead of undefined behaviour. The assertion fires in debug builds. */
 int safeIndex(int index, int numItems) noexcept
@@ -417,8 +478,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     const auto addBool = [&layout](const juce::String& paramId, const juce::String& name, bool defaultValue,
                                    juce::AudioParameterBoolAttributes attributes = {})
     {
-        layout.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{paramId, kVersionHint}, name,
-                                                              defaultValue, std::move(attributes)));
+        layout.add(std::make_unique<EmberBoolParameter>(juce::ParameterID{paramId, kVersionHint}, name, defaultValue,
+                                                        std::move(attributes)));
     };
 
     const auto addChoice = [&layout](const juce::String& paramId, const juce::String& name,

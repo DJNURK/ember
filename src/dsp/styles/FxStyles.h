@@ -59,7 +59,7 @@ inline float timeCoeff(float seconds, double rate) noexcept
     a single bad host buffer cannot poison a recursive stage for good. */
 inline void sanitiseOnePole(dsputil::OnePole& p) noexcept
 {
-    if (! dsputil::isFinite(p.getState()))
+    if (!dsputil::isFinite(p.getState()))
         p.reset();
 }
 
@@ -88,10 +88,10 @@ inline float wrapPhase(float phase) noexcept
 */
 inline float fastSineTurns(float phase01) noexcept
 {
-    const float p = 2.0f * phase01 - 1.0f;                     // [-1, 1)
-    const float y = 4.0f * p * (1.0f - std::abs(p));           // ~= sin(pi * p)
+    const float p = 2.0f * phase01 - 1.0f;           // [-1, 1)
+    const float y = 4.0f * p * (1.0f - std::abs(p)); // ~= sin(pi * p)
     const float refined = y + 0.225f * (y * std::abs(y) - y);
-    return -refined;                                           // sin(pi*p + pi)
+    return -refined; // sin(pi*p + pi)
 }
 } // namespace fxdetail
 
@@ -136,19 +136,19 @@ public:
     void process(float* const* channelData, int numChannels, int numSamples,
                  const StyleParams& params) noexcept override;
 
-    const char* getName() const noexcept override       { return "Shimmer"; }
+    const char* getName() const noexcept override { return "Shimmer"; }
     StyleCategory getCategory() const noexcept override { return StyleCategory::FX; }
 
 private:
     struct ShimmerChannel
     {
-        dsputil::OnePole env;    ///< bounded amplitude tracker -> carrier pitch
-        dsputil::OnePole tilt;   ///< 700 Hz split; only the complement is modulated
-        float phase { 0.0f };    ///< carrier phase in turns, always in [0, 1)
+        dsputil::OnePole env;  ///< bounded amplitude tracker -> carrier pitch
+        dsputil::OnePole tilt; ///< 700 Hz split; only the complement is modulated
+        float phase{0.0f};     ///< carrier phase in turns, always in [0, 1)
     };
 
-    double sampleRate { 44100.0 };
-    std::array<ShimmerChannel, fxdetail::kMaxChannels> state {};
+    double sampleRate{44100.0};
+    std::array<ShimmerChannel, fxdetail::kMaxChannels> state{};
 };
 
 //==============================================================================
@@ -193,18 +193,18 @@ public:
     void process(float* const* channelData, int numChannels, int numSamples,
                  const StyleParams& params) noexcept override;
 
-    const char* getName() const noexcept override       { return "Breathe"; }
+    const char* getName() const noexcept override { return "Breathe"; }
     StyleCategory getCategory() const noexcept override { return StyleCategory::FX; }
 
 private:
     struct BreatheChannel
     {
-        dsputil::SvfTPT sweep;   ///< resonant tilt ahead of the shaper
-        dsputil::SvfTPT body;    ///< resonant bandpass behind it
-        float env { 0.0f };      ///< attack/release follower, bounded to [0, 1]
+        dsputil::SvfTPT sweep; ///< resonant tilt ahead of the shaper
+        dsputil::SvfTPT body;  ///< resonant bandpass behind it
+        float env{0.0f};       ///< attack/release follower, bounded to [0, 1]
     };
 
-    double sampleRate { 44100.0 };
-    std::array<BreatheChannel, fxdetail::kMaxChannels> state {};
+    double sampleRate{44100.0};
+    std::array<BreatheChannel, fxdetail::kMaxChannels> state{};
 };
 } // namespace ember

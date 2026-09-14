@@ -20,7 +20,11 @@ target_sources(ember_dsp PRIVATE
     dsp/modulation/ModSources.cpp
     dsp/modulation/ModulationEngine.cpp
     plugin/Parameters.cpp
-    plugin/PresetManager.cpp)
+    plugin/PresetManager.cpp
+    plugin/PluginProcessor.cpp
+    plugin/PluginEditor.cpp
+    gui/EmberLookAndFeel.cpp
+    gui/Widgets.cpp)
 
 target_include_directories(ember_dsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -38,6 +42,8 @@ target_link_libraries(ember_dsp
         juce::juce_dsp
         juce::juce_audio_basics
         juce::juce_audio_processors
+        juce::juce_audio_utils
+        juce::juce_gui_extra
     PRIVATE
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
@@ -45,11 +51,10 @@ target_link_libraries(ember_dsp
 set_target_properties(ember_dsp PROPERTIES FOLDER "Ember")
 
 # ------------------------------------------------------------------ Plugin
-target_sources(Ember PRIVATE
-    plugin/PluginProcessor.cpp
-    plugin/PluginEditor.cpp
-    gui/EmberLookAndFeel.cpp
-    gui/Widgets.cpp)
+# The plugin target's own sources live in ember_dsp so that the tests can build
+# a real EmberAudioProcessor; this target only needs the JUCE wrapper, which
+# pulls createPluginFilter out of the library.
+target_sources(Ember PRIVATE plugin/PluginEntry.cpp)
 
 target_compile_definitions(Ember PUBLIC
     JUCE_WEB_BROWSER=0
@@ -62,8 +67,6 @@ target_compile_definitions(Ember PUBLIC
 target_link_libraries(Ember
     PRIVATE
         ember_dsp
-        juce::juce_audio_utils
-        juce::juce_gui_extra
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags

@@ -6,7 +6,8 @@ add_executable(ember_tests
     test_feedback.cpp
     test_smoothing.cpp
     test_state.cpp
-    test_presets.cpp)
+    test_presets.cpp
+    test_processor.cpp)
 
 target_include_directories(ember_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(ember_tests PRIVATE

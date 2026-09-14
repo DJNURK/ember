@@ -74,6 +74,134 @@ void EmberAudioProcessor::buildModulationTargetTable()
         modTargetIndexByID.set(withID->paramID, modTargetIDs.size());
         modTargetIDs.add(withID->paramID);
     }
+
+    registerSourceParameterOwnership();
+}
+
+void EmberAudioProcessor::registerSourceParameterOwnership()
+{
+    // A modulation source's own parameters can themselves be modulation
+    // destinations. The engine applies that internally — it has to, because the
+    // sources are evaluated in dependency order inside one control block — so it
+    // needs to know which destination index corresponds to which (source, field)
+    // pair. Registering it here is what makes "drag an LFO onto another LFO's
+    // rate" work; without it the processor would push a base value that silently
+    // overwrote the modulated one every block.
+    modulation.clearTargetOwners();
+
+    auto own = [this](const juce::String& id, ModSourceType type, int ordinal, ModSourceField field)
+    {
+        const int idx = getModulationTargetIndex(id);
+        if (idx >= 0)
+            modulation.setTargetOwner(idx, flatSourceIndex(type, ordinal), field);
+    };
+
+    for (int i = 0; i < kNumXLFOs; ++i)
+    {
+        own(pid::lfoRate(i), ModSourceType::XLFO, i, ModSourceField::Rate);
+        own(pid::lfoPhase(i), ModSourceType::XLFO, i, ModSourceField::Phase);
+        own(pid::lfoSmooth(i), ModSourceType::XLFO, i, ModSourceField::Smoothing);
+        own(pid::lfoDepth(i), ModSourceType::XLFO, i, ModSourceField::Depth);
+    }
+    for (int i = 0; i < kNumEnvGenerators; ++i)
+    {
+        own(pid::egAttack(i), ModSourceType::EnvelopeGenerator, i, ModSourceField::Attack);
+        own(pid::egDecay(i), ModSourceType::EnvelopeGenerator, i, ModSourceField::Decay);
+        own(pid::egSustain(i), ModSourceType::EnvelopeGenerator, i, ModSourceField::Sustain);
+        own(pid::egRelease(i), ModSourceType::EnvelopeGenerator, i, ModSourceField::Release);
+        own(pid::egThreshold(i), ModSourceType::EnvelopeGenerator, i, ModSourceField::Threshold);
+    }
+    for (int i = 0; i < kNumEnvFollowers; ++i)
+    {
+        own(pid::efAttack(i), ModSourceType::EnvelopeFollower, i, ModSourceField::Attack);
+        own(pid::efRelease(i), ModSourceType::EnvelopeFollower, i, ModSourceField::Release);
+        own(pid::efGain(i), ModSourceType::EnvelopeFollower, i, ModSourceField::Depth);
+    }
+    own(pid::xyX, ModSourceType::XYController, 0, ModSourceField::Value);
+    for (int i = 0; i < kNumMidiSources; ++i)
+        own(pid::midiSmooth(i), ModSourceType::MidiSource, i, ModSourceField::Smoothing);
+    for (int i = 0; i < kNumMacros; ++i)
+        own(pid::macro(i), ModSourceType::Macro, i, ModSourceField::Value);
+}
+
+void EmberAudioProcessor::pushSourceParameters() noexcept
+{
+    // Base (un-modulated) values. The engine adds any modulation to the fields
+    // registered above, so applying it here as well would double it.
+    auto raw = [this](const juce::String& id) noexcept
+    {
+        auto* p = apvts.getParameter(id);
+        return p == nullptr ? 0.0f : p->getNormalisableRange().convertFrom0to1(p->getValue());
+    };
+    auto choice = [this](const juce::String& id) noexcept
+    {
+        auto* p = apvts.getParameter(id);
+        return p == nullptr ? 0 : choiceIndex(p);
+    };
+
+    for (int i = 0; i < kNumXLFOs; ++i)
+    {
+        XLfoParams lp;
+        lp.rateHz = juce::jlimit(0.01f, 40.0f, raw(pid::lfoRate(i)));
+        lp.tempoSync = raw(pid::lfoSync(i)) >= 0.5f;
+        // There is no separate sync-division parameter, so a synced LFO carries
+        // its division in the rate field at the 120 BPM reference (a quarter
+        // note is 2 Hz there). Presets are written with that convention.
+        lp.syncBeats = juce::jlimit(0.03125f, 64.0f, 2.0f / juce::jmax(0.01f, lp.rateHz));
+        lp.phaseOffset = raw(pid::lfoPhase(i)) / 360.0f;
+        lp.steps = static_cast<int>(std::lround(raw(pid::lfoSteps(i))));
+        lp.smoothingMs = juce::jlimit(0.0f, 500.0f, raw(pid::lfoSmooth(i)) * 5.0f);
+        lp.depth = juce::jlimit(0.0f, 1.0f, raw(pid::lfoDepth(i)) * 0.01f);
+        modulation.setXLfoParameters(i, lp);
+    }
+
+    for (int i = 0; i < kNumEnvGenerators; ++i)
+    {
+        EnvelopeGeneratorParams ep;
+        ep.attackMs = raw(pid::egAttack(i));
+        ep.decayMs = raw(pid::egDecay(i));
+        ep.sustain = juce::jlimit(0.0f, 1.0f, raw(pid::egSustain(i)) * 0.01f);
+        ep.releaseMs = raw(pid::egRelease(i));
+        ep.threshold = juce::Decibels::decibelsToGain(raw(pid::egThreshold(i)));
+        ep.detectorBand = -1;
+        ep.trigger = static_cast<EgTriggerMode>(
+            juce::jlimit(0, static_cast<int>(EgTriggerMode::Count) - 1, choice(pid::egTrigger(i))));
+        modulation.setEnvelopeGeneratorParameters(i, ep);
+    }
+
+    for (int i = 0; i < kNumEnvFollowers; ++i)
+    {
+        EnvelopeFollowerParams fp;
+        fp.attackMs = raw(pid::efAttack(i));
+        fp.releaseMs = raw(pid::efRelease(i));
+        // The parameter is 0 = Full Range, 1..6 = band; the engine wants -1 for
+        // full range and a zero-based band index otherwise.
+        fp.band = static_cast<int>(std::lround(raw(pid::efBand(i)))) - 1;
+        fp.gainDb = raw(pid::efGain(i));
+        modulation.setEnvelopeFollowerParameters(i, fp);
+    }
+
+    XyControllerParams xy;
+    xy.x = juce::jlimit(0.0f, 1.0f, raw(pid::xyX) * 0.01f);
+    xy.y = juce::jlimit(0.0f, 1.0f, raw(pid::xyY) * 0.01f);
+    modulation.setXyParameters(xy);
+
+    for (int i = 0; i < kNumMidiSources; ++i)
+    {
+        MidiSourceParams mp;
+        mp.kind = static_cast<MidiSourceKind>(
+            juce::jlimit(0, static_cast<int>(MidiSourceKind::Count) - 1, choice(pid::midiType(i))));
+        mp.ccNumber = juce::jlimit(0, 127, static_cast<int>(std::lround(raw(pid::midiCC(i)))));
+        mp.smoothingMs = juce::jlimit(0.0f, 500.0f, raw(pid::midiSmooth(i)));
+        modulation.setMidiSourceParameters(i, mp);
+    }
+
+    for (int i = 0; i < kNumMacros; ++i)
+    {
+        MacroParams mp;
+        mp.value = juce::jlimit(0.0f, 1.0f, raw(pid::macro(i)) * 0.01f);
+        modulation.setMacroParameters(i, mp);
+    }
 }
 
 int EmberAudioProcessor::getModulationTargetIndex(const juce::String& parameterID) const
@@ -247,6 +375,7 @@ void EmberAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     {
         const int chunk = juce::jmin(kControlBlockSize, numSamples - offset);
 
+        pushSourceParameters();
         modulation.updateControlBlock(bandRms.data(), globalParams.numBands, chunk);
         resolveParameters(chunk);
         engine.setParameters(globalParams, bandParams.data(), kMaxBands);
@@ -552,8 +681,3 @@ juce::AudioProcessorEditor* EmberAudioProcessor::createEditor()
     return new EmberAudioProcessorEditor(*this);
 }
 } // namespace ember
-
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
-{
-    return new ember::EmberAudioProcessor();
-}

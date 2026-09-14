@@ -154,10 +154,16 @@ public:
         Default 0.2, clamped to 0.02..1.0. */
     void setFineDragFactor(float factor);
 
-    /** An extra line appended to the tooltip — what the control does, in a few
-        words. The parameter name, value, MIDI mapping and interaction hints are
-        added automatically. */
+    /** An extra line added to the tooltip — what the control does, in a few
+        words. The parameter name, its current value, any MIDI mapping and the
+        interaction hints are added automatically. */
     void setExtraTooltipText(const juce::String& text);
+
+    /** The tooltip, built on demand: parameter name and current value, the
+        extra text if any, whether it is modulated or MIDI-mapped, and the
+        double-click / shift-drag hints. Built when the tooltip window asks
+        rather than cached, so dragging a knob allocates nothing. */
+    juce::String getTooltip() override;
 
     //==========================================================================
     void paint(juce::Graphics&) override;
@@ -165,7 +171,6 @@ public:
     void mouseDrag(const juce::MouseEvent&) override;
     void mouseUp(const juce::MouseEvent&) override;
     void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
-    void valueChanged() override;
     void parentHierarchyChanged() override;
 
     bool isInterestedInDragSource(const SourceDetails&) override;
@@ -176,7 +181,6 @@ public:
 private:
     void timerCallback() override;
     void handleMenuResult(int menuItemId);
-    void updateTooltip();
     juce::Rectangle<float> getRotaryArea();
 
     EmberAudioProcessor& processor;
@@ -477,8 +481,9 @@ public:
 
     void setCaption(const juce::String& newCaption);
 
-    /** Tints knob, readout and caption — band panels pass
-        `EmberColours::band (b)`. */
+    /** Tints the knob's value arc and modulation ring, and the readout's edit
+        highlight — band panels pass `EmberColours::band (b)`. The caption stays
+        secondary grey on purpose: one coloured element per control is enough. */
     void setAccentColour(juce::Colour colour);
 
     void resized() override;

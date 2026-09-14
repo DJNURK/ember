@@ -30,10 +30,10 @@ namespace ember
 class FoldbackStyle final : public SaturationStyle
 {
 public:
-    void prepare (double oversampledSampleRate, int maxBlockSize, int numChannels) override;
+    void prepare(double oversampledSampleRate, int maxBlockSize, int numChannels) override;
     void reset() noexcept override;
-    void process (float* const* channelData, int numChannels, int numSamples,
-                  const StyleParams& params) noexcept override;
+    void process(float* const* channelData, int numChannels, int numSamples,
+                 const StyleParams& params) noexcept override;
 
     const char* getName() const noexcept override { return "Foldback"; }
     StyleCategory getCategory() const noexcept override { return StyleCategory::Destroy; }
@@ -42,8 +42,8 @@ public:
 private:
     static constexpr int kMaxChannels = 2;
 
-    std::array<float, kMaxChannels> adaaState {};   ///< previous (pre-gained) input per channel
-    int activeChannels { kMaxChannels };
+    std::array<float, kMaxChannels> adaaState{}; ///< previous (pre-gained) input per channel
+    int activeChannels{kMaxChannels};
 };
 
 /**
@@ -62,10 +62,10 @@ private:
 class HardClipStyle final : public SaturationStyle
 {
 public:
-    void prepare (double oversampledSampleRate, int maxBlockSize, int numChannels) override;
+    void prepare(double oversampledSampleRate, int maxBlockSize, int numChannels) override;
     void reset() noexcept override;
-    void process (float* const* channelData, int numChannels, int numSamples,
-                  const StyleParams& params) noexcept override;
+    void process(float* const* channelData, int numChannels, int numSamples,
+                 const StyleParams& params) noexcept override;
 
     const char* getName() const noexcept override { return "Hard Clip"; }
     StyleCategory getCategory() const noexcept override { return StyleCategory::Destroy; }
@@ -74,8 +74,8 @@ public:
 private:
     static constexpr int kMaxChannels = 2;
 
-    std::array<float, kMaxChannels> adaaState {};
-    int activeChannels { kMaxChannels };
+    std::array<float, kMaxChannels> adaaState{};
+    int activeChannels{kMaxChannels};
 };
 
 /**
@@ -98,10 +98,10 @@ private:
 class DecimateStyle final : public SaturationStyle
 {
 public:
-    void prepare (double oversampledSampleRate, int maxBlockSize, int numChannels) override;
+    void prepare(double oversampledSampleRate, int maxBlockSize, int numChannels) override;
     void reset() noexcept override;
-    void process (float* const* channelData, int numChannels, int numSamples,
-                  const StyleParams& params) noexcept override;
+    void process(float* const* channelData, int numChannels, int numSamples,
+                 const StyleParams& params) noexcept override;
 
     const char* getName() const noexcept override { return "Decimate"; }
     StyleCategory getCategory() const noexcept override { return StyleCategory::Destroy; }
@@ -109,10 +109,10 @@ public:
 private:
     static constexpr int kMaxChannels = 2;
 
-    std::array<float, kMaxChannels> held {};
-    double sampleRate { 44100.0 };
-    float phase { 1.0f };            ///< >= 1 forces a latch on the very first sample
-    int activeChannels { kMaxChannels };
+    std::array<float, kMaxChannels> held{};
+    double sampleRate{44100.0};
+    float phase{1.0f}; ///< >= 1 forces a latch on the very first sample
+    int activeChannels{kMaxChannels};
 };
 
 /**
@@ -139,26 +139,26 @@ private:
 class BitcrushStyle final : public SaturationStyle
 {
 public:
-    void prepare (double oversampledSampleRate, int maxBlockSize, int numChannels) override;
+    void prepare(double oversampledSampleRate, int maxBlockSize, int numChannels) override;
     void reset() noexcept override;
-    void process (float* const* channelData, int numChannels, int numSamples,
-                  const StyleParams& params) noexcept override;
+    void process(float* const* channelData, int numChannels, int numSamples,
+                 const StyleParams& params) noexcept override;
 
     const char* getName() const noexcept override { return "Bitcrush"; }
     StyleCategory getCategory() const noexcept override { return StyleCategory::Crush; }
 
     /** Dither type. Not realtime-safe to change mid-block; call from prepare. */
-    void setDitherMode (DitherMode mode) noexcept { ditherMode = mode; }
+    void setDitherMode(DitherMode mode) noexcept { ditherMode = mode; }
     DitherMode getDitherMode() const noexcept { return ditherMode; }
 
 private:
     static constexpr int kMaxChannels = 2;
 
-    std::array<float, kMaxChannels> held {};
-    std::array<std::uint32_t, kMaxChannels> rngState {};
-    double sampleRate { 44100.0 };
-    float phase { 1.0f };
-    DitherMode ditherMode { DitherMode::Triangular };
-    int activeChannels { kMaxChannels };
+    std::array<float, kMaxChannels> held{};
+    std::array<std::uint32_t, kMaxChannels> rngState{};
+    double sampleRate{44100.0};
+    float phase{1.0f};
+    DitherMode ditherMode{DitherMode::Triangular};
+    int activeChannels{kMaxChannels};
 };
 } // namespace ember

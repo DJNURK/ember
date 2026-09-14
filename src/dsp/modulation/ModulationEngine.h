@@ -27,20 +27,20 @@ namespace ember
 */
 enum class ModSourceField : int
 {
-    Rate = 0,     ///< XLFO rate / sync division (applied as +/- 4 octaves)
-    Phase,        ///< XLFO phase offset (additive, wraps)
-    Depth,        ///< XLFO depth, follower gain (additive, clamped)
-    Smoothing,    ///< output smoothing time (additive, +/- 500 ms)
-    Attack,       ///< EG / follower attack (applied as +/- 3 octaves of time)
-    Decay,        ///< EG decay (+/- 3 octaves)
-    Sustain,      ///< EG sustain level (additive)
-    Release,      ///< EG / follower release (+/- 3 octaves)
-    Threshold,    ///< EG transient threshold (additive)
-    Value,        ///< macro / XY / MIDI output value (additive)
+    Rate = 0,  ///< XLFO rate / sync division (applied as +/- 4 octaves)
+    Phase,     ///< XLFO phase offset (additive, wraps)
+    Depth,     ///< XLFO depth, follower gain (additive, clamped)
+    Smoothing, ///< output smoothing time (additive, +/- 500 ms)
+    Attack,    ///< EG / follower attack (applied as +/- 3 octaves of time)
+    Decay,     ///< EG decay (+/- 3 octaves)
+    Sustain,   ///< EG sustain level (additive)
+    Release,   ///< EG / follower release (+/- 3 octaves)
+    Threshold, ///< EG transient threshold (additive)
+    Value,     ///< macro / XY / MIDI output value (additive)
     Count
 };
 
-inline constexpr int kNumModSourceFields = static_cast<int> (ModSourceField::Count);
+inline constexpr int kNumModSourceFields = static_cast<int>(ModSourceField::Count);
 
 /** Every source's base (un-modulated) parameters in one struct, so the
     processor can push the whole APVTS snapshot in a single realtime-safe call
@@ -48,26 +48,26 @@ inline constexpr int kNumModSourceFields = static_cast<int> (ModSourceField::Cou
     updates. */
 struct ModSourceParameters
 {
-    std::array<XLfoParams, kNumXLFOs>                      lfos {};
-    std::array<EnvelopeGeneratorParams, kNumEnvGenerators> envGenerators {};
-    std::array<EnvelopeFollowerParams, kNumEnvFollowers>   envFollowers {};
-    XyControllerParams                                     xy {};
-    std::array<MidiSourceParams, kNumMidiSources>          midi {};
-    std::array<MacroParams, kNumMacros>                    macros {};
+    std::array<XLfoParams, kNumXLFOs> lfos{};
+    std::array<EnvelopeGeneratorParams, kNumEnvGenerators> envGenerators{};
+    std::array<EnvelopeFollowerParams, kNumEnvFollowers> envFollowers{};
+    XyControllerParams xy{};
+    std::array<MidiSourceParams, kNumMidiSources> midi{};
+    std::array<MacroParams, kNumMacros> macros{};
 };
 
 /** ValueTree identifiers for the serialised graph. Public so the preset manager
     and the state tests can reach them without string literals. */
 namespace ModStateIds
 {
-    extern const juce::Identifier modulation;    ///< parent node
-    extern const juce::Identifier connection;    ///< one child per routing
-    extern const juce::Identifier source;
-    extern const juce::Identifier target;
-    extern const juce::Identifier amount;
-    extern const juce::Identifier curve;
-    extern const juce::Identifier smoothing;
-    extern const juce::Identifier enabled;
+extern const juce::Identifier modulation; ///< parent node
+extern const juce::Identifier connection; ///< one child per routing
+extern const juce::Identifier source;
+extern const juce::Identifier target;
+extern const juce::Identifier amount;
+extern const juce::Identifier curve;
+extern const juce::Identifier smoothing;
+extern const juce::Identifier enabled;
 } // namespace ModStateIds
 
 /**
@@ -154,7 +154,7 @@ public:
         @param numModulatableParams size of the processor's target table; any
                                     connection pointing outside it is kept in
                                     the graph but contributes nothing. */
-    void prepare (double sampleRate, int maxBlockSize, int numModulatableParams);
+    void prepare(double sampleRate, int maxBlockSize, int numModulatableParams);
 
     /** Silence every source and offset. Does not touch the graph. */
     void reset() noexcept;
@@ -162,31 +162,31 @@ public:
     // ------------------------------------------------------ per-block inputs
     /** Host transport, for tempo-synced XLFOs. Audio thread. A stopped or
         absent transport is fine: synced LFOs then free-run at the synced rate. */
-    void setTransport (double bpm, double ppqPosition, bool isPlaying) noexcept;
+    void setTransport(double bpm, double ppqPosition, bool isPlaying) noexcept;
 
     /** Parse the block's MIDI into the shared MIDI state and gate the
         MIDI-triggered envelopes. Audio thread; reads raw bytes, so no
         juce::MidiMessage is ever constructed. */
-    void processMidi (const juce::MidiBuffer& midi) noexcept;
+    void processMidi(const juce::MidiBuffer& midi) noexcept;
 
     /** Push every source's base parameters at once. Audio thread. */
-    void setSourceParameters (const ModSourceParameters& newParams) noexcept;
+    void setSourceParameters(const ModSourceParameters& newParams) noexcept;
 
     /** Partial pushes. Out-of-range indices are ignored. Audio thread. */
-    void setXLfoParameters (int index, const XLfoParams& p) noexcept;
-    void setEnvelopeGeneratorParameters (int index, const EnvelopeGeneratorParams& p) noexcept;
-    void setEnvelopeFollowerParameters (int index, const EnvelopeFollowerParams& p) noexcept;
-    void setXyParameters (const XyControllerParams& p) noexcept;
-    void setMidiSourceParameters (int index, const MidiSourceParams& p) noexcept;
-    void setMacroParameters (int index, const MacroParams& p) noexcept;
+    void setXLfoParameters(int index, const XLfoParams& p) noexcept;
+    void setEnvelopeGeneratorParameters(int index, const EnvelopeGeneratorParams& p) noexcept;
+    void setEnvelopeFollowerParameters(int index, const EnvelopeFollowerParams& p) noexcept;
+    void setXyParameters(const XyControllerParams& p) noexcept;
+    void setMidiSourceParameters(int index, const MidiSourceParams& p) noexcept;
+    void setMacroParameters(int index, const MacroParams& p) noexcept;
 
     /** Replace an XLFO's shape. MESSAGE THREAD ONLY (double-buffered inside
         XLfo, see ModSources.h). */
-    void setXLfoShape (int index, const LfoPoint* points, int numPoints);
+    void setXLfoShape(int index, const LfoPoint* points, int numPoints);
 
     /** Read-only access for the shape editor / GUI drawing. Out-of-range
         indices clamp to the first LFO, so this never returns a dangling ref. */
-    const XLfo& getXLfo (int index) const noexcept;
+    const XLfo& getXLfo(int index) const noexcept;
 
     // -------------------------------------------------------- evaluation
     /** Advance every source by one nominal control block (kControlBlockSize
@@ -194,23 +194,23 @@ public:
         @param perBandRms  one RMS value per active band, measured by the
                            engine's caller; may be null.
         @param numBands    number of valid entries in `perBandRms`. */
-    void updateControlBlock (const float* perBandRms, int numBands) noexcept;
+    void updateControlBlock(const float* perBandRms, int numBands) noexcept;
 
     /** As above, but advancing by exactly `numSamples` samples of audio time.
         Use this when the host's block size is not a multiple of 32 so rates
         stay exact. `numSamples <= 0` evaluates without advancing time. */
-    void updateControlBlock (const float* perBandRms, int numBands, int numSamples) noexcept;
+    void updateControlBlock(const float* perBandRms, int numBands, int numSamples) noexcept;
 
     /** Summed, smoothed, curve-shaped offset for a target, in normalised units,
         clamped to [-1, +1]. Valid for the control block that was last
         evaluated; the caller ramps it across the block. Out-of-range indices
         return 0. Audio thread. */
-    float getModulationOffset (int targetIndex) const noexcept;
+    float getModulationOffset(int targetIndex) const noexcept;
 
     /** Last value of a source, for the GUI: [-1, +1] for bipolar sources
         (XLFO), [0, 1] for the rest — see `sourceInfoFromFlatIndex`. Lock-free
         from any thread. */
-    float getSourceValue (int flatSourceIndex) const noexcept;
+    float getSourceValue(int flatSourceIndex) const noexcept;
 
     // ------------------------------------------------- source-owned targets
     /** Register `targetIndex` as `field` of modulation source `flatSourceIndex`
@@ -223,7 +223,7 @@ public:
         routing and falls back to flat (index) evaluation order, which is still
         finite and stable — a source-to-source routing then simply lands one
         control block late. */
-    void setTargetOwner (int targetIndex, int flatSourceIndex, ModSourceField field);
+    void setTargetOwner(int targetIndex, int flatSourceIndex, ModSourceField field);
 
     /** Forget every registration made with `setTargetOwner`. Message thread. */
     void clearTargetOwners();
@@ -233,16 +233,16 @@ public:
         full, the source or target index is invalid, the same source -> target
         pair already exists, or the routing would create a cycle.
         Message thread. */
-    bool addConnection (const ModConnection& c);
+    bool addConnection(const ModConnection& c);
 
     /** Remove slot `slot`; later slots shift down by one so slots stay dense.
         Out-of-range slots are ignored. Message thread. */
-    void removeConnection (int slot);
+    void removeConnection(int slot);
 
     /** Replace slot `slot`. A replacement that would create a cycle or
         duplicate an existing routing is rejected and the old connection is
         kept (an assertion fires in debug). Message thread. */
-    void setConnection (int slot, const ModConnection& c);
+    void setConnection(int slot, const ModConnection& c);
 
     /** Remove every routing. Message thread. */
     void clearConnections();
@@ -251,11 +251,11 @@ public:
 
     /** Slots are dense: valid range is [0, getNumConnections()). An
         out-of-range slot returns a reference to a shared empty connection. */
-    const ModConnection& getConnection (int slot) const noexcept;
+    const ModConnection& getConnection(int slot) const noexcept;
 
     /** How many routings currently point at a target — for the GUI's
         "modulated" ring. Message thread. */
-    int getNumConnectionsForTarget (int targetIndex) const noexcept;
+    int getNumConnectionsForTarget(int targetIndex) const noexcept;
 
     // ------------------------------------------------------------- state
     /** The whole graph as a `ModStateIds::modulation` node with one
@@ -268,7 +268,7 @@ public:
         unknown children and properties are ignored, and routings that would
         form a cycle are dropped rather than throwing — an old or hand-edited
         state must never take the plugin down. Message thread. */
-    void fromValueTree (const juce::ValueTree& tree);
+    void fromValueTree(const juce::ValueTree& tree);
 
 private:
     /** One routing, compiled for the audio thread: no strings, no branches for
@@ -276,84 +276,83 @@ private:
         multiplier for the nominal control block. */
     struct RuntimeConnection
     {
-        int      slot { -1 };           ///< editor slot, so smoother state follows the routing
-        int      sourceIndex { -1 };
-        int      targetIndex { -1 };
-        float    amount { 0.0f };
-        ModCurve curve { ModCurve::Linear };
-        float    smoothCoeff { 0.0f };  ///< one-pole multiplier for a NOMINAL 32-sample block
-        float    smoothSeconds { 0.0f };///< the time constant itself, for odd block lengths
-        bool     enabled { false };
+        int slot{-1}; ///< editor slot, so smoother state follows the routing
+        int sourceIndex{-1};
+        int targetIndex{-1};
+        float amount{0.0f};
+        ModCurve curve{ModCurve::Linear};
+        float smoothCoeff{0.0f};   ///< one-pole multiplier for a NOMINAL 32-sample block
+        float smoothSeconds{0.0f}; ///< the time constant itself, for odd block lengths
+        bool enabled{false};
     };
 
     /** Immutable snapshot the audio thread evaluates. Built by the editor. */
     struct EvaluationPlan
     {
-        std::array<RuntimeConnection, kMaxModConnections> connections {};
-        int                                               numConnections { 0 };
+        std::array<RuntimeConnection, kMaxModConnections> connections{};
+        int numConnections{0};
         /** All kNumModSources sources in dependency order. */
-        std::array<int, kNumModSources>                   order {};
+        std::array<int, kNumModSources> order{};
         /** fieldTarget[source][field] = target index, or -1. */
-        std::array<std::array<int, kNumModSourceFields>, kNumModSources> fieldTarget {};
+        std::array<std::array<int, kNumModSourceFields>, kNumModSources> fieldTarget{};
     };
 
     // ---- audio thread
-    float tickSource (const EvaluationPlan& plan, int flatIndex, int numSamples,
-                      const float* perBandRms, int numBands) noexcept;
-    float fieldOffset (const EvaluationPlan& plan, int flatIndex, ModSourceField field) const noexcept;
-    float detectorFor (const float* perBandRms, int numBands, int band) const noexcept;
+    float tickSource(const EvaluationPlan& plan, int flatIndex, int numSamples, const float* perBandRms,
+                     int numBands) noexcept;
+    float fieldOffset(const EvaluationPlan& plan, int flatIndex, ModSourceField field) const noexcept;
+    float detectorFor(const float* perBandRms, int numBands, int band) const noexcept;
 
     // ---- message thread
     void rebuildPlan();
     void publishPlan();
-    bool topologicalOrder (const ModConnection* conns, int numConns,
-                           std::array<int, kNumModSources>& outOrder) const;
-    int  ownerOfTarget (int targetIndex) const noexcept;
-    static ModConnection sanitised (const ModConnection& c) noexcept;
+    bool topologicalOrder(const ModConnection* conns, int numConns, std::array<int, kNumModSources>& outOrder) const;
+    int ownerOfTarget(int targetIndex) const noexcept;
+    static ModConnection sanitised(const ModConnection& c) noexcept;
 
     // ---- sources
-    std::array<XLfo, kNumXLFOs>                      lfos;
+    std::array<XLfo, kNumXLFOs> lfos;
     std::array<EnvelopeGenerator, kNumEnvGenerators> envGenerators;
-    std::array<EnvelopeFollower, kNumEnvFollowers>   envFollowers;
-    XyController                                     xyPad;
-    std::array<MidiSource, kNumMidiSources>          midiSources;
-    std::array<MacroSource, kNumMacros>              macroSources;
+    std::array<EnvelopeFollower, kNumEnvFollowers> envFollowers;
+    XyController xyPad;
+    std::array<MidiSource, kNumMidiSources> midiSources;
+    std::array<MacroSource, kNumMacros> macroSources;
 
-    ModSourceParameters baseParams {};
-    MidiState           midiState {};
+    ModSourceParameters baseParams{};
+    MidiState midiState{};
 
     // ---- graph (message thread owns these)
-    std::array<ModConnection, kMaxModConnections> connections {};
-    int                                           numConnections { 0 };
-    ModConnection                                 emptyConnection {};
+    std::array<ModConnection, kMaxModConnections> connections{};
+    int numConnections{0};
+    ModConnection emptyConnection{};
 
     struct TargetOwner
     {
-        int            source { -1 };
-        ModSourceField field { ModSourceField::Value };
+        int source{-1};
+        ModSourceField field{ModSourceField::Value};
     };
 
     std::vector<TargetOwner> targetOwners;
 
     // ---- plan hand-off (see the class comment: lock-free triple buffer)
-    std::array<EvaluationPlan, 3> planStorage {};
+    std::array<EvaluationPlan, 3> planStorage{};
     /** Packed slot roles: bits 0-1 write, 2-3 pending, 4-5 read, bit 8 "fresh". */
-    std::atomic<std::uint32_t>    planSlots { 0 };
-    int                           readPlanIndex { 0 };    ///< audio thread only
-    int                           writePlanIndex { 1 };   ///< message thread only
+    std::atomic<std::uint32_t> planSlots{0};
+    int readPlanIndex{0};  ///< audio thread only
+    int writePlanIndex{1}; ///< message thread only
 
     // ---- audio-thread state
-    std::vector<float>                                   offsets;
-    std::array<float, kMaxModConnections>                smoothState {};
-    std::array<std::atomic<float>, kNumModSources>       sourceValues {};
+    std::vector<float> offsets;
+    std::array<float, kMaxModConnections> smoothState{};
+    std::array<std::atomic<float>, kNumModSources> sourceValues{};
 
-    double transportBpm { 120.0 };
-    double transportPpq { 0.0 };
-    bool   transportPlaying { false };
+    double transportBpm{120.0};
+    double transportPpq{0.0};
+    bool transportPlaying{false};
 
-    double sr { 44100.0 };
-    int    numTargets { 0 };
+    double sr{44100.0};
+    int numTargets{0};
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModulationEngine)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ModulationEngine)
 };
 } // namespace ember

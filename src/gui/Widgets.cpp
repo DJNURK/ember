@@ -28,6 +28,47 @@ enum KnobMenuItem
     enough to show an LFO's full sweep and quick enough that reducing a depth is
     visible immediately. */
 constexpr float kModulationSpanRelax = 0.06f;
+
+/** Trims a value string to a readable number of decimals.
+
+    A juce::AudioParameterFloat whose NormalisableRange has no explicit step
+    formats itself with JUCE's maximum precision, so a frequency control reads
+    "199.9999847" rather than "200.0". Only a string that is a bare number with
+    more than three decimals is touched, and only its precision changes — a
+    parameter that supplies its own text ("1/4", "Off", "x2", "12 dB") is
+    passed through exactly as the parameter wrote it. */
+juce::String tidyNumericText(const juce::String& text)
+{
+    if (text.isEmpty() || !text.containsOnly("0123456789.+-eE"))
+        return text;
+
+    const int decimalPoint = text.indexOfChar('.');
+
+    if (decimalPoint < 0 || text.length() - decimalPoint - 1 <= 3)
+        return text;
+
+    const double value = text.getDoubleValue();
+    const double magnitude = std::abs(value);
+    const int decimals = magnitude >= 1000.0 ? 0 : (magnitude >= 100.0 ? 1 : (magnitude >= 10.0 ? 2 : 3));
+
+    return juce::String(value, decimals);
+}
+
+/** A parameter's current value as the GUI shows it: tidied, plus its unit. */
+juce::String formattedValue(const juce::RangedAudioParameter& parameter, float normalisedValue, bool withUnit)
+{
+    auto text = tidyNumericText(parameter.getText(normalisedValue, 0));
+
+    if (withUnit)
+    {
+        const auto unit = parameter.getLabel();
+
+        if (unit.isNotEmpty())
+            text << " " << unit;
+    }
+
+    return text;
+}
 } // namespace
 
 //==============================================================================
@@ -78,7 +119,6 @@ ModulatableKnob::ModulatableKnob(EmberAudioProcessor& processorToUse, const juce
                                   juce::ModifierKeys());
     }
 
-    updateTooltip();
     refreshModulationDisplay();
     startTimerHz(refreshRateHz);
 }
@@ -115,7 +155,6 @@ void ModulatableKnob::setFineDragFactor(float factor)
 void ModulatableKnob::setExtraTooltipText(const juce::String& text)
 {
     extraTooltip = text;
-    updateTooltip();
 }
 
 //==============================================================================
@@ -247,12 +286,6 @@ void ModulatableKnob::mouseWheelMove(const juce::MouseEvent& e, const juce::Mous
     juce::Slider::mouseWheelMove(e, wheel);
 }
 
-void ModulatableKnob::valueChanged()
-{
-    juce::Slider::valueChanged();
-    updateTooltip();
-}
-
 void ModulatableKnob::parentHierarchyChanged()
 {
     juce::Slider::parentHierarchyChanged();
@@ -373,7 +406,6 @@ void ModulatableKnob::handleMenuResult(int menuItemId)
     }
 
     refreshModulationDisplay();
-    updateTooltip();
     repaint();
 }
 
@@ -398,7 +430,6 @@ void ModulatableKnob::refreshModulationDisplay()
         modulationSpanLow = offset;
         modulationSpanHigh = offset;
         needsRepaint = true;
-        updateTooltip();
     }
 
     if (modulationActive)
@@ -428,7 +459,6 @@ void ModulatableKnob::refreshModulationDisplay()
         midiLearning = learning;
         learnPhase = 0.0f;
         needsRepaint = true;
-        updateTooltip();
     }
 
     if (midiLearning)
@@ -445,18 +475,13 @@ void ModulatableKnob::refreshModulationDisplay()
         repaint();
 }
 
-void ModulatableKnob::updateTooltip()
+juce::String ModulatableKnob::getTooltip()
 {
     juce::String text;
 
     if (parameter != nullptr)
     {
-        text << parameter->getName(48) << ": " << parameter->getCurrentValueAsText();
-
-        const auto unit = parameter->getLabel();
-
-        if (unit.isNotEmpty())
-            text << " " << unit;
+        text << parameter->getName(48) << ": " << formattedValue(*parameter, parameter->getValue(), true);
     }
     else
     {
@@ -479,7 +504,7 @@ void ModulatableKnob::updateTooltip()
 
     text << "\nDouble-click to reset, shift-drag for fine control";
 
-    setTooltip(text);
+    return text;
 }
 
 //==============================================================================
@@ -529,17 +554,8 @@ void ParameterValueLabel::showValue(float denormalisedValue)
     if (parameter == nullptr)
         return;
 
-    auto text = parameter->getText(parameter->convertTo0to1(denormalisedValue), 0);
-
-    if (includeUnit)
-    {
-        const auto unit = parameter->getLabel();
-
-        if (unit.isNotEmpty())
-            text << " " << unit;
-    }
-
-    setText(text, juce::dontSendNotification);
+    setText(formattedValue(*parameter, parameter->convertTo0to1(denormalisedValue), includeUnit),
+            juce::dontSendNotification);
 }
 
 //==============================================================================

@@ -107,6 +107,8 @@ public:
 private:
     void parameterChanged(const juce::String& parameterID, float newValue) override;
     void buildModulationTargetTable();
+    void registerSourceParameterOwnership();
+    void pushSourceParameters() noexcept;
     void resolveParameters(int numSamples) noexcept;
     void applyMidiMappings(const juce::MidiBuffer& midi);
     juce::ValueTree captureFullState() const;

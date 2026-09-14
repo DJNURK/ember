@@ -19,43 +19,43 @@ constexpr float kDrivenClamp = 64.0f;
     drive setting, instead of parking at the top of its range once the shaper
     saturates. */
 constexpr float kShimmerDetectGain = 1.6f;
-constexpr float kShimmerEnvSeconds = 0.030f;   ///< carrier glide, not a transient tracker
-constexpr float kShimmerSplitHz    = 700.0f;   ///< below this the band is left alone
-constexpr float kShimmerBaseHz     = 1200.0f;  ///< resting carrier pitch
-constexpr float kShimmerSpanHz     = 3200.0f;  ///< envelope lift on top of the base
-constexpr float kShimmerMinHz      = 200.0f;   ///< floor after clamping
-constexpr float kShimmerDepthMin   = 0.10f;    ///< blend at 0 dB drive
-constexpr float kShimmerDepthMax   = 0.85f;    ///< ... and at 40 dB
-constexpr float kShimmerEdgeMin    = 0.30f;    ///< carrier waveshaping: ~pure sine
-constexpr float kShimmerEdgeRange  = 3.30f;    ///< ... up to a softly squared carrier
+constexpr float kShimmerEnvSeconds = 0.030f; ///< carrier glide, not a transient tracker
+constexpr float kShimmerSplitHz = 700.0f;    ///< below this the band is left alone
+constexpr float kShimmerBaseHz = 1200.0f;    ///< resting carrier pitch
+constexpr float kShimmerSpanHz = 3200.0f;    ///< envelope lift on top of the base
+constexpr float kShimmerMinHz = 200.0f;      ///< floor after clamping
+constexpr float kShimmerDepthMin = 0.10f;    ///< blend at 0 dB drive
+constexpr float kShimmerDepthMax = 0.85f;    ///< ... and at 40 dB
+constexpr float kShimmerEdgeMin = 0.30f;     ///< carrier waveshaping: ~pure sine
+constexpr float kShimmerEdgeRange = 3.30f;   ///< ... up to a softly squared carrier
 /** Highest carrier increment in turns per sample; 0.45 keeps it under Nyquist
     even before the explicit frequency clamp. */
 constexpr float kShimmerMaxInc = 0.45f;
 
 /** ~2.4 cents of detune between the channels, so the sparkle spreads instead of
     collapsing to the phantom centre. */
-constexpr float kShimmerDetune[fxdetail::kMaxChannels] = { 1.0f, 1.0014f };
+constexpr float kShimmerDetune[fxdetail::kMaxChannels] = {1.0f, 1.0014f};
 /** A quarter turn apart at reset, for the same reason. */
-constexpr float kShimmerInitialPhase[fxdetail::kMaxChannels] = { 0.0f, 0.25f };
+constexpr float kShimmerInitialPhase[fxdetail::kMaxChannels] = {0.0f, 0.25f};
 
 // ---------------------------------------------------------------- Breathe
-constexpr float kBreatheDetectGain    = 2.0f;
-constexpr float kBreatheAttackSeconds = 0.004f;   ///< catches the transient
-constexpr float kBreatheRelSeconds    = 0.160f;   ///< ... and exhales slowly
-constexpr float kBreatheBaseHz        = 220.0f;   ///< resting cutoff (envelope at zero)
-constexpr float kBreatheSweepOctaves  = 5.5f;     ///< full travel at full drive
-constexpr float kBreatheDepthMin      = 0.45f;    ///< fraction of that travel at 0 dB drive
-constexpr float kBreatheDepthRange    = 0.55f;
-constexpr float kBreatheCloseMin      = 0.25f;    ///< how far the tilt shuts at 0 dB drive
-constexpr float kBreatheCloseRange    = 0.60f;    ///< ... max 0.85, i.e. -16 dB, never mute
-constexpr float kBreatheSweepQMin     = 0.60f;
-constexpr float kBreatheSweepQRange   = 2.60f;    ///< max Q 3.2: audible, nowhere near self-osc
-constexpr float kBreatheBodyQ         = 2.50f;
-constexpr float kBreatheResMixMin     = 0.08f;
-constexpr float kBreatheResMixRange   = 0.22f;    ///< max 0.30 of a Q=2.5 bandpass
-constexpr float kBreatheBiasMax       = 0.25f;    ///< even-harmonic colour at full drive
-constexpr float kBreatheMinCutoffHz   = 20.0f;    ///< spec floor
-constexpr float kBreatheNyquistFrac   = 0.45f;    ///< spec ceiling
+constexpr float kBreatheDetectGain = 2.0f;
+constexpr float kBreatheAttackSeconds = 0.004f; ///< catches the transient
+constexpr float kBreatheRelSeconds = 0.160f;    ///< ... and exhales slowly
+constexpr float kBreatheBaseHz = 220.0f;        ///< resting cutoff (envelope at zero)
+constexpr float kBreatheSweepOctaves = 5.5f;    ///< full travel at full drive
+constexpr float kBreatheDepthMin = 0.45f;       ///< fraction of that travel at 0 dB drive
+constexpr float kBreatheDepthRange = 0.55f;
+constexpr float kBreatheCloseMin = 0.25f;   ///< how far the tilt shuts at 0 dB drive
+constexpr float kBreatheCloseRange = 0.60f; ///< ... max 0.85, i.e. -16 dB, never mute
+constexpr float kBreatheSweepQMin = 0.60f;
+constexpr float kBreatheSweepQRange = 2.60f; ///< max Q 3.2: audible, nowhere near self-osc
+constexpr float kBreatheBodyQ = 2.50f;
+constexpr float kBreatheResMixMin = 0.08f;
+constexpr float kBreatheResMixRange = 0.22f; ///< max 0.30 of a Q=2.5 bandpass
+constexpr float kBreatheBiasMax = 0.25f;     ///< even-harmonic colour at full drive
+constexpr float kBreatheMinCutoffHz = 20.0f; ///< spec floor
+constexpr float kBreatheNyquistFrac = 0.45f; ///< spec ceiling
 
 /** Common entry guard: returns the number of channels to touch, or 0 if there
     is nothing to do. Keeps every `process` honest about empty and oversized
@@ -104,26 +104,26 @@ void ShimmerStyle::process(float* const* channelData, int numChannels, int numSa
     if (chans == 0)
         return;
 
-    jassert(std::abs(params.sampleRate - sampleRate) < 1.0);   // prepare() owns the rate
+    jassert(std::abs(params.sampleRate - sampleRate) < 1.0); // prepare() owns the rate
 
     const float amount = fxdetail::clampAmount(params.amount01);
-    const float drive  = fxdetail::clampDrive(params.driveLin);
+    const float drive = fxdetail::clampDrive(params.driveLin);
 
     // Two of drive's three jobs: how much ring product is blended back, and how
     // hard the carrier itself is shaped. (The third — how far the envelope may
     // lift the carrier — is `spanHz` below.) `edgeNorm` renormalises the shaped
     // carrier so it still peaks at exactly 1 — the output bound depends on that.
-    const float depth    = kShimmerDepthMin + (kShimmerDepthMax - kShimmerDepthMin) * amount;
-    const float edge     = kShimmerEdgeMin + kShimmerEdgeRange * amount;
+    const float depth = kShimmerDepthMin + (kShimmerDepthMax - kShimmerDepthMin) * amount;
+    const float edge = kShimmerEdgeMin + kShimmerEdgeRange * amount;
     const float edgeNorm = 1.0f / juce::jmax(1.0e-3f, dsputil::fastTanh(edge));
 
-    const float envCoeff  = fxdetail::timeCoeff(kShimmerEnvSeconds, sampleRate);
+    const float envCoeff = fxdetail::timeCoeff(kShimmerEnvSeconds, sampleRate);
     const float tiltCoeff = fxdetail::onePoleCoeff(kShimmerSplitHz, sampleRate);
-    const float invSr     = 1.0f / static_cast<float>(sampleRate);
-    const float maxHz     = juce::jmax(kShimmerMinHz, static_cast<float>(sampleRate) * 0.45f);
+    const float invSr = 1.0f / static_cast<float>(sampleRate);
+    const float maxHz = juce::jmax(kShimmerMinHz, static_cast<float>(sampleRate) * 0.45f);
     // Drive's third job: at 0 dB the envelope may only lift the carrier over a
     // third of `kShimmerSpanHz`, at 40 dB over all of it.
-    const float spanHz    = kShimmerSpanHz * (0.35f + 0.65f * amount);
+    const float spanHz = kShimmerSpanHz * (0.35f + 0.65f * amount);
 
     for (int ch = 0; ch < chans; ++ch)
     {
@@ -149,21 +149,20 @@ void ShimmerStyle::process(float* const* channelData, int numChannels, int numSa
             // Carrier pitch is refreshed once per control block from the envelope
             // as it stood at the block boundary; a 30 ms glide cannot move far
             // enough in 32 samples for that to be audible as stepping.
-            const float freq = juce::jlimit(kShimmerMinHz, maxHz,
-                                            baseHz + spanHz * s.env.getState());
-            const float inc  = juce::jlimit(0.0f, kShimmerMaxInc, freq * invSr);
+            const float freq = juce::jlimit(kShimmerMinHz, maxHz, baseHz + spanHz * s.env.getState());
+            const float inc = juce::jlimit(0.0f, kShimmerMaxInc, freq * invSr);
 
             for (int i = start; i < blockEnd; ++i)
             {
-                const float x   = dsputil::sanitise(data[i]);
-                const float sat = dsputil::fastTanh(x * drive);          // |sat| <= 1
+                const float x = dsputil::sanitise(data[i]);
+                const float sat = dsputil::fastTanh(x * drive); // |sat| <= 1
 
                 // Detector runs on the raw input, so the carrier tracks the
                 // performance rather than the shaper's saturation point.
                 s.env.process(std::abs(dsputil::fastTanh(x * kShimmerDetectGain)));
 
-                const float low  = s.tilt.process(sat);
-                const float high = sat - low;                            // |high| <= 2
+                const float low = s.tilt.process(sat);
+                const float high = sat - low; // |high| <= 2
 
                 const float osc = edgeNorm * dsputil::fastTanh(edge * fxdetail::fastSineTurns(phase));
 
@@ -218,23 +217,22 @@ void BreatheStyle::process(float* const* channelData, int numChannels, int numSa
     jassert(std::abs(params.sampleRate - sampleRate) < 1.0);
 
     const float amount = fxdetail::clampAmount(params.amount01);
-    const float drive  = fxdetail::clampDrive(params.driveLin);
+    const float drive = fxdetail::clampDrive(params.driveLin);
 
-    const float attackCoeff  = fxdetail::timeCoeff(kBreatheAttackSeconds, sampleRate);
+    const float attackCoeff = fxdetail::timeCoeff(kBreatheAttackSeconds, sampleRate);
     const float releaseCoeff = fxdetail::timeCoeff(kBreatheRelSeconds, sampleRate);
 
     // Drive sets how far the filter travels, how far it shuts, how resonant it
     // is, and how asymmetric the shaper gets.
     const float sweepDepth = kBreatheDepthMin + kBreatheDepthRange * amount;
-    const float through    = 1.0f - (kBreatheCloseMin + kBreatheCloseRange * amount);
-    const float sweepQ     = kBreatheSweepQMin + kBreatheSweepQRange * amount;
-    const float resMix     = kBreatheResMixMin + kBreatheResMixRange * amount;
-    const float bias       = kBreatheBiasMax * amount;
-    const float octaves    = kBreatheSweepOctaves * sweepDepth;
+    const float through = 1.0f - (kBreatheCloseMin + kBreatheCloseRange * amount);
+    const float sweepQ = kBreatheSweepQMin + kBreatheSweepQRange * amount;
+    const float resMix = kBreatheResMixMin + kBreatheResMixRange * amount;
+    const float bias = kBreatheBiasMax * amount;
+    const float octaves = kBreatheSweepOctaves * sweepDepth;
 
     // Hard spec bound: the cutoff may never leave [20 Hz, 0.45 * sampleRate].
-    const float maxHz = juce::jmax(kBreatheMinCutoffHz,
-                                   static_cast<float>(sampleRate) * kBreatheNyquistFrac);
+    const float maxHz = juce::jmax(kBreatheMinCutoffHz, static_cast<float>(sampleRate) * kBreatheNyquistFrac);
 
     for (int ch = 0; ch < chans; ++ch)
     {
@@ -256,26 +254,25 @@ void BreatheStyle::process(float* const* channelData, int numChannels, int numSa
             s.sweep.sanitiseState();
             s.body.sanitiseState();
 
-            const float cutoff = juce::jlimit(kBreatheMinCutoffHz, maxHz,
-                                              kBreatheBaseHz * std::exp2(octaves * env));
+            const float cutoff = juce::jlimit(kBreatheMinCutoffHz, maxHz, kBreatheBaseHz * std::exp2(octaves * env));
             s.sweep.setCutoffQ(cutoff, sweepQ);
             s.body.setCutoffQ(cutoff, kBreatheBodyQ);
 
             for (int i = start; i < blockEnd; ++i)
             {
-                const float x      = dsputil::sanitise(data[i]);
+                const float x = dsputil::sanitise(data[i]);
                 const float driven = juce::jlimit(-kDrivenClamp, kDrivenClamp, x * drive);
 
                 // Bounded, drive-independent detector: the band breathes with the
                 // material, and drive only decides how deeply it breathes.
-                const float det   = std::abs(dsputil::fastTanh(x * kBreatheDetectGain));
+                const float det = std::abs(dsputil::fastTanh(x * kBreatheDetectGain));
                 const float coeff = det > env ? attackCoeff : releaseCoeff;
                 env = det + coeff * (env - det);
 
                 // Tilt, not a plain lowpass: `driven - lp` is the exact complement
                 // of the SVF lowpass, so `through == 1` reconstructs `driven`
                 // bit-for-bit and no band is ever muted outright.
-                const float lp     = s.sweep.process(driven).lp;
+                const float lp = s.sweep.process(driven).lp;
                 const float tilted = lp + through * (driven - lp);
 
                 // Asymmetric bounded shaper: |sat| <= 1 + |tanh(bias)| < 1.25.

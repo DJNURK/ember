@@ -42,7 +42,7 @@ constexpr float kInjectCeiling = 1.5f;
 constexpr float kHardCeiling = 4.0f;
 
 // ---------------------------------------------------------------- dynamics
-constexpr float kKneeDb     = 6.0f;
+constexpr float kKneeDb = 6.0f;
 constexpr float kHalfKneeDb = kKneeDb * 0.5f;
 
 /** RMS window. Long enough to read programme level, short enough to still track
@@ -57,11 +57,11 @@ constexpr float kPeakReleaseSeconds = 0.100f;
 constexpr float kPeakWeight = 0.5f;
 
 // --------------------------------------------------------------- tone stack
-constexpr float kToneLowHz   = 150.0f;
-constexpr float kToneMidHz   = 1000.0f;
-constexpr float kToneHighHz  = 4000.0f;
-constexpr float kToneMidQ    = 0.7f;
-constexpr float kToneShelfQ  = 0.7071068f;   // Butterworth shelf slope
+constexpr float kToneLowHz = 150.0f;
+constexpr float kToneMidHz = 1000.0f;
+constexpr float kToneHighHz = 4000.0f;
+constexpr float kToneMidQ = 0.7f;
+constexpr float kToneShelfQ = 0.7071068f; // Butterworth shelf slope
 
 /** One-pole "retain" coefficient for a time constant in seconds:
     state = target + c * (state - target). c -> 1 is slow, 0 is instant. */
@@ -89,14 +89,13 @@ DynamicsTiming computeDynamicsTiming(double sampleRate, float amount) noexcept
 {
     const float strength = std::abs(amount);
 
-    const float downSeconds = amount > 0.0f ? (0.030f - 0.027f * strength)    // compressor attack 30 -> 3 ms
-                                            : (0.150f - 0.100f * strength);   // gate close      150 -> 50 ms
-    const float upSeconds   = amount > 0.0f ? (0.300f - 0.220f * strength)    // compressor release 300 -> 80 ms
-                                            : (0.010f - 0.008f * strength);   // gate open         10 -> 2 ms
+    const float downSeconds = amount > 0.0f ? (0.030f - 0.027f * strength)  // compressor attack 30 -> 3 ms
+                                            : (0.150f - 0.100f * strength); // gate close      150 -> 50 ms
+    const float upSeconds = amount > 0.0f ? (0.300f - 0.220f * strength)    // compressor release 300 -> 80 ms
+                                          : (0.010f - 0.008f * strength);   // gate open         10 -> 2 ms
 
-    return { onePoleCoeff(sampleRate, downSeconds),
-             onePoleCoeff(sampleRate, upSeconds),
-             onePoleCoeff(sampleRate, kRmsSeconds) };
+    return {onePoleCoeff(sampleRate, downSeconds), onePoleCoeff(sampleRate, upSeconds),
+            onePoleCoeff(sampleRate, kRmsSeconds)};
 }
 } // namespace
 
@@ -110,8 +109,7 @@ void DCBlocker::prepare(double newSampleRate, int)
     // y[n] = x[n] - x[n-1] + R y[n-1]. The pole R sets the corner; clamping it
     // strictly inside the unit circle keeps the recursion contracting at every
     // supported rate (at 192 kHz R is already 0.99984).
-    coeff = juce::jlimit(0.0, 0.99999,
-                         std::exp(-2.0 * juce::MathConstants<double>::pi * kDcBlockHz / sr));
+    coeff = juce::jlimit(0.0, 0.99999, std::exp(-2.0 * juce::MathConstants<double>::pi * kDcBlockHz / sr));
 
     reset();
 }
@@ -196,7 +194,7 @@ void FeedbackLoop::prepare(double newSampleRate, int, int)
     for (auto& line : delayLine)
         line.assign(static_cast<size_t>(lineLength), 0.0f);
 
-    setParameters(amount, freq);   // re-tune: D and the SVF depend on the rate
+    setParameters(amount, freq); // re-tune: D and the SVF depend on the rate
     reset();
 }
 
@@ -248,8 +246,8 @@ void FeedbackLoop::setParameters(float amount01, float frequency) noexcept
     // hard. k = 1 / Q is also exactly the reciprocal of its peak magnitude,
     // which is what the loop gain is normalised against in process().
     const float q = kFeedbackMinQ + (kFeedbackMaxQ - kFeedbackMinQ) * amount;
-    g  = std::tan(juce::MathConstants<float>::pi * freq / static_cast<float>(sampleRate));
-    k  = 1.0f / juce::jmax(0.025f, q);
+    g = std::tan(juce::MathConstants<float>::pi * freq / static_cast<float>(sampleRate));
+    k = 1.0f / juce::jmax(0.025f, q);
     a1 = 1.0f / (1.0f + g * (g + k));
     a2 = g * a1;
     a3 = g * a2;
@@ -280,10 +278,10 @@ void FeedbackLoop::process(float* const* channels, int numChannels, int numSampl
         auto& line = delayLine[c];
 
         if (line.size() != static_cast<size_t>(lineLength))
-            continue;   // not prepared for this channel
+            continue; // not prepared for this channel
 
         // Per-block guard: one bad host buffer must not poison the resonator.
-        if (! (dsputil::isFinite(svfIc1[c]) && dsputil::isFinite(svfIc2[c])))
+        if (!(dsputil::isFinite(svfIc1[c]) && dsputil::isFinite(svfIc2[c])))
         {
             svfIc1[c] = 0.0f;
             svfIc2[c] = 0.0f;
@@ -348,9 +346,9 @@ void Dynamics::prepare(double newSampleRate, int, int)
     sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
 
     const auto timing = computeDynamicsTiming(sampleRate, amount);
-    attackCoeff  = timing.down;
+    attackCoeff = timing.down;
     releaseCoeff = timing.up;
-    rmsCoeff     = timing.rms;
+    rmsCoeff = timing.rms;
 
     reset();
 }
@@ -373,9 +371,9 @@ void Dynamics::setAmount(float bipolarAmount) noexcept
     amount = a;
 
     const auto timing = computeDynamicsTiming(sampleRate, amount);
-    attackCoeff  = timing.down;
+    attackCoeff = timing.down;
     releaseCoeff = timing.up;
-    rmsCoeff     = timing.rms;
+    rmsCoeff = timing.rms;
 }
 
 void Dynamics::process(float* const* channels, int numChannels, int numSamples) noexcept
@@ -397,36 +395,35 @@ void Dynamics::process(float* const* channels, int numChannels, int numSamples) 
         return;
 
     // --- block constants -------------------------------------------------
-    const bool  compressing = amount > 0.0f;
-    const float strength    = std::abs(amount);
+    const bool compressing = amount > 0.0f;
+    const float strength = std::abs(amount);
 
     // Compressor: threshold walks down and the ratio up with the knob, so the
     // knob is one continuous gesture from "nothing" to "obvious".
     // Expander: threshold walks *up* towards the signal instead.
-    const float thresholdDb = compressing ? (-6.0f - 24.0f * strength)
-                                          : (-55.0f + 25.0f * strength);
-    const float ratio       = compressing ? (1.0f + 7.0f * strength)      // up to  8 : 1
-                                          : (1.0f + 3.0f * strength);     // up to  1 : 4 downwards
-    const float slope       = compressing ? (1.0f - 1.0f / ratio) : (ratio - 1.0f);
-    const float floorDb     = -(12.0f + 48.0f * strength);                // expander range
+    const float thresholdDb = compressing ? (-6.0f - 24.0f * strength) : (-55.0f + 25.0f * strength);
+    const float ratio = compressing ? (1.0f + 7.0f * strength)  // up to  8 : 1
+                                    : (1.0f + 3.0f * strength); // up to  1 : 4 downwards
+    const float slope = compressing ? (1.0f - 1.0f / ratio) : (ratio - 1.0f);
+    const float floorDb = -(12.0f + 48.0f * strength); // expander range
 
-    const float thrLin      = juce::Decibels::decibelsToGain(thresholdDb);
-    const float kneeLowLin  = juce::Decibels::decibelsToGain(thresholdDb - kHalfKneeDb);
+    const float thrLin = juce::Decibels::decibelsToGain(thresholdDb);
+    const float kneeLowLin = juce::Decibels::decibelsToGain(thresholdDb - kHalfKneeDb);
     const float kneeHighLin = juce::Decibels::decibelsToGain(thresholdDb + kHalfKneeDb);
-    const float invThrLin   = 1.0f / juce::jmax(1.0e-9f, thrLin);
+    const float invThrLin = 1.0f / juce::jmax(1.0e-9f, thrLin);
 
     const float peakRelCoeff = onePoleCoeff(sampleRate, kPeakReleaseSeconds);
-    const float invChannels  = 1.0f / static_cast<float>(numChannels);
+    const float invChannels = 1.0f / static_cast<float>(numChannels);
 
     // Programme dependence, precomputed: c^4 is the same one-pole a quarter of
     // the time constant long, c + (1 - c) * 0.6 roughly two and a half times
     // longer. The per-sample cost is then one lerp each.
     const float attackSquared = attackCoeff * attackCoeff;
-    const float attackFast    = attackSquared * attackSquared;
-    const float releaseSlow   = releaseCoeff + (1.0f - releaseCoeff) * 0.6f;
+    const float attackFast = attackSquared * attackSquared;
+    const float releaseSlow = releaseCoeff + (1.0f - releaseCoeff) * 0.6f;
 
     // Recover from a poisoned detector before it can reach the audio.
-    if (! (dsputil::isFinite(rmsState) && dsputil::isFinite(peakState) && dsputil::isFinite(envState)))
+    if (!(dsputil::isFinite(rmsState) && dsputil::isFinite(peakState) && dsputil::isFinite(envState)))
     {
         rmsState = 0.0f;
         peakState = 0.0f;
@@ -457,8 +454,7 @@ void Dynamics::process(float* const* channels, int numChannels, int numSamples) 
         const float rms = std::sqrt(juce::jmax(0.0f, rmsState));
 
         // Instant attack / slow release peak follower.
-        peakState = instantPeak > peakState ? instantPeak
-                                            : instantPeak + peakRelCoeff * (peakState - instantPeak);
+        peakState = instantPeak > peakState ? instantPeak : instantPeak + peakRelCoeff * (peakState - instantPeak);
 
         const float detector = juce::jmax(rms, peakState * kPeakWeight);
 
@@ -470,20 +466,20 @@ void Dynamics::process(float* const* channels, int numChannels, int numSamples) 
             if (detector > kneeLowLin)
             {
                 const float overDb = juce::Decibels::gainToDecibels(detector, -120.0f) - thresholdDb;
-                const float reductionDb = overDb >= kHalfKneeDb
-                                        ? -slope * overDb
-                                        : -slope * ((overDb + kHalfKneeDb) * (overDb + kHalfKneeDb))
-                                              / (2.0f * kKneeDb);
+                const float reductionDb =
+                    overDb >= kHalfKneeDb
+                        ? -slope * overDb
+                        : -slope * ((overDb + kHalfKneeDb) * (overDb + kHalfKneeDb)) / (2.0f * kKneeDb);
                 targetGain = juce::Decibels::decibelsToGain(reductionDb);
             }
         }
         else if (detector < kneeHighLin)
         {
             const float underDb = thresholdDb - juce::Decibels::gainToDecibels(detector, -120.0f);
-            const float reductionDb = underDb >= kHalfKneeDb
-                                    ? -slope * underDb
-                                    : -slope * ((underDb + kHalfKneeDb) * (underDb + kHalfKneeDb))
-                                          / (2.0f * kKneeDb);
+            const float reductionDb =
+                underDb >= kHalfKneeDb
+                    ? -slope * underDb
+                    : -slope * ((underDb + kHalfKneeDb) * (underDb + kHalfKneeDb)) / (2.0f * kKneeDb);
             targetGain = juce::Decibels::decibelsToGain(juce::jmax(floorDb, reductionDb));
         }
 
@@ -503,7 +499,7 @@ void Dynamics::process(float* const* channels, int numChannels, int numSamples) 
             }
             else
             {
-                coefficient = attackCoeff;   // gate closing: fixed, unhurried
+                coefficient = attackCoeff; // gate closing: fixed, unhurried
             }
         }
         else
@@ -519,7 +515,7 @@ void Dynamics::process(float* const* channels, int numChannels, int numSamples) 
             }
             else
             {
-                coefficient = releaseCoeff;  // gate opening: fast
+                coefficient = releaseCoeff; // gate opening: fast
             }
         }
 
@@ -553,8 +549,8 @@ void ToneStack::prepare(double newSampleRate, int maxBlockSize, int)
 
     // Force a redesign at the new rate: NaN never compares equal, so every
     // stage below sees a change even if the gains themselves are unchanged.
-    const float lowDb  = lastLow;
-    const float midDb  = lastMid;
+    const float lowDb = lastLow;
+    const float midDb = lastMid;
     const float highDb = lastHigh;
     const float forceUpdate = std::numeric_limits<float>::quiet_NaN();
     lastLow = lastMid = lastHigh = forceUpdate;
@@ -563,9 +559,7 @@ void ToneStack::prepare(double newSampleRate, int maxBlockSize, int)
     // prepare() after the coefficients are in place: it calls reset(), which is
     // where the filter sizes its state for the (now second-order) coefficients.
     // That is the only allocation the tone stack ever makes.
-    const juce::dsp::ProcessSpec spec { sampleRate,
-                                        static_cast<juce::uint32>(juce::jmax(1, maxBlockSize)),
-                                        1u };
+    const juce::dsp::ProcessSpec spec{sampleRate, static_cast<juce::uint32>(juce::jmax(1, maxBlockSize)), 1u};
 
     for (auto& perChannel : filters)
         for (auto& f : perChannel)
@@ -596,29 +590,29 @@ void ToneStack::setGainsDb(float lowDb, float midDb, float highDb) noexcept
 {
     using ArrayCoeffs = juce::dsp::IIR::ArrayCoefficients<float>;
 
-    if (! juce::exactlyEqual(lowDb, lastLow))
+    if (!juce::exactlyEqual(lowDb, lastLow))
     {
         lastLow = lowDb;
-        const auto c = ArrayCoeffs::makeLowShelf(sampleRate, kToneLowHz, kToneShelfQ,
-                                                 juce::Decibels::decibelsToGain(lowDb));
+        const auto c =
+            ArrayCoeffs::makeLowShelf(sampleRate, kToneLowHz, kToneShelfQ, juce::Decibels::decibelsToGain(lowDb));
         for (auto& perChannel : filters)
             *perChannel[0].coefficients = c;
     }
 
-    if (! juce::exactlyEqual(midDb, lastMid))
+    if (!juce::exactlyEqual(midDb, lastMid))
     {
         lastMid = midDb;
-        const auto c = ArrayCoeffs::makePeakFilter(sampleRate, kToneMidHz, kToneMidQ,
-                                                   juce::Decibels::decibelsToGain(midDb));
+        const auto c =
+            ArrayCoeffs::makePeakFilter(sampleRate, kToneMidHz, kToneMidQ, juce::Decibels::decibelsToGain(midDb));
         for (auto& perChannel : filters)
             *perChannel[1].coefficients = c;
     }
 
-    if (! juce::exactlyEqual(highDb, lastHigh))
+    if (!juce::exactlyEqual(highDb, lastHigh))
     {
         lastHigh = highDb;
-        const auto c = ArrayCoeffs::makeHighShelf(sampleRate, kToneHighHz, kToneShelfQ,
-                                                  juce::Decibels::decibelsToGain(highDb));
+        const auto c =
+            ArrayCoeffs::makeHighShelf(sampleRate, kToneHighHz, kToneShelfQ, juce::Decibels::decibelsToGain(highDb));
         for (auto& perChannel : filters)
             *perChannel[2].coefficients = c;
     }
@@ -634,8 +628,8 @@ void ToneStack::process(float* const* channels, int numChannels, int numSamples)
     for (int ch = 0; ch < nc; ++ch)
     {
         auto& perChannel = filters[static_cast<size_t>(ch)];
-        auto& low  = perChannel[0];
-        auto& mid  = perChannel[1];
+        auto& low = perChannel[0];
+        auto& mid = perChannel[1];
         auto& high = perChannel[2];
         auto* d = channels[ch];
 
@@ -651,7 +645,7 @@ void ToneStack::process(float* const* channels, int numChannels, int numSamples)
         mid.snapToZero();
         high.snapToZero();
 
-        if (! dsputil::isFinite(d[numSamples - 1]))
+        if (!dsputil::isFinite(d[numSamples - 1]))
         {
             low.reset();
             mid.reset();

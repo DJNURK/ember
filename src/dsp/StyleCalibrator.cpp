@@ -42,7 +42,7 @@ constexpr std::uint32_t kNoiseSeed = 0xE3B12F5u;
     4096 samples and capped so the build cost stays bounded. Rates at or below
     96 kHz are unchanged, bit for bit. */
 constexpr int kMinWarmupSamples = 4096;
-constexpr double kWarmupSeconds = 4096.0 / 96000.0;   // 42.7 ms
+constexpr double kWarmupSeconds = 4096.0 / 96000.0; // 42.7 ms
 
 /** Ceiling on the warm-up, purely to bound build time. 131072 samples is
     exactly `kWarmupSeconds` at 3.072 MHz — the highest oversampled rate the
@@ -77,10 +77,9 @@ int warmupSamplesForRate(double rate) noexcept
 {
     const double byDuration = std::ceil(rate * kWarmupSeconds);
 
-    return static_cast<int>(juce::jlimit(static_cast<double>(kMinWarmupSamples),
-                                         static_cast<double>(kMaxWarmupSamples),
-                                         std::isfinite(byDuration) ? byDuration
-                                                                   : static_cast<double>(kMinWarmupSamples)));
+    return static_cast<int>(
+        juce::jlimit(static_cast<double>(kMinWarmupSamples), static_cast<double>(kMaxWarmupSamples),
+                     std::isfinite(byDuration) ? byDuration : static_cast<double>(kMinWarmupSamples)));
 }
 
 /** Nominal operating level (-18 dBFS RMS, the usual alignment level). Gain
@@ -101,8 +100,7 @@ constexpr float kMaxCompensationDb = 40.0f;
 constexpr double kSilenceFloor = 1.0e-7;
 
 /** dB between adjacent table entries (1.0 for the 0..40 dB / 41 point table). */
-constexpr float kDriveStepDb =
-    StyleCalibrator::kMaxDriveDb / static_cast<float>(StyleCalibrator::kNumDrivePoints - 1);
+constexpr float kDriveStepDb = StyleCalibrator::kMaxDriveDb / static_cast<float>(StyleCalibrator::kNumDrivePoints - 1);
 
 /** Marsaglia xorshift32. Deterministic, no library RNG involved: std::mt19937
     would also be portable but the distribution adaptors are not specified
@@ -110,8 +108,7 @@ constexpr float kDriveStepDb =
 class Xorshift32
 {
 public:
-    explicit Xorshift32(std::uint32_t seed) noexcept
-        : state(seed != 0u ? seed : 1u) {}
+    explicit Xorshift32(std::uint32_t seed) noexcept : state(seed != 0u ? seed : 1u) {}
 
     std::uint32_t nextBits() noexcept
     {
@@ -122,10 +119,7 @@ public:
     }
 
     /** Uniform in [-1, 1). */
-    float nextBipolar() noexcept
-    {
-        return static_cast<float>(static_cast<std::int32_t>(nextBits())) / 2147483648.0f;
-    }
+    float nextBipolar() noexcept { return static_cast<float>(static_cast<std::int32_t>(nextBits())) / 2147483648.0f; }
 
 private:
     std::uint32_t state;
@@ -158,7 +152,7 @@ std::vector<float> makeStimulus(int numSamples)
 {
     std::vector<float> signal(static_cast<std::size_t>(juce::jmax(1, numSamples)), 0.0f);
 
-    Xorshift32 rng { kNoiseSeed };
+    Xorshift32 rng{kNoiseSeed};
 
     double mean = 0.0;
 
@@ -205,7 +199,7 @@ double windowRms(const float* data, int start, int count) noexcept
     {
         const double v = static_cast<double>(data[static_cast<std::size_t>(start + i)]);
 
-        if (! std::isfinite(v))
+        if (!std::isfinite(v))
             return 0.0;
 
         acc += v * v;
@@ -216,16 +210,13 @@ double windowRms(const float* data, int start, int count) noexcept
 
 /** Drive an isolated instance of one style with the stimulus and report the
     gain, in dB, that restores the input RMS. Off the audio thread. */
-float measureCompensationDb(StyleID id, float driveDb, double rate,
-                            const std::vector<float>& stimulus,
-                            std::vector<float>& scratch,
-                            int warmupSamples,
-                            double inputRms)
+float measureCompensationDb(StyleID id, float driveDb, double rate, const std::vector<float>& stimulus,
+                            std::vector<float>& scratch, int warmupSamples, double inputRms)
 {
     auto style = createSaturationStyle(id);
 
-    if (style == nullptr)                       // the factory promises non-null
-        return 0.0f;                            // but never trust it silently
+    if (style == nullptr) // the factory promises non-null
+        return 0.0f;      // but never trust it silently
 
     const int stimulusSamples = static_cast<int>(stimulus.size());
 
@@ -236,23 +227,23 @@ float measureCompensationDb(StyleID id, float driveDb, double rate,
 
     StyleParams params;
     params.sampleRate = rate;
-    params.driveDb    = driveDb;
-    params.driveLin   = juce::Decibels::decibelsToGain(driveDb);
-    params.amount01   = juce::jlimit(0.0f, 1.0f, driveDb / StyleCalibrator::kMaxDriveDb);
+    params.driveDb = driveDb;
+    params.driveLin = juce::Decibels::decibelsToGain(driveDb);
+    params.amount01 = juce::jlimit(0.0f, 1.0f, driveDb / StyleCalibrator::kMaxDriveDb);
 
-    float* channels[1] = { scratch.data() };
+    float* channels[1] = {scratch.data()};
     style->process(channels, 1, stimulusSamples, params);
 
     const double outRms = windowRms(scratch.data(), warmupSamples, kMeasureSamples);
 
     // Silent, or NaN/Inf somewhere in the window: there is nothing to match, so
     // leave the level alone instead of inventing a correction.
-    if (! (outRms > kSilenceFloor) || ! (inputRms > kSilenceFloor))
+    if (!(outRms > kSilenceFloor) || !(inputRms > kSilenceFloor))
         return 0.0f;
 
     const double db = 20.0 * std::log10(inputRms / outRms);
 
-    if (! std::isfinite(db))
+    if (!std::isfinite(db))
         return 0.0f;
 
     return juce::jlimit(-kMaxCompensationDb, kMaxCompensationDb, static_cast<float>(db));
@@ -264,14 +255,13 @@ StyleCalibrator::StyleCalibrator(double oversampledSampleRate)
 {
     // Oversampled rates run from 44.1 k (no oversampling) to 192 k x 16; the
     // clamp only guards against a host reporting nonsense during prepare.
-    const double rate = juce::jlimit(8000.0, 1.0e7, std::isfinite(oversampledSampleRate)
-                                                        ? oversampledSampleRate
-                                                        : 44100.0);
+    const double rate =
+        juce::jlimit(8000.0, 1.0e7, std::isfinite(oversampledSampleRate) ? oversampledSampleRate : 44100.0);
 
     // Warm-up scales with the rate so that every rate gets the same settling
     // TIME; the measurement window does not, because it is counted in
     // independent observations of flat noise. See the constants above.
-    const int warmupSamples   = warmupSamplesForRate(rate);
+    const int warmupSamples = warmupSamplesForRate(rate);
     const int stimulusSamples = warmupSamples + kMeasureSamples;
 
     const std::vector<float> stimulus = makeStimulus(stimulusSamples);
@@ -287,8 +277,8 @@ StyleCalibrator::StyleCalibrator(double oversampledSampleRate)
         {
             const float driveDb = juce::jmin(kMaxDriveDb, static_cast<float>(d) * kDriveStepDb);
 
-            tableDb[static_cast<std::size_t>(s)][static_cast<std::size_t>(d)]
-                = measureCompensationDb(id, driveDb, rate, stimulus, scratch, warmupSamples, inputRms);
+            tableDb[static_cast<std::size_t>(s)][static_cast<std::size_t>(d)] =
+                measureCompensationDb(id, driveDb, rate, stimulus, scratch, warmupSamples, inputRms);
         }
     }
 }
@@ -308,8 +298,7 @@ float StyleCalibrator::compensationDb(StyleID id, float driveDb) const noexcept
     // like, because at high oversampled rates the 0 dB entry is a large BOOST
     // for the amp styles (+22 dB for Clean Amp at 3.072 MHz) where the 40 dB
     // entry is close to unity.
-    const float safeDrive = juce::jlimit(0.0f, kMaxDriveDb,
-                                         std::isnan(driveDb) ? 0.0f : driveDb);
+    const float safeDrive = juce::jlimit(0.0f, kMaxDriveDb, std::isnan(driveDb) ? 0.0f : driveDb);
 
     const float pos = safeDrive * (1.0f / kDriveStepDb);
     const int lower = juce::jlimit(0, kNumDrivePoints - 1, static_cast<int>(pos));
@@ -361,9 +350,8 @@ const StyleCalibrator& StyleCalibrator::getForSampleRate(double oversampledSampl
     // Key on the rounded rate: hosts hand back rates that differ in the last
     // float bit between calls, and an exact-equality key would miss the cache
     // and rebuild the table every time.
-    const double clamped = juce::jlimit(8000.0, 1.0e7, std::isfinite(oversampledSampleRate)
-                                                           ? oversampledSampleRate
-                                                           : 44100.0);
+    const double clamped =
+        juce::jlimit(8000.0, 1.0e7, std::isfinite(oversampledSampleRate) ? oversampledSampleRate : 44100.0);
     const int key = static_cast<int>(std::lround(clamped));
 
     const juce::ScopedLock lock(cacheLock);

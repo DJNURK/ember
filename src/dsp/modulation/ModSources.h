@@ -47,25 +47,22 @@ namespace ember
 class ControlSmoother
 {
 public:
-    void prepare (double sampleRate) noexcept
-    {
-        sr = sampleRate > 0.0 ? sampleRate : 44100.0;
-    }
+    void prepare(double sampleRate) noexcept { sr = sampleRate > 0.0 ? sampleRate : 44100.0; }
 
-    void reset (float initialValue = 0.0f) noexcept { value = dsputil::sanitise (initialValue); }
+    void reset(float initialValue = 0.0f) noexcept { value = dsputil::sanitise(initialValue); }
 
     /** Move `numSamples` of audio time towards `target` with a `timeMs`
         exponential. A non-positive time snaps; a non-positive BLOCK does not
         advance at all (no time has passed, so the value cannot have moved —
         snapping there would let a zero-length call jump a 500 ms smoother
         straight to its target). */
-    float process (float target, float timeMs, int numSamples) noexcept
+    float process(float target, float timeMs, int numSamples) noexcept
     {
         if (numSamples <= 0)
             return value;
 
-        const float safeTarget = dsputil::sanitise (target);
-        const float seconds    = juce::jmax (0.0f, timeMs) * 0.001f;
+        const float safeTarget = dsputil::sanitise(target);
+        const float seconds = juce::jmax(0.0f, timeMs) * 0.001f;
 
         if (seconds <= 0.0f)
         {
@@ -73,17 +70,16 @@ public:
             return value;
         }
 
-        const float coeff = std::exp (-static_cast<float> (numSamples)
-                                      / (static_cast<float> (sr) * seconds));
-        value = dsputil::sanitise (safeTarget + coeff * (value - safeTarget));
+        const float coeff = std::exp(-static_cast<float>(numSamples) / (static_cast<float>(sr) * seconds));
+        value = dsputil::sanitise(safeTarget + coeff * (value - safeTarget));
         return value;
     }
 
     float getValue() const noexcept { return value; }
 
 private:
-    double sr { 44100.0 };
-    float  value { 0.0f };
+    double sr{44100.0};
+    float value{0.0f};
 };
 
 // ============================================================================
@@ -97,20 +93,20 @@ inline constexpr int kMaxLfoPoints = 32;
     to the first). */
 struct LfoPoint
 {
-    float    position { 0.0f };                 ///< 0 .. 1 within the cycle
-    float    value { 0.0f };                    ///< -1 .. +1
-    ModCurve curve { ModCurve::Linear };
+    float position{0.0f}; ///< 0 .. 1 within the cycle
+    float value{0.0f};    ///< -1 .. +1
+    ModCurve curve{ModCurve::Linear};
 };
 
 struct XLfoParams
 {
-    float rateHz { 1.0f };         ///< free-running rate, 0.01 .. 40 Hz
-    bool  tempoSync { false };     ///< derive the phase from the host timeline
-    float syncBeats { 4.0f };      ///< cycle length in quarter notes when synced
-    float phaseOffset { 0.0f };    ///< 0 .. 1, applied at read time (phase stays continuous)
-    int   steps { 0 };             ///< 0 or 1 = smooth; >= 2 snaps the phase to a grid
-    float smoothingMs { 0.0f };    ///< output smoothing, 0 .. 500 ms
-    float depth { 1.0f };          ///< 0 .. 1 output scale
+    float rateHz{1.0f};      ///< free-running rate, 0.01 .. 40 Hz
+    bool tempoSync{false};   ///< derive the phase from the host timeline
+    float syncBeats{4.0f};   ///< cycle length in quarter notes when synced
+    float phaseOffset{0.0f}; ///< 0 .. 1, applied at read time (phase stays continuous)
+    int steps{0};            ///< 0 or 1 = smooth; >= 2 snaps the phase to a grid
+    float smoothingMs{0.0f}; ///< output smoothing, 0 .. 500 ms
+    float depth{1.0f};       ///< 0 .. 1 output scale
 };
 
 /**
@@ -136,9 +132,9 @@ public:
 
     XLfo();
 
-    void prepare (double sampleRate) noexcept;
+    void prepare(double sampleRate) noexcept;
     void reset() noexcept;
-    void setParameters (const XLfoParams& newParams) noexcept;
+    void setParameters(const XLfoParams& newParams) noexcept;
 
     /** Replace the shape. MESSAGE THREAD ONLY: it writes the inactive half of a
         double buffer and publishes it with a release store, so the audio thread
@@ -152,62 +148,62 @@ public:
         are edited at human speed, and every stored point is clamped before it
         is written, so the worst case is one block of a blended shape — still
         finite, still within [-1, +1]. It is not worth a triple buffer.) */
-    void setShape (const LfoPoint* points, int numPoints);
+    void setShape(const LfoPoint* points, int numPoints);
 
     /** Restore the default shape (a smooth cosine-like 3-point curve). Message
         thread only. */
     void setDefaultShape();
 
-    int      getNumShapePoints() const noexcept;
-    LfoPoint getShapePoint (int index) const noexcept;
+    int getNumShapePoints() const noexcept;
+    LfoPoint getShapePoint(int index) const noexcept;
 
     /** Advance and return the new value in [-1, +1]. Audio thread. */
-    float tick (int numSamples, double bpm, double ppqPosition, bool isPlaying) noexcept;
+    float tick(int numSamples, double bpm, double ppqPosition, bool isPlaying) noexcept;
 
     float getValue() const noexcept { return currentValue; }
 
     /** Value of the current shape at an arbitrary phase, for drawing the editor.
         Message thread; does not touch the running phase. */
-    float evaluateShapeAt (float phase01) const noexcept;
+    float evaluateShapeAt(float phase01) const noexcept;
 
 private:
     struct Shape
     {
-        std::array<LfoPoint, kMaxLfoPoints> points {};
-        int                                 numPoints { 0 };
+        std::array<LfoPoint, kMaxLfoPoints> points{};
+        int numPoints{0};
     };
 
-    float evaluate (const Shape& shape, float phase01) const noexcept;
+    float evaluate(const Shape& shape, float phase01) const noexcept;
 
-    std::array<Shape, 2> shapes {};
-    std::atomic<int>     activeShape { 0 };
+    std::array<Shape, 2> shapes{};
+    std::atomic<int> activeShape{0};
 
-    XLfoParams      params {};
+    XLfoParams params{};
     ControlSmoother smoother;
-    double          sr { 44100.0 };
-    double          phase { 0.0 };      ///< 0 .. 1, before the phase offset
-    double          lastPpq { 0.0 };    ///< last ppq the host reported, for sync
-    bool            havePpq { false };
-    float           currentValue { 0.0f };
+    double sr{44100.0};
+    double phase{0.0};   ///< 0 .. 1, before the phase offset
+    double lastPpq{0.0}; ///< last ppq the host reported, for sync
+    bool havePpq{false};
+    float currentValue{0.0f};
 };
 
 // ============================================================================
 enum class EgTriggerMode : int
 {
-    Transient = 0,   ///< fires when the detector crosses the threshold
-    MidiNote,        ///< fires on MIDI note-on, releases when the last note lifts
+    Transient = 0, ///< fires when the detector crosses the threshold
+    MidiNote,      ///< fires on MIDI note-on, releases when the last note lifts
     Count
 };
 
 struct EnvelopeGeneratorParams
 {
-    float         attackMs { 5.0f };
-    float         decayMs { 120.0f };
-    float         sustain { 0.7f };        ///< 0 .. 1
-    float         releaseMs { 200.0f };
-    float         threshold { 0.2f };      ///< 0 .. 1 detector level (Transient mode)
-    int           detectorBand { -1 };     ///< band to watch, -1 = full range
-    EgTriggerMode trigger { EgTriggerMode::Transient };
+    float attackMs{5.0f};
+    float decayMs{120.0f};
+    float sustain{0.7f}; ///< 0 .. 1
+    float releaseMs{200.0f};
+    float threshold{0.2f}; ///< 0 .. 1 detector level (Transient mode)
+    int detectorBand{-1};  ///< band to watch, -1 = full range
+    EgTriggerMode trigger{EgTriggerMode::Transient};
 };
 
 /**
@@ -229,9 +225,9 @@ class EnvelopeGenerator
 public:
     static constexpr bool kBipolar = false;
 
-    void prepare (double sampleRate) noexcept;
+    void prepare(double sampleRate) noexcept;
     void reset() noexcept;
-    void setParameters (const EnvelopeGeneratorParams& newParams) noexcept;
+    void setParameters(const EnvelopeGeneratorParams& newParams) noexcept;
 
     /** MIDI gate. Audio thread, realtime-safe. Note counting is done here so a
         legato chord releases only when the LAST note lifts. */
@@ -241,7 +237,7 @@ public:
 
     /** Advance and return the new level in [0, 1]. `detectorValue` is the
         (already band-selected) 0..1 detector the engine measured this block. */
-    float tick (int numSamples, float detectorValue) noexcept;
+    float tick(int numSamples, float detectorValue) noexcept;
 
     float getValue() const noexcept { return level; }
 
@@ -249,26 +245,33 @@ public:
     int getDetectorBand() const noexcept { return params.detectorBand; }
 
 private:
-    enum class Stage : int { Idle = 0, Attack, Decay, Sustain, Release };
+    enum class Stage : int
+    {
+        Idle = 0,
+        Attack,
+        Decay,
+        Sustain,
+        Release
+    };
 
-    EnvelopeGeneratorParams params {};
-    double sr { 44100.0 };
-    Stage  stage { Stage::Idle };
-    float  level { 0.0f };
-    int    heldNotes { 0 };
-    bool   retriggerPending { false };
-    bool   gate { false };
-    bool   armed { true };
+    EnvelopeGeneratorParams params{};
+    double sr{44100.0};
+    Stage stage{Stage::Idle};
+    float level{0.0f};
+    int heldNotes{0};
+    bool retriggerPending{false};
+    bool gate{false};
+    bool armed{true};
 };
 
 // ============================================================================
 struct EnvelopeFollowerParams
 {
-    float attackMs { 10.0f };
-    float releaseMs { 200.0f };
-    int   band { -1 };            ///< band to follow, -1 = full range
-    float gainDb { 0.0f };        ///< detector make-up before the dB mapping
-    float floorDb { -60.0f };     ///< detector level that maps to 0
+    float attackMs{10.0f};
+    float releaseMs{200.0f};
+    int band{-1};          ///< band to follow, -1 = full range
+    float gainDb{0.0f};    ///< detector make-up before the dB mapping
+    float floorDb{-60.0f}; ///< detector level that maps to 0
 };
 
 /**
@@ -287,21 +290,21 @@ class EnvelopeFollower
 public:
     static constexpr bool kBipolar = false;
 
-    void prepare (double sampleRate) noexcept;
+    void prepare(double sampleRate) noexcept;
     void reset() noexcept;
-    void setParameters (const EnvelopeFollowerParams& newParams) noexcept;
+    void setParameters(const EnvelopeFollowerParams& newParams) noexcept;
 
     /** `perBandRms` may be null / `numBands` may be 0; the follower then decays
         towards silence instead of misbehaving. */
-    float tick (int numSamples, const float* perBandRms, int numBands) noexcept;
+    float tick(int numSamples, const float* perBandRms, int numBands) noexcept;
 
     float getValue() const noexcept { return level; }
-    int   getBand() const noexcept { return params.band; }
+    int getBand() const noexcept { return params.band; }
 
 private:
-    EnvelopeFollowerParams params {};
-    double sr { 44100.0 };
-    float  level { 0.0f };
+    EnvelopeFollowerParams params{};
+    double sr{44100.0};
+    float level{0.0f};
 };
 
 // ============================================================================
@@ -309,14 +312,20 @@ private:
     itself always keeps both smoothed values (`getX`/`getY`) for the GUI and for
     direct use by the processor; the flat source index defined in EmberTypes.h
     is one value, so it emits the axis selected here. */
-enum class XyAxis : int { X = 0, Y, Radius, Count };
+enum class XyAxis : int
+{
+    X = 0,
+    Y,
+    Radius,
+    Count
+};
 
 struct XyControllerParams
 {
-    float  x { 0.5f };             ///< 0 .. 1 pad position
-    float  y { 0.5f };             ///< 0 .. 1 pad position
-    float  smoothingMs { 30.0f };  ///< both axes, 0 .. 500 ms
-    XyAxis axis { XyAxis::X };     ///< which value the mod source emits
+    float x{0.5f};            ///< 0 .. 1 pad position
+    float y{0.5f};            ///< 0 .. 1 pad position
+    float smoothingMs{30.0f}; ///< both axes, 0 .. 500 ms
+    XyAxis axis{XyAxis::X};   ///< which value the mod source emits
 };
 
 /** XY pad source, unipolar [0, 1] on both axes. */
@@ -325,30 +334,30 @@ class XyController
 public:
     static constexpr bool kBipolar = false;
 
-    void prepare (double sampleRate) noexcept;
+    void prepare(double sampleRate) noexcept;
     void reset() noexcept;
-    void setParameters (const XyControllerParams& newParams) noexcept;
+    void setParameters(const XyControllerParams& newParams) noexcept;
 
     /** Advance both axes; returns the value of the selected axis. */
-    float tick (int numSamples) noexcept;
+    float tick(int numSamples) noexcept;
 
     float getX() const noexcept { return smoothedX.getValue(); }
     float getY() const noexcept { return smoothedY.getValue(); }
     float getValue() const noexcept { return currentValue; }
 
 private:
-    XyControllerParams params {};
-    ControlSmoother    smoothedX, smoothedY;
-    float              currentValue { 0.0f };
+    XyControllerParams params{};
+    ControlSmoother smoothedX, smoothedY;
+    float currentValue{0.0f};
 };
 
 // ============================================================================
 enum class MidiSourceKind : int
 {
-    Velocity = 0,     ///< velocity of the most recent note-on
-    ControlChange,    ///< an arbitrary CC number
-    ModWheel,         ///< CC 1, broken out because everyone wants it
-    NoteNumber,       ///< note number of the most recent note-on, /127
+    Velocity = 0,  ///< velocity of the most recent note-on
+    ControlChange, ///< an arbitrary CC number
+    ModWheel,      ///< CC 1, broken out because everyone wants it
+    NoteNumber,    ///< note number of the most recent note-on, /127
     Count
 };
 
@@ -356,25 +365,25 @@ enum class MidiSourceKind : int
     the buffer is parsed exactly once per block. All values are 0..1. */
 struct MidiState
 {
-    float                     velocity { 0.0f };
-    float                     noteNumber { 0.0f };
-    std::array<float, 128>    cc {};
-    int                       heldNotes { 0 };
+    float velocity{0.0f};
+    float noteNumber{0.0f};
+    std::array<float, 128> cc{};
+    int heldNotes{0};
 
     void reset() noexcept
     {
-        velocity   = 0.0f;
+        velocity = 0.0f;
         noteNumber = 0.0f;
-        heldNotes  = 0;
-        cc.fill (0.0f);
+        heldNotes = 0;
+        cc.fill(0.0f);
     }
 };
 
 struct MidiSourceParams
 {
-    MidiSourceKind kind { MidiSourceKind::Velocity };
-    int            ccNumber { 1 };        ///< 0 .. 127, used by ControlChange
-    float          smoothingMs { 20.0f }; ///< 0 .. 500 ms
+    MidiSourceKind kind{MidiSourceKind::Velocity};
+    int ccNumber{1};          ///< 0 .. 127, used by ControlChange
+    float smoothingMs{20.0f}; ///< 0 .. 500 ms
 };
 
 /** MIDI-derived source, unipolar [0, 1]. */
@@ -383,23 +392,23 @@ class MidiSource
 public:
     static constexpr bool kBipolar = false;
 
-    void prepare (double sampleRate) noexcept;
+    void prepare(double sampleRate) noexcept;
     void reset() noexcept;
-    void setParameters (const MidiSourceParams& newParams) noexcept;
+    void setParameters(const MidiSourceParams& newParams) noexcept;
 
-    float tick (int numSamples, const MidiState& state) noexcept;
+    float tick(int numSamples, const MidiState& state) noexcept;
     float getValue() const noexcept { return smoother.getValue(); }
 
 private:
-    MidiSourceParams params {};
-    ControlSmoother  smoother;
+    MidiSourceParams params{};
+    ControlSmoother smoother;
 };
 
 // ============================================================================
 struct MacroParams
 {
-    float value { 0.0f };          ///< 0 .. 1
-    float smoothingMs { 20.0f };   ///< 0 .. 500 ms
+    float value{0.0f};        ///< 0 .. 1
+    float smoothingMs{20.0f}; ///< 0 .. 500 ms
 };
 
 /** Macro knob, unipolar [0, 1]: a smoothed pass-through of its parameter, so a
@@ -409,15 +418,15 @@ class MacroSource
 public:
     static constexpr bool kBipolar = false;
 
-    void prepare (double sampleRate) noexcept;
+    void prepare(double sampleRate) noexcept;
     void reset() noexcept;
-    void setParameters (const MacroParams& newParams) noexcept;
+    void setParameters(const MacroParams& newParams) noexcept;
 
-    float tick (int numSamples) noexcept;
+    float tick(int numSamples) noexcept;
     float getValue() const noexcept { return smoother.getValue(); }
 
 private:
-    MacroParams     params {};
+    MacroParams params{};
     ControlSmoother smoother;
 };
 } // namespace ember
