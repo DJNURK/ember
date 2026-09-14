@@ -185,8 +185,13 @@ private:
 
     // Model state.
     juce::StringArray categoryNames;                     // "All" first, then the manager's own
+    juce::Array<int> categoryCounts;                     // parallel to categoryNames; built in rebuildCategories()
     juce::Array<PresetManager::PresetInfo> shownPresets; // what the preset list is showing
     int hoveredPresetRow{-1}, hoveredCategoryRow{-1};
+
+    // Last annotation handed to the title, so a keystroke that does not change
+    // the count does not repaint the header (and the panel behind it).
+    juce::String shownCountText;
 
     PromptMode promptMode{PromptMode::none};
     PresetManager::PresetInfo promptTarget; // captured when the prompt opens
@@ -299,6 +304,7 @@ private:
     PresetManager& manager;
 
     std::function<void()> previousListChanged, previousPresetLoaded;
+    bool callbacksInstalled{false};
 
     ChevronButton previousButton{false}, nextButton{true};
     NameDisplay nameDisplay;

@@ -32,9 +32,12 @@ First public release of Ember, a multiband analog saturation and distortion plug
 - 19 saturation styles: Clean Tube, Warm Tube, Subtle Tube, Broken Tube, Clean Tape,
   Warm Tape, Bright Tape, Transformer, Clean Amp, Crunch, Lead, Smudge, Rectify, Foldback,
   Hard Clip, Decimate, Bitcrush, Shimmer and Breathe.
-- Per-style gain matching measured at `prepare()` by running a deterministic pink-noise
-  burst through each shaper at 1 dB drive steps, so switching styles or raising drive does
-  not jump the level. The table is computed once per sample rate and shared across bands.
+- Per-style gain matching measured at `prepare()` by running a deterministic flat-noise
+  burst at −18 dBFS through each shaper at 1 dB drive steps, so switching styles or raising
+  drive does not jump the level. The reference is flat rather than pink because several
+  styles roll off above a few kHz, where pink noise carries almost no energy. The table is
+  computed once per sample rate and shared across bands; the residual after compensation is
+  0.09 dB worst case across all 19 styles.
 - First-order antiderivative anti-aliasing on the hard-edged shapers (hard clip, wavefolder,
   rectifiers), with an ill-conditioned-difference guard that falls back to direct evaluation
   when consecutive samples are too close.
@@ -115,3 +118,22 @@ First public release of Ember, a multiband analog saturation and distortion plug
 
 - Released under the GNU General Public License v3, because Ember links JUCE 8 under its
   GPLv3 terms. See `LICENSE`.
+
+### Measured at release
+
+All figures from the host machine (Apple M2, macOS, Apple clang 21, JUCE 8.0.15):
+
+- Crossover band sum is magnitude-flat to better than **0.01 dB** for every band count from
+  1 to 6; the linear-phase sum nulls against the delayed input at **−150.9 dB**.
+- Per-style gain match at 0 dB drive: **0.09 dB** worst case across 19 styles.
+- Aliasing, 10 kHz at 44.1 kHz through Hard Clip at 16× oversampling: **−91.2 dB** relative
+  to the fundamental. Foldback −84 dB, Rectify −92 dB, Smudge −95 dB.
+- Feedback loop bounded and finite through 60 s of full-scale noise at every combination of
+  amount and frequency, and through 20 s of the worst full-chain settings.
+- CPU, full plugin with six modulation routings: **6.6 %** of one core at 6 bands / 4× /
+  48 kHz, **3.2 %** at 3 bands. The specification's 3 % target is met at three bands and
+  missed at six; see `docs/STATUS.md` for what was tried and what closing it would take.
+- 35 unit tests and 41,281 assertions pass, and pass again under
+  `-fsanitize=address,undefined`.
+- `pluginval --strictness-level 10` passes on VST3 and Audio Unit, including the editor,
+  editor automation and parameter thread-safety groups. `auval` is clean.

@@ -251,6 +251,13 @@ PresetBrowser::~PresetBrowser()
     restoreManagerCallbacks();
 
     searchField.removeKeyListener(this);
+
+    // Symmetry with the constructor: the lists hold a raw pointer to this as a
+    // mouse listener, so it is taken out explicitly rather than relying on the
+    // member destruction order to make it unreachable.
+    categoryList.removeMouseListener(this);
+    presetList.removeMouseListener(this);
+
     categoryList.setModel(nullptr);
     presetList.setModel(nullptr);
 }
@@ -263,6 +270,11 @@ void PresetBrowser::detachFromManager()
 //==============================================================================
 void PresetBrowser::installManagerCallbacks()
 {
+    // Installing twice would capture our own chained lambda as "what was there
+    // before" and recurse forever the next time the manager fires.
+    if (callbacksInstalled)
+        return;
+
     const juce::Component::SafePointer<PresetBrowser> safeThis(this);
 
     previousListChanged = manager.onPresetListChanged;
