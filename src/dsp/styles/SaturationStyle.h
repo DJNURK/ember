@@ -23,6 +23,10 @@ struct StyleParams
 
     Contract every implementation must honour:
 
+    - The input has NOT had drive applied. The style applies drive itself,
+      because each style maps drive to character differently (bias depth, fold
+      count, bit depth, filter movement) and a single pre-gain cannot express
+      that. `StyleParams::driveLin` is the smoothed linear gain to use.
     - `process` is called on the AUDIO THREAD. No allocation, no locks, no
       logging, no exceptions, no `juce::String`, no virtual dispatch per sample.
     - All state is allocated in `prepare` and sized for `maxBlockSize` samples
