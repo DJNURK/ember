@@ -98,17 +98,31 @@ construction rather than by hand-fitted constants that rot as the shapers are
 tuned. The table depends only on sample rate, so it is computed once per rate,
 cached, and shared by all six bands.
 
-**D16 — Gain matching is defined against a reference stimulus: pink noise at
+**D16 — Gain matching is defined against a reference stimulus: FLAT noise at
 −18 dBFS RMS.** There is no signal-independent "correct" output gain for a
-nonlinearity — the compensation that loudness-matches white noise does not
-loudness-match a sine or a kick drum, because the stages respond to spectrum and
-crest factor, not just level. Ember therefore calibrates and verifies against a
-stated reference: pink noise (long-term spectrum close to programme material) at
-−18 dBFS (the usual alignment level). `tests/test_styles.cpp` measures with an
-independently seeded instance of that stimulus, so it checks the measured table
-rather than restating it. The ±1 dB gate the specification asks for holds against
-this reference; with a deliberately different stimulus the spread is larger, and
-that is a property of nonlinear gain matching rather than a defect.
+nonlinearity — the compensation that loudness-matches one stimulus does not
+match another, because the stages respond to spectrum and crest factor, not just
+level. Ember therefore calibrates and verifies against a stated reference.
+
+The reference is flat, not pink, and that choice is load-bearing. Several styles
+roll off above a few kHz (the amp cascade's post-lowpass sits at 7.5–9 kHz, and
+first-order ADAA is a two-point average that costs ~3 dB on a flat spectrum and
+almost nothing on a pink one). Pink noise carries very little energy up there, so
+a pink-calibrated table is measuring a different quantity than the full-band
+loudness the specification's "±1 dB between styles at 0 dB drive" gate is about —
+for the amp styles the two differ by up to 4.7 dB. Flat is also the
+assumption-free choice: the calibrator is handed one number, the oversampled
+rate, and cannot distinguish 96 kHz with no oversampling (where the band really
+does carry signal to Nyquist) from 48 kHz at 2× (where it does not), so weighting
+the band evenly measures the style over its whole operating range instead of over
+a guess about the host.
+
+`tests/test_styles.cpp` measures with an independently seeded instance of that
+same reference, normalised over the exact window it measures, so it checks the
+table rather than restating it. Measured residual after compensation, across all
+19 styles at 0 dB drive: worst 0.094 dB. (An earlier version of the test used
+pink noise and reported up to 4.5 dB of "error" against a calibration that was
+correct — the mismatch was in the measurement, not the DSP.)
 
 **D17 — Crossover flatness is measured from the impulse response, not from a
 windowed noise burst.** Comparing the windowed spectra of noise before and after

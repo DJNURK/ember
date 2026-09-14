@@ -125,9 +125,9 @@ TEST_CASE("calibrated styles are loudness matched at 0 dB drive", "[styles][gain
     // that applying it actually lands inside the window.
     const auto& cal = StyleCalibrator::getForSampleRate(kRate);
 
-    juce::AudioBuffer<float> reference(1, kBlock * 8);
-    fillPinkNoise(reference, 0xC0FFEEu, -18.0f);
-    const float inputRms = rms(reference, 0, kBlock, kBlock * 6);
+    juce::AudioBuffer<float> reference(1, kBlock * 40);
+    fillFlatNoiseAtRms(reference, 0xC0FFEEu, -18.0f, kBlock * 4, kBlock * 34);
+    const float inputRms = rms(reference, 0, kBlock * 4, kBlock * 34);
 
     for (int i = 0; i < kNumStyles; ++i)
     {
@@ -143,7 +143,7 @@ TEST_CASE("calibrated styles are loudness matched at 0 dB drive", "[styles][gain
         style->process(buf.getArrayOfWritePointers(), 1, buf.getNumSamples(), params);
         buf.applyGain(cal.compensationGain(id, 0.0f));
 
-        const float outRms = rms(buf, 0, kBlock, kBlock * 6);
+        const float outRms = rms(buf, 0, kBlock * 4, kBlock * 34);
         const float deviationDb = juce::Decibels::gainToDecibels(outRms / juce::jmax(1.0e-9f, inputRms));
 
         INFO(getStyleName(id) << " deviation " << deviationDb << " dB");
@@ -158,9 +158,9 @@ TEST_CASE("gain matching holds across the drive range", "[styles][gainmatch]")
     // that sweeping drive does not blow up the mix.
     const auto& cal = StyleCalibrator::getForSampleRate(kRate);
 
-    juce::AudioBuffer<float> reference(1, kBlock * 8);
-    fillPinkNoise(reference, 0xFEEDu, -18.0f);
-    const float inputRms = rms(reference, 0, kBlock, kBlock * 6);
+    juce::AudioBuffer<float> reference(1, kBlock * 40);
+    fillFlatNoiseAtRms(reference, 0xFEEDu, -18.0f, kBlock * 4, kBlock * 34);
+    const float inputRms = rms(reference, 0, kBlock * 4, kBlock * 34);
 
     for (int i = 0; i < kNumStyles; ++i)
     {
@@ -178,11 +178,47 @@ TEST_CASE("gain matching holds across the drive range", "[styles][gainmatch]")
             style->process(buf.getArrayOfWritePointers(), 1, buf.getNumSamples(), params);
             buf.applyGain(cal.compensationGain(id, driveDb));
 
-            const float outRms = rms(buf, 0, kBlock, kBlock * 6);
+            const float outRms = rms(buf, 0, kBlock * 4, kBlock * 34);
             const float deviationDb = juce::Decibels::gainToDecibels(outRms / juce::jmax(1.0e-9f, inputRms));
 
             INFO(getStyleName(id) << " at " << driveDb << " dB drive: " << deviationDb << " dB");
             REQUIRE(std::abs(deviationDb) <= 3.0f);
         }
+    }
+}
+
+TEST_CASE("report the calibration table", "[.][gainmatch][diag]")
+{
+    // Hidden by default (the leading "." tag). Run explicitly with
+    //   ember_tests "[diag]"
+    // to see, per style, what the calibrator measured and what remains after
+    // applying it to an independently seeded reference signal. This is the
+    // first thing to look at when a gain-match assertion moves.
+    const auto& cal = StyleCalibrator::getForSampleRate(kRate);
+
+    juce::AudioBuffer<float> reference(1, kBlock * 40);
+    fillFlatNoiseAtRms(reference, 0xC0FFEEu, -18.0f, kBlock * 4, kBlock * 34);
+    const float inputRms = rms(reference, 0, kBlock * 4, kBlock * 34);
+
+    WARN("style           calDb      rawDb   residual");
+    for (int i = 0; i < kNumStyles; ++i)
+    {
+        const auto id = static_cast<StyleID>(i);
+        auto style = createSaturationStyle(id);
+        style->prepare(kRate, reference.getNumSamples(), 1);
+        style->reset();
+
+        juce::AudioBuffer<float> buf(1, reference.getNumSamples());
+        buf.makeCopyOf(reference);
+        style->process(buf.getArrayOfWritePointers(), 1, buf.getNumSamples(), makeParams(kRate, 0.0f));
+
+        const float outRms = rms(buf, 0, kBlock * 4, kBlock * 34);
+        const float rawDb = juce::Decibels::gainToDecibels(outRms / juce::jmax(1.0e-9f, inputRms));
+        const float calDb = cal.compensationDb(id, 0.0f);
+
+        WARN(juce::String(getStyleName(id)).paddedRight(' ', 14)
+             << juce::String(calDb, 3).paddedLeft(' ', 9)
+             << juce::String(rawDb, 3).paddedLeft(' ', 11)
+             << juce::String(rawDb + calDb, 3).paddedLeft(' ', 11));
     }
 }

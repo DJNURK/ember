@@ -109,9 +109,10 @@ void ShimmerStyle::process(float* const* channelData, int numChannels, int numSa
     const float amount = fxdetail::clampAmount(params.amount01);
     const float drive  = fxdetail::clampDrive(params.driveLin);
 
-    // Drive's two jobs: how much ring product is blended back, and how hard the
-    // carrier itself is shaped. `edgeNorm` renormalises the shaped carrier so it
-    // still peaks at exactly 1 — the output bound depends on that.
+    // Two of drive's three jobs: how much ring product is blended back, and how
+    // hard the carrier itself is shaped. (The third — how far the envelope may
+    // lift the carrier — is `spanHz` below.) `edgeNorm` renormalises the shaped
+    // carrier so it still peaks at exactly 1 — the output bound depends on that.
     const float depth    = kShimmerDepthMin + (kShimmerDepthMax - kShimmerDepthMin) * amount;
     const float edge     = kShimmerEdgeMin + kShimmerEdgeRange * amount;
     const float edgeNorm = 1.0f / juce::jmax(1.0e-3f, dsputil::fastTanh(edge));
@@ -120,6 +121,8 @@ void ShimmerStyle::process(float* const* channelData, int numChannels, int numSa
     const float tiltCoeff = fxdetail::onePoleCoeff(kShimmerSplitHz, sampleRate);
     const float invSr     = 1.0f / static_cast<float>(sampleRate);
     const float maxHz     = juce::jmax(kShimmerMinHz, static_cast<float>(sampleRate) * 0.45f);
+    // Drive's third job: at 0 dB the envelope may only lift the carrier over a
+    // third of `kShimmerSpanHz`, at 40 dB over all of it.
     const float spanHz    = kShimmerSpanHz * (0.35f + 0.65f * amount);
 
     for (int ch = 0; ch < chans; ++ch)

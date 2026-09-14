@@ -24,6 +24,52 @@ inline void fillWhiteNoise(juce::AudioBuffer<float>& buf, uint32_t seed = 0x1234
     }
 }
 
+/** Deterministic flat noise, DC-removed and normalised to a target RMS in dBFS.
+
+    This is the stimulus the gain-match tests measure against, and it matches
+    what StyleCalibrator itself uses. The reference has to be FLAT rather than
+    pink: several styles roll off above a few kHz, so a pink stimulus — which
+    has almost no energy up there — measures a different gain than the full-band
+    noise the specification's "+/-1 dB between styles" gate is about. Flat is
+    also the assumption-free choice, since the calibrator is handed only the
+    oversampled rate and cannot know how much of the band the host will excite.
+
+    The level is normalised over the same window the caller measures, so the
+    operating point of the nonlinearity is exact rather than approximate. */
+inline void fillFlatNoiseAtRms(juce::AudioBuffer<float>& buf, uint32_t seed, float targetRmsDb,
+                               int windowStart, int windowLength)
+{
+    for (int ch = 0; ch < buf.getNumChannels(); ++ch)
+    {
+        uint32_t s = seed + static_cast<uint32_t>(ch) * 2654435761u;
+        auto* d = buf.getWritePointer(ch);
+        for (int i = 0; i < buf.getNumSamples(); ++i)
+        {
+            s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+            d[i] = static_cast<float>(static_cast<int32_t>(s)) / 2147483648.0f;
+        }
+
+        // Strip the residual DC of a finite burst: asymmetric and rectifying
+        // styles would otherwise be measured against an offset no real signal
+        // has. Then scale so the MEASURED window sits exactly at the target.
+        double mean = 0.0;
+        for (int i = 0; i < buf.getNumSamples(); ++i) mean += d[i];
+        mean /= juce::jmax(1, buf.getNumSamples());
+        for (int i = 0; i < buf.getNumSamples(); ++i) d[i] -= static_cast<float>(mean);
+
+        double sumSq = 0.0;
+        for (int i = 0; i < windowLength; ++i)
+        {
+            const float v = d[windowStart + i];
+            sumSq += static_cast<double>(v) * v;
+        }
+        const double r = std::sqrt(sumSq / juce::jmax(1, windowLength));
+        const float scale = r > 1.0e-12 ? static_cast<float>(juce::Decibels::decibelsToGain(targetRmsDb) / r)
+                                        : 1.0f;
+        for (int i = 0; i < buf.getNumSamples(); ++i) d[i] *= scale;
+    }
+}
+
 /** Deterministic pink-ish noise normalised to a target RMS in dBFS.
 
     Gain matching a nonlinearity is inherently signal-dependent — there is no

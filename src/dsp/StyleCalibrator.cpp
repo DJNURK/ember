@@ -25,14 +25,20 @@ constexpr std::uint32_t kNoiseSeed = 0xE3B12F5u;
 /** Samples discarded before the measurement window opens, so that envelope
     followers, magnetisation memories and filter states have settled and are not
     measured mid-transient. ~10 ms at 96 kHz. */
-constexpr int kWarmupSamples = 1024;
+constexpr int kWarmupSamples = 4096;
 
 /** Measurement window. 6144 samples is 64 ms at 96 kHz. Long enough that the
     estimate no longer depends much on which stretch of noise it saw — halving
     it to 4096 doubles the spread of the gain match across independent test
     signals, from 0.29 dB to 0.66 dB — and short enough that the whole 19 x 41
     table still builds in well under a tenth of a second. */
-constexpr int kMeasureSamples = 6144;
+// Pink noise puts most of its energy at low frequencies, so a short window has
+// not heard enough cycles of the components that actually drive a saturator and
+// two realisations of the same stimulus can differ by around a decibel through
+// the same style. 32768 samples is where the measurement stops moving: it makes
+// the table a property of the style rather than of one noise burst, which is
+// what lets tests/test_styles.cpp verify it with an independently seeded signal.
+constexpr int kMeasureSamples = 32768;
 
 constexpr int kStimulusSamples = kWarmupSamples + kMeasureSamples;
 

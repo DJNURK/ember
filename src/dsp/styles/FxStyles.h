@@ -115,9 +115,11 @@ inline float fastSineTurns(float phase01) noexcept
       sparkle region as the band gets louder, so the artefact moves with the
       performance instead of sitting on top of it as a static whistle.
 
-    Drive does the two jobs the spec gives it: it sets the blend `depth`, and it
-    sets the carrier's character, waveshaping the sine progressively closer to a
-    square (more sidebands, harder sparkle) as it is pushed.
+    Drive is the only control the spec gives it, and it does three things: it
+    sets the blend `depth`, it sets how far the envelope is allowed to lift the
+    carrier (35% of the span at 0 dB drive, all of it at 40 dB), and it sets the
+    carrier's character, waveshaping the sine progressively closer to a square
+    (more sidebands, harder sparkle) as it is pushed.
 
     The phase accumulator lives in per-channel member state and is wrapped, not
     recomputed from a block-relative index, so the carrier is continuous across
