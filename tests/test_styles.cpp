@@ -8,7 +8,7 @@ using namespace embertest;
 
 namespace
 {
-constexpr double kRate = 96000.0;   // a representative oversampled rate
+constexpr double kRate = 96000.0; // a representative oversampled rate
 constexpr int kBlock = 1024;
 
 StyleParams makeParams(double rate, float driveDb)
@@ -44,7 +44,7 @@ TEST_CASE("styles stay bounded and finite at every drive", "[styles][safety]")
         style->prepare(kRate, kBlock, 2);
         style->reset();
 
-        for (float driveDb : { 0.0f, 12.0f, 24.0f, 40.0f })
+        for (float driveDb : {0.0f, 12.0f, 24.0f, 40.0f})
         {
             juce::AudioBuffer<float> buf(2, kBlock);
             // Deliberately hot input: hosts do send signals above 0 dBFS.
@@ -80,7 +80,7 @@ TEST_CASE("styles survive degenerate block sizes and mono", "[styles][safety]")
 
         juce::AudioBuffer<float> zero(2, 1);
         zero.clear();
-        style->process(zero.getArrayOfWritePointers(), 2, 0, params);   // zero-length block
+        style->process(zero.getArrayOfWritePointers(), 2, 0, params); // zero-length block
         REQUIRE(allFinite(zero));
 
         juce::AudioBuffer<float> mono(1, 256);
@@ -100,8 +100,8 @@ TEST_CASE("silence in gives silence out", "[styles][safety]")
         // Decimate and Bitcrush quantise around zero and Shimmer carries an
         // internal oscillator, so they are allowed a small noise floor rather
         // than mathematical silence; everything else must be exactly quiet.
-        const bool allowFloor = (id == StyleID::Decimate || id == StyleID::Bitcrush
-                                 || id == StyleID::Shimmer || id == StyleID::Breathe);
+        const bool allowFloor =
+            (id == StyleID::Decimate || id == StyleID::Bitcrush || id == StyleID::Shimmer || id == StyleID::Breathe);
 
         auto style = createSaturationStyle(id);
         style->prepare(kRate, kBlock, 2);
@@ -165,7 +165,7 @@ TEST_CASE("gain matching holds across the drive range", "[styles][gainmatch]")
     for (int i = 0; i < kNumStyles; ++i)
     {
         const auto id = static_cast<StyleID>(i);
-        for (float driveDb : { 6.0f, 18.0f, 30.0f, 40.0f })
+        for (float driveDb : {6.0f, 18.0f, 30.0f, 40.0f})
         {
             auto style = createSaturationStyle(id);
             style->prepare(kRate, reference.getNumSamples(), 1);
@@ -217,8 +217,7 @@ TEST_CASE("report the calibration table", "[.][gainmatch][diag]")
         const float calDb = cal.compensationDb(id, 0.0f);
 
         WARN(juce::String(getStyleName(id)).paddedRight(' ', 14)
-             << juce::String(calDb, 3).paddedLeft(' ', 9)
-             << juce::String(rawDb, 3).paddedLeft(' ', 11)
+             << juce::String(calDb, 3).paddedLeft(' ', 9) << juce::String(rawDb, 3).paddedLeft(' ', 11)
              << juce::String(rawDb + calDb, 3).paddedLeft(' ', 11));
     }
 }

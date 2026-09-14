@@ -39,15 +39,18 @@ float measureAliasFloorDb(const juce::AudioBuffer<float>& output)
 
     auto isExcluded = [](int bin)
     {
-        if (bin <= 2) return true;                                   // DC and the first bins
-        if (std::abs(bin - kFundamentalBin) <= 2) return true;        // fundamental
-        if (std::abs(bin - 2 * kFundamentalBin) <= 2) return true;    // 2nd harmonic, if any
+        if (bin <= 2)
+            return true; // DC and the first bins
+        if (std::abs(bin - kFundamentalBin) <= 2)
+            return true; // fundamental
+        if (std::abs(bin - 2 * kFundamentalBin) <= 2)
+            return true; // 2nd harmonic, if any
         return false;
     };
 
     float worst = -300.0f;
     for (int bin = 0; bin < static_cast<int>(spec.size()); ++bin)
-        if (! isExcluded(bin))
+        if (!isExcluded(bin))
             worst = juce::jmax(worst, spec[static_cast<size_t>(bin)]);
 
     return worst - fundamentalDb;
@@ -92,8 +95,8 @@ TEST_CASE("oversampling monotonically reduces aliasing", "[aliasing]")
     // Catches an oversampler that is silently doing nothing, and documents what
     // each factor actually buys.
     const float off = runAndMeasure(OversamplingFactor::Off, StyleID::HardClip, 24.0f);
-    const float x2  = runAndMeasure(OversamplingFactor::x2,  StyleID::HardClip, 24.0f);
-    const float x4  = runAndMeasure(OversamplingFactor::x4,  StyleID::HardClip, 24.0f);
+    const float x2 = runAndMeasure(OversamplingFactor::x2, StyleID::HardClip, 24.0f);
+    const float x4 = runAndMeasure(OversamplingFactor::x4, StyleID::HardClip, 24.0f);
     const float x16 = runAndMeasure(OversamplingFactor::x16, StyleID::HardClip, 24.0f);
 
     INFO("alias floor: off=" << off << "  2x=" << x2 << "  4x=" << x4 << "  16x=" << x16 << " dB");
@@ -104,7 +107,7 @@ TEST_CASE("oversampling monotonically reduces aliasing", "[aliasing]")
 
 TEST_CASE("the other hard-edged styles are also anti-aliased", "[aliasing]")
 {
-    for (auto style : { StyleID::Foldback, StyleID::Rectify, StyleID::Smudge })
+    for (auto style : {StyleID::Foldback, StyleID::Rectify, StyleID::Smudge})
     {
         const float aliasDb = runAndMeasure(OversamplingFactor::x16, style, 24.0f);
         INFO(getStyleName(style) << " alias floor: " << aliasDb << " dB");

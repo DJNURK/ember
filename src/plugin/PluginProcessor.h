@@ -21,8 +21,7 @@ namespace ember
         the modulation engine hands the new graph to the audio thread without
         blocking it.
 */
-class EmberAudioProcessor : public juce::AudioProcessor,
-                            private juce::AudioProcessorValueTreeState::Listener
+class EmberAudioProcessor : public juce::AudioProcessor, private juce::AudioProcessorValueTreeState::Listener
 {
 public:
     EmberAudioProcessor();
@@ -110,7 +109,7 @@ private:
     void restoreFullState(const juce::ValueTree& tree);
 
     juce::AudioProcessorValueTreeState apvts;
-    juce::UndoManager undoManager { 30000, 100 };
+    juce::UndoManager undoManager{30000, 100};
     EmberEngine engine;
     ModulationEngine modulation;
     std::unique_ptr<PresetManager> presetManager;
@@ -125,22 +124,22 @@ private:
     GlobalParams globalParams;
 
     // MIDI learn: parameter index -> CC number, -1 for unmapped.
-    std::array<std::atomic<int>, 512> midiCCForParam {};
-    std::atomic<bool> midiLearnActive { false };
+    std::array<std::atomic<int>, 512> midiCCForParam{};
+    std::atomic<bool> midiLearnActive{false};
     juce::String midiLearnParameterID;
     juce::CriticalSection midiLearnLock;
 
     juce::ValueTree slotA, slotB;
-    int activeSlot { 0 };
+    int activeSlot{0};
 
-    std::atomic<int> selectedBand { 0 };
-    std::atomic<int> editorWidth { 1100 }, editorHeight { 640 };
+    std::atomic<int> selectedBand{0};
+    std::atomic<int> editorWidth{1100}, editorHeight{640};
 
-    int controlCounter { 0 };
-    std::array<float, kMaxBands> bandRms {};
+    int controlCounter{0};
+    std::array<float, kMaxBands> bandRms{};
 
-    double lastSampleRate { 44100.0 };
-    int lastBlockSize { 512 };
+    double lastSampleRate{44100.0};
+    int lastBlockSize{512};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EmberAudioProcessor)
 };

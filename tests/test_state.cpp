@@ -32,12 +32,9 @@ int buildGraph(ModulationEngine& mod, int numTargets)
 
 bool sameConnection(const ModConnection& a, const ModConnection& b)
 {
-    return a.sourceIndex == b.sourceIndex
-        && a.targetIndex == b.targetIndex
-        && std::abs(a.amount - b.amount) < 1.0e-6f
-        && a.curve == b.curve
-        && std::abs(a.smoothingMs - b.smoothingMs) < 1.0e-4f
-        && a.enabled == b.enabled;
+    return a.sourceIndex == b.sourceIndex && a.targetIndex == b.targetIndex &&
+           std::abs(a.amount - b.amount) < 1.0e-6f && a.curve == b.curve &&
+           std::abs(a.smoothingMs - b.smoothingMs) < 1.0e-4f && a.enabled == b.enabled;
 }
 } // namespace
 
@@ -68,13 +65,20 @@ TEST_CASE("parameter layout is complete and internally consistent", "[state][par
         required.add(pid::crossover(i));
     for (int b = 0; b < kMaxBands; ++b)
     {
-        required.add(pid::drive(b));      required.add(pid::bandMix(b));
-        required.add(pid::level(b));      required.add(pid::pan(b));
-        required.add(pid::width(b));      required.add(pid::style(b));
-        required.add(pid::feedback(b));   required.add(pid::feedbackFreq(b));
-        required.add(pid::dynamics(b));   required.add(pid::toneLow(b));
-        required.add(pid::toneMid(b));    required.add(pid::toneHigh(b));
-        required.add(pid::bypass(b));     required.add(pid::solo(b));
+        required.add(pid::drive(b));
+        required.add(pid::bandMix(b));
+        required.add(pid::level(b));
+        required.add(pid::pan(b));
+        required.add(pid::width(b));
+        required.add(pid::style(b));
+        required.add(pid::feedback(b));
+        required.add(pid::feedbackFreq(b));
+        required.add(pid::dynamics(b));
+        required.add(pid::toneLow(b));
+        required.add(pid::toneMid(b));
+        required.add(pid::toneHigh(b));
+        required.add(pid::bypass(b));
+        required.add(pid::solo(b));
     }
 
     // IDs must be unique: a duplicate silently shadows a control in the host.
@@ -82,7 +86,7 @@ TEST_CASE("parameter layout is complete and internally consistent", "[state][par
     for (const auto& id : required)
     {
         INFO("duplicate parameter id: " << id);
-        REQUIRE(! seen.contains(id));
+        REQUIRE(!seen.contains(id));
         seen.add(id);
     }
 

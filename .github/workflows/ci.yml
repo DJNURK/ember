@@ -122,6 +122,17 @@ jobs:
             build/${{ matrix.preset }}/_deps/catch2-subbuild
           key: fetchcontent-${{ matrix.os }}-cmake${{ steps.deps.outputs.cmake }}-juce${{ steps.deps.outputs.juce }}-catch2${{ steps.deps.outputs.catch2 }}
 
+      - name: Install Ninja (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ninja --no-progress -y
+        shell: pwsh
+
+      - name: Set up MSVC developer environment (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}
 

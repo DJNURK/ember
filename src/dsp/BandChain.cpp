@@ -21,7 +21,7 @@ void BandChain::prepare(double hostSampleRate, int maxBlockSize, int numChannels
     channels = juce::jlimit(1, 2, numChannels);
     osFactorMultiplier = oversamplingMultiplier(factor);
 
-    const int numStages = static_cast<int>(factor);   // Off=0, x2=1, x4=2, x8=3, x16=4
+    const int numStages = static_cast<int>(factor); // Off=0, x2=1, x4=2, x8=3, x16=4
 
     if (numStages > 0)
     {
@@ -29,8 +29,8 @@ void BandChain::prepare(double hostSampleRate, int maxBlockSize, int numChannels
             static_cast<size_t>(channels), static_cast<size_t>(numStages),
             linearPhaseOversampling ? juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple
                                     : juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR,
-            true,   // maximum quality
-            true);  // integer latency where possible
+            true,  // maximum quality
+            true); // integer latency where possible
         oversampler->initProcessing(static_cast<size_t>(maxBlock));
         oversampler->reset();
         latencySamples = static_cast<float>(oversampler->getLatencyInSamples());
@@ -59,7 +59,7 @@ void BandChain::prepare(double hostSampleRate, int maxBlockSize, int numChannels
     // Order matters: prepare() establishes the channel count, and
     // setMaximumDelayInSamples resizes while keeping it, so preparing second
     // would leave the line sized for zero channels.
-    dryDelay.prepare({ hostRate, static_cast<juce::uint32>(maxBlock), static_cast<juce::uint32>(channels) });
+    dryDelay.prepare({hostRate, static_cast<juce::uint32>(maxBlock), static_cast<juce::uint32>(channels)});
     dryDelay.setMaximumDelayInSamples(juce::jmax(8, static_cast<int>(std::ceil(latencySamples)) + 8));
     dryDelay.setDelay(latencySamples);
 
@@ -67,8 +67,8 @@ void BandChain::prepare(double hostSampleRate, int maxBlockSize, int numChannels
     fadeBuffer.setSize(channels, osBlock, false, false, true);
 
     const double smoothSeconds = 0.02;
-    for (auto* sv : { &smoothedDriveDb, &smoothedMix, &smoothedLevelGain,
-                      &smoothedPan, &smoothedWidth, &smoothedCompGain })
+    for (auto* sv :
+         {&smoothedDriveDb, &smoothedMix, &smoothedLevelGain, &smoothedPan, &smoothedWidth, &smoothedCompGain})
         sv->reset(hostRate, smoothSeconds);
 
     smoothedDriveDb.setCurrentAndTargetValue(params.driveDb);
@@ -129,11 +129,9 @@ void BandChain::setParameters(const BandParams& p) noexcept
     if (calibrator != nullptr)
         smoothedCompGain.setTargetValue(calibrator->compensationGain(p.style, p.driveDb));
 
-    feedback.setParameters(juce::jlimit(0.0f, 1.0f, p.feedback01),
-                           juce::jlimit(20.0f, 2000.0f, p.feedbackFreq));
+    feedback.setParameters(juce::jlimit(0.0f, 1.0f, p.feedback01), juce::jlimit(20.0f, 2000.0f, p.feedbackFreq));
     dynamics.setAmount(juce::jlimit(-1.0f, 1.0f, p.dynamics));
-    tone.setGainsDb(juce::jlimit(-12.0f, 12.0f, p.toneLowDb),
-                    juce::jlimit(-12.0f, 12.0f, p.toneMidDb),
+    tone.setGainsDb(juce::jlimit(-12.0f, 12.0f, p.toneLowDb), juce::jlimit(-12.0f, 12.0f, p.toneMidDb),
                     juce::jlimit(-12.0f, 12.0f, p.toneHighDb));
 }
 
@@ -161,7 +159,6 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
         }
     }
 
-
     // A fully bypassed band still has to come out with the same latency as its
     // neighbours, otherwise the band sum combs. The dry path above already
     // carries that delay, so bypass is just "use the dry path".
@@ -181,8 +178,7 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
     smoothedDriveDb.skip(numSamples);
 
     // ---- oversampled nonlinear section ----
-    juce::dsp::AudioBlock<float> block(buffer.getArrayOfWritePointers(),
-                                       static_cast<size_t>(numCh),
+    juce::dsp::AudioBlock<float> block(buffer.getArrayOfWritePointers(), static_cast<size_t>(numCh),
                                        static_cast<size_t>(numSamples));
 
     if (oversampler != nullptr)
@@ -192,7 +188,7 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
 
         // AudioBlock exposes channels one at a time; the style interface wants
         // an array of pointers, so gather them into a fixed-size local.
-        float* osPtrs[2] = { nullptr, nullptr };
+        float* osPtrs[2] = {nullptr, nullptr};
         for (int ch = 0; ch < numCh && ch < 2; ++ch)
             osPtrs[ch] = up.getChannelPointer(static_cast<size_t>(ch));
         float* const* ptrs = osPtrs;
@@ -239,7 +235,11 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
             auto* d = ptrs[ch];
             const float inc = (compEnd - compStart) / static_cast<float>(juce::jmax(1, n));
             float gCur = compStart;
-            for (int i = 0; i < n; ++i) { d[i] *= gCur; gCur += inc; }
+            for (int i = 0; i < n; ++i)
+            {
+                d[i] *= gCur;
+                gCur += inc;
+            }
         }
 
         oversampler->processSamplesDown(block);
@@ -257,7 +257,11 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
             auto* d = ptrs[ch];
             const float inc = (compEnd - compStart) / static_cast<float>(juce::jmax(1, numSamples));
             float gCur = compStart;
-            for (int i = 0; i < numSamples; ++i) { d[i] *= gCur; gCur += inc; }
+            for (int i = 0; i < numSamples; ++i)
+            {
+                d[i] *= gCur;
+                gCur += inc;
+            }
         }
         if (fadingStyle != nullptr)
         {
@@ -279,8 +283,8 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
     // Pointers hoisted out of the sample loop: getWritePointer/getSample per
     // sample per channel is a measurable cost in a six-band chain.
     {
-        float* wet[2] = { nullptr, nullptr };
-        const float* dry[2] = { nullptr, nullptr };
+        float* wet[2] = {nullptr, nullptr};
+        const float* dry[2] = {nullptr, nullptr};
         for (int ch = 0; ch < numCh && ch < 2; ++ch)
         {
             wet[ch] = buffer.getWritePointer(ch);
@@ -316,7 +320,7 @@ void BandChain::applyLevelPanWidth(juce::AudioBuffer<float>& buffer, int numSamp
     auto panGains = [](float pan, float& gl, float& gr) noexcept
     {
         const float theta = (juce::jlimit(-1.0f, 1.0f, pan) + 1.0f) * 0.25f * juce::MathConstants<float>::pi;
-        gl = std::cos(theta) * juce::MathConstants<float>::sqrt2;   // unity at centre
+        gl = std::cos(theta) * juce::MathConstants<float>::sqrt2; // unity at centre
         gr = std::sin(theta) * juce::MathConstants<float>::sqrt2;
     };
 
@@ -354,7 +358,10 @@ void BandChain::applyLevelPanWidth(juce::AudioBuffer<float>& buffer, int numSamp
             const float side = 0.5f * (l[i] - r[i]) * wd;
             l[i] = (mid + side) * gl * lv;
             r[i] = (mid - side) * gr * lv;
-            lv += dLv; wd += dWd; gl += dGl; gr += dGr;
+            lv += dLv;
+            wd += dWd;
+            gl += dGl;
+            gr += dGr;
         }
     }
     else

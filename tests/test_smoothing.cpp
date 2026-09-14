@@ -25,7 +25,7 @@ TEST_CASE("slamming parameters over silence produces no audible click", "[smooth
     // violently as a host can, with silence going in, and nothing above
     // -60 dBFS may come out. Any zipper noise or discontinuity shows up here.
     EmberEngine engine;
-    engine.prepare({ kRate, static_cast<juce::uint32>(kBlock), 2 });
+    engine.prepare({kRate, static_cast<juce::uint32>(kBlock), 2});
 
     std::array<BandParams, kMaxBands> bands;
     auto global = defaultGlobal();
@@ -58,7 +58,7 @@ TEST_CASE("slamming parameters over silence produces no audible click", "[smooth
 
         engine.setParameters(global, bands.data(), kMaxBands);
 
-        buf.clear();                       // silence in
+        buf.clear(); // silence in
         engine.process(buf);
 
         REQUIRE(allFinite(buf));
@@ -73,7 +73,7 @@ TEST_CASE("slamming parameters over silence produces no audible click", "[smooth
 TEST_CASE("changing style over silence produces no click", "[smoothing]")
 {
     EmberEngine engine;
-    engine.prepare({ kRate, static_cast<juce::uint32>(kBlock), 2 });
+    engine.prepare({kRate, static_cast<juce::uint32>(kBlock), 2});
 
     std::array<BandParams, kMaxBands> bands;
     auto global = defaultGlobal(3);
@@ -107,10 +107,14 @@ TEST_CASE("changing band count is click-free on sustained material", "[smoothing
     // so the sum stays continuous; this test looks for a step discontinuity in
     // the output of a steady sine while the count changes underneath it.
     EmberEngine engine;
-    engine.prepare({ kRate, static_cast<juce::uint32>(kBlock), 2 });
+    engine.prepare({kRate, static_cast<juce::uint32>(kBlock), 2});
 
     std::array<BandParams, kMaxBands> bands;
-    for (auto& p : bands) { p.driveDb = 0.0f; p.mix01 = 1.0f; }
+    for (auto& p : bands)
+    {
+        p.driveDb = 0.0f;
+        p.mix01 = 1.0f;
+    }
 
     auto global = defaultGlobal(1);
     engine.setParameters(global, bands.data(), kMaxBands);
@@ -142,7 +146,7 @@ TEST_CASE("changing band count is click-free on sustained material", "[smoothing
         engine.process(buf);
         REQUIRE(allFinite(buf));
 
-        if (step > 20)   // let latency and startup transients pass
+        if (step > 20) // let latency and startup transients pass
         {
             for (int i = 0; i < kBlock; ++i)
             {

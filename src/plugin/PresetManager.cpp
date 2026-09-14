@@ -35,7 +35,7 @@ void PresetManager::loadFactoryPresets()
     {
         const auto* resourceName = BinaryData::namedResourceList[i];
         const juce::String originalName(BinaryData::getNamedResourceOriginalFilename(resourceName));
-        if (! originalName.endsWithIgnoreCase(".xml"))
+        if (!originalName.endsWithIgnoreCase(".xml"))
             continue;
 
         int size = 0;
@@ -67,8 +67,8 @@ void PresetManager::refresh()
     auto dir = getUserPresetDirectory();
     if (dir.isDirectory())
     {
-        for (const auto& entry : juce::RangedDirectoryIterator(dir, true, juce::String("*") + kPresetExtension,
-                                                               juce::File::findFiles))
+        for (const auto& entry :
+             juce::RangedDirectoryIterator(dir, true, juce::String("*") + kPresetExtension, juce::File::findFiles))
         {
             PresetInfo info;
             info.file = entry.getFile();
@@ -80,12 +80,15 @@ void PresetManager::refresh()
         }
     }
 
-    std::sort(presets.begin(), presets.end(), [](const PresetInfo& a, const PresetInfo& b)
-    {
-        if (a.isFactory != b.isFactory) return a.isFactory;
-        if (a.category != b.category) return a.category < b.category;
-        return a.name < b.name;
-    });
+    std::sort(presets.begin(), presets.end(),
+              [](const PresetInfo& a, const PresetInfo& b)
+              {
+                  if (a.isFactory != b.isFactory)
+                      return a.isFactory;
+                  if (a.category != b.category)
+                      return a.category < b.category;
+                  return a.name < b.name;
+              });
 
     if (onPresetListChanged)
         onPresetListChanged();
@@ -107,7 +110,7 @@ juce::Array<PresetManager::PresetInfo> PresetManager::search(const juce::String&
     {
         if (category.isNotEmpty() && p.category != category)
             continue;
-        if (query.isNotEmpty() && ! p.name.containsIgnoreCase(query) && ! p.category.containsIgnoreCase(query))
+        if (query.isNotEmpty() && !p.name.containsIgnoreCase(query) && !p.category.containsIgnoreCase(query))
             continue;
         out.add(p);
     }
@@ -133,16 +136,16 @@ juce::ValueTree PresetManager::captureState() const
 
 void PresetManager::applyState(const juce::ValueTree& tree)
 {
-    if (! tree.isValid())
+    if (!tree.isValid())
         return;
 
     // Parameters: accept either the APVTS child by its real type or the first
     // child that looks like a parameter tree, so hand-written and older presets
     // both load rather than silently doing nothing.
     auto params = tree.getChildWithName(apvts.state.getType());
-    if (! params.isValid())
+    if (!params.isValid())
         params = tree.getChildWithName(kParamsChild);
-    if (! params.isValid() && tree.getNumChildren() > 0)
+    if (!params.isValid() && tree.getNumChildren() > 0)
         params = tree.getChild(0);
 
     if (params.isValid())
@@ -151,7 +154,7 @@ void PresetManager::applyState(const juce::ValueTree& tree)
     if (setModTree)
     {
         auto mod = tree.getChildWithName(kModChild);
-        setModTree(mod);   // an invalid tree means "no modulation": clear the graph
+        setModTree(mod); // an invalid tree means "no modulation": clear the graph
     }
 
     currentName = tree.getProperty("name", currentName).toString();
@@ -168,13 +171,13 @@ bool PresetManager::loadPreset(const PresetInfo& preset)
 
     if (preset.isFactory)
     {
-        if (! factoryXml.contains(preset.name))
+        if (!factoryXml.contains(preset.name))
             return false;
         xml = juce::parseXML(factoryXml[preset.name]);
     }
     else
     {
-        if (! preset.file.existsAsFile())
+        if (!preset.file.existsAsFile())
             return false;
         xml = juce::parseXML(preset.file);
     }
@@ -208,7 +211,7 @@ bool PresetManager::saveUserPreset(const juce::String& name, const juce::String&
     if (category.isNotEmpty() && category != "User")
         dir = dir.getChildFile(juce::File::createLegalFileName(category));
 
-    if (! dir.exists() && ! dir.createDirectory().wasOk())
+    if (!dir.exists() && !dir.createDirectory().wasOk())
         return false;
 
     currentName = name;
@@ -216,7 +219,7 @@ bool PresetManager::saveUserPreset(const juce::String& name, const juce::String&
 
     auto file = dir.getChildFile(juce::File::createLegalFileName(name) + kPresetExtension);
     auto xml = captureState().createXml();
-    if (xml == nullptr || ! xml->writeTo(file))
+    if (xml == nullptr || !xml->writeTo(file))
         return false;
 
     modified = false;
@@ -226,9 +229,9 @@ bool PresetManager::saveUserPreset(const juce::String& name, const juce::String&
 
 bool PresetManager::deleteUserPreset(const PresetInfo& preset)
 {
-    if (preset.isFactory || ! preset.file.existsAsFile())
+    if (preset.isFactory || !preset.file.existsAsFile())
         return false;
-    if (! preset.file.deleteFile())
+    if (!preset.file.deleteFile())
         return false;
     refresh();
     return true;
@@ -236,14 +239,14 @@ bool PresetManager::deleteUserPreset(const PresetInfo& preset)
 
 bool PresetManager::renameUserPreset(const PresetInfo& preset, const juce::String& newName)
 {
-    if (preset.isFactory || ! preset.file.existsAsFile() || newName.isEmpty())
+    if (preset.isFactory || !preset.file.existsAsFile() || newName.isEmpty())
         return false;
 
-    auto target = preset.file.getParentDirectory()
-                      .getChildFile(juce::File::createLegalFileName(newName) + kPresetExtension);
+    auto target =
+        preset.file.getParentDirectory().getChildFile(juce::File::createLegalFileName(newName) + kPresetExtension);
     if (target.existsAsFile())
         return false;
-    if (! preset.file.moveFileTo(target))
+    if (!preset.file.moveFileTo(target))
         return false;
 
     if (currentName == preset.name)

@@ -43,8 +43,7 @@ EmberAudioProcessor::EmberAudioProcessor()
         cc.store(-1, std::memory_order_relaxed);
 
     presetManager = std::make_unique<PresetManager>(
-        apvts,
-        [this] { return modulation.toValueTree(); },
+        apvts, [this] { return modulation.toValueTree(); },
         [this](const juce::ValueTree& t) { modulation.fromValueTree(t); });
 
     // Any parameter change marks the preset dirty so the GUI can show it.
@@ -69,7 +68,7 @@ void EmberAudioProcessor::buildModulationTargetTable()
     for (auto* p : getParameters())
     {
         auto* withID = dynamic_cast<juce::AudioProcessorParameterWithID*>(p);
-        if (withID == nullptr || ! pid::isModulatable(withID->paramID))
+        if (withID == nullptr || !pid::isModulatable(withID->paramID))
             continue;
 
         modTargetIndexByID.set(withID->paramID, modTargetIDs.size());
@@ -109,7 +108,7 @@ void EmberAudioProcessor::prepareToPlay(double sampleRate, int maximumExpectedSa
     lastSampleRate = sampleRate;
     lastBlockSize = juce::jmax(1, maximumExpectedSamplesPerBlock);
 
-    juce::dsp::ProcessSpec spec {};
+    juce::dsp::ProcessSpec spec{};
     spec.sampleRate = sampleRate;
     spec.maximumBlockSize = static_cast<juce::uint32>(lastBlockSize);
     spec.numChannels = static_cast<juce::uint32>(juce::jmax(1, getTotalNumOutputChannels()));
@@ -129,8 +128,7 @@ void EmberAudioProcessor::prepareToPlay(double sampleRate, int maximumExpectedSa
     engine.setOversamplingFactor(factor);
     engine.prepare(spec);
     engine.setCrossoverMode(static_cast<CrossoverMode>(
-        juce::jlimit(0, static_cast<int>(CrossoverMode::Count) - 1,
-                     choiceIndex(apvts.getParameter(pid::xoverMode)))));
+        juce::jlimit(0, static_cast<int>(CrossoverMode::Count) - 1, choiceIndex(apvts.getParameter(pid::xoverMode)))));
 
     modulation.prepare(sampleRate, lastBlockSize, modTargetIDs.size());
     modulation.reset();
@@ -180,10 +178,9 @@ void EmberAudioProcessor::resolveParameters(int numSamples) noexcept
     globalParams.outputGainDb = value(pid::outputGain);
     globalParams.mix01 = value(pid::globalMix) * 0.01f;
     globalParams.autoGain = raw(pid::autoGain) >= 0.5f;
-    globalParams.numBands = juce::jlimit(kMinBands, kMaxBands,
-                                         static_cast<int>(std::lround(value(pid::numBands))));
-    globalParams.stereoMode = static_cast<StereoMode>(
-        juce::jlimit(0, 1, choiceIndex(apvts.getParameter(pid::stereoMode))));
+    globalParams.numBands = juce::jlimit(kMinBands, kMaxBands, static_cast<int>(std::lround(value(pid::numBands))));
+    globalParams.stereoMode =
+        static_cast<StereoMode>(juce::jlimit(0, 1, choiceIndex(apvts.getParameter(pid::stereoMode))));
 
     for (int i = 0; i < kMaxCrossovers; ++i)
         globalParams.crossoverHz[i] = value(pid::crossover(i));
@@ -191,10 +188,10 @@ void EmberAudioProcessor::resolveParameters(int numSamples) noexcept
     // Keep the edges ascending and at least a third of an octave apart, even if
     // modulation pushes two of them together: unordered edges would produce
     // unstable crossover coefficients.
-    constexpr float kMinRatio = 1.26f;   // one third of an octave
+    constexpr float kMinRatio = 1.26f; // one third of an octave
     for (int i = 1; i < kMaxCrossovers; ++i)
-        globalParams.crossoverHz[i] = juce::jmax(globalParams.crossoverHz[i],
-                                                 globalParams.crossoverHz[i - 1] * kMinRatio);
+        globalParams.crossoverHz[i] =
+            juce::jmax(globalParams.crossoverHz[i], globalParams.crossoverHz[i - 1] * kMinRatio);
 
     for (int b = 0; b < kMaxBands; ++b)
     {
@@ -204,8 +201,7 @@ void EmberAudioProcessor::resolveParameters(int numSamples) noexcept
         p.levelDb = value(pid::level(b));
         p.pan = value(pid::pan(b)) * 0.01f;
         p.width01 = value(pid::width(b)) * 0.01f;
-        p.style = static_cast<StyleID>(
-            juce::jlimit(0, kNumStyles - 1, choiceIndex(apvts.getParameter(pid::style(b)))));
+        p.style = static_cast<StyleID>(juce::jlimit(0, kNumStyles - 1, choiceIndex(apvts.getParameter(pid::style(b)))));
         p.feedback01 = value(pid::feedback(b)) * 0.01f;
         p.feedbackFreq = value(pid::feedbackFreq(b));
         p.dynamics = value(pid::dynamics(b)) * 0.01f;
@@ -235,8 +231,7 @@ void EmberAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     {
         if (auto pos = ph->getPosition())
         {
-            modulation.setTransport(pos->getBpm().orFallback(120.0),
-                                    pos->getPpqPosition().orFallback(0.0),
+            modulation.setTransport(pos->getBpm().orFallback(120.0), pos->getPpqPosition().orFallback(0.0),
                                     pos->getIsPlaying());
         }
     }
@@ -349,7 +344,7 @@ void EmberAudioProcessor::applyMidiMappings(const juce::MidiBuffer& midi)
     for (const auto meta : midi)
     {
         const auto msg = meta.getMessage();
-        if (! msg.isController())
+        if (!msg.isController())
             continue;
 
         const int cc = msg.getControllerNumber();
@@ -404,7 +399,7 @@ void EmberAudioProcessor::setActiveSlot(int slot)
     slot = slot == 0 ? 0 : 1;
     if (slot == activeSlot)
         return;
-    storeToSlot(activeSlot);      // remember where we were
+    storeToSlot(activeSlot); // remember where we were
     activeSlot = slot;
     recallSlot(activeSlot);
 }
@@ -424,7 +419,7 @@ void EmberAudioProcessor::setEditorBounds(int width, int height)
 
 juce::Rectangle<int> EmberAudioProcessor::getEditorBounds() const
 {
-    return { editorWidth.load(std::memory_order_relaxed), editorHeight.load(std::memory_order_relaxed) };
+    return {editorWidth.load(std::memory_order_relaxed), editorHeight.load(std::memory_order_relaxed)};
 }
 
 // ---------------------------------------------------------------- programs
@@ -433,7 +428,10 @@ int EmberAudioProcessor::getNumPrograms()
     return juce::jmax(1, presetManager != nullptr ? presetManager->getAllPresets().size() : 1);
 }
 
-int EmberAudioProcessor::getCurrentProgram() { return 0; }
+int EmberAudioProcessor::getCurrentProgram()
+{
+    return 0;
+}
 
 void EmberAudioProcessor::setCurrentProgram(int index)
 {
@@ -499,7 +497,7 @@ juce::ValueTree EmberAudioProcessor::captureFullState() const
 
 void EmberAudioProcessor::restoreFullState(const juce::ValueTree& tree)
 {
-    if (! tree.isValid())
+    if (!tree.isValid())
         return;
 
     if (auto params = tree.getChildWithName(apvts.state.getType()); params.isValid())

@@ -12,7 +12,9 @@ inline void fillWhiteNoise(juce::AudioBuffer<float>& buf, uint32_t seed = 0x1234
     uint32_t s = seed;
     auto next = [&s]() noexcept
     {
-        s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+        s ^= s << 13;
+        s ^= s >> 17;
+        s ^= s << 5;
         return static_cast<float>(static_cast<int32_t>(s)) / 2147483648.0f;
     };
     for (int ch = 0; ch < buf.getNumChannels(); ++ch)
@@ -36,8 +38,8 @@ inline void fillWhiteNoise(juce::AudioBuffer<float>& buf, uint32_t seed = 0x1234
 
     The level is normalised over the same window the caller measures, so the
     operating point of the nonlinearity is exact rather than approximate. */
-inline void fillFlatNoiseAtRms(juce::AudioBuffer<float>& buf, uint32_t seed, float targetRmsDb,
-                               int windowStart, int windowLength)
+inline void fillFlatNoiseAtRms(juce::AudioBuffer<float>& buf, uint32_t seed, float targetRmsDb, int windowStart,
+                               int windowLength)
 {
     for (int ch = 0; ch < buf.getNumChannels(); ++ch)
     {
@@ -45,7 +47,9 @@ inline void fillFlatNoiseAtRms(juce::AudioBuffer<float>& buf, uint32_t seed, flo
         auto* d = buf.getWritePointer(ch);
         for (int i = 0; i < buf.getNumSamples(); ++i)
         {
-            s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+            s ^= s << 13;
+            s ^= s >> 17;
+            s ^= s << 5;
             d[i] = static_cast<float>(static_cast<int32_t>(s)) / 2147483648.0f;
         }
 
@@ -53,9 +57,11 @@ inline void fillFlatNoiseAtRms(juce::AudioBuffer<float>& buf, uint32_t seed, flo
         // styles would otherwise be measured against an offset no real signal
         // has. Then scale so the MEASURED window sits exactly at the target.
         double mean = 0.0;
-        for (int i = 0; i < buf.getNumSamples(); ++i) mean += d[i];
+        for (int i = 0; i < buf.getNumSamples(); ++i)
+            mean += d[i];
         mean /= juce::jmax(1, buf.getNumSamples());
-        for (int i = 0; i < buf.getNumSamples(); ++i) d[i] -= static_cast<float>(mean);
+        for (int i = 0; i < buf.getNumSamples(); ++i)
+            d[i] -= static_cast<float>(mean);
 
         double sumSq = 0.0;
         for (int i = 0; i < windowLength; ++i)
@@ -64,9 +70,9 @@ inline void fillFlatNoiseAtRms(juce::AudioBuffer<float>& buf, uint32_t seed, flo
             sumSq += static_cast<double>(v) * v;
         }
         const double r = std::sqrt(sumSq / juce::jmax(1, windowLength));
-        const float scale = r > 1.0e-12 ? static_cast<float>(juce::Decibels::decibelsToGain(targetRmsDb) / r)
-                                        : 1.0f;
-        for (int i = 0; i < buf.getNumSamples(); ++i) d[i] *= scale;
+        const float scale = r > 1.0e-12 ? static_cast<float>(juce::Decibels::decibelsToGain(targetRmsDb) / r) : 1.0f;
+        for (int i = 0; i < buf.getNumSamples(); ++i)
+            d[i] *= scale;
     }
 }
 
@@ -88,7 +94,9 @@ inline void fillPinkNoise(juce::AudioBuffer<float>& buf, uint32_t seed = 0x51EED
         auto* d = buf.getWritePointer(ch);
         for (int i = 0; i < buf.getNumSamples(); ++i)
         {
-            s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+            s ^= s << 13;
+            s ^= s >> 17;
+            s ^= s << 5;
             const float white = static_cast<float>(static_cast<int32_t>(s)) / 2147483648.0f;
             b0 = 0.99765f * b0 + white * 0.0990460f;
             b1 = 0.96300f * b1 + white * 0.2965164f;
@@ -98,7 +106,8 @@ inline void fillPinkNoise(juce::AudioBuffer<float>& buf, uint32_t seed = 0x51EED
 
         // Remove the DC the long time constants leave behind, then normalise.
         double mean = 0.0;
-        for (int i = 0; i < buf.getNumSamples(); ++i) mean += d[i];
+        for (int i = 0; i < buf.getNumSamples(); ++i)
+            mean += d[i];
         mean /= juce::jmax(1, buf.getNumSamples());
         double sumSq = 0.0;
         for (int i = 0; i < buf.getNumSamples(); ++i)
@@ -108,7 +117,8 @@ inline void fillPinkNoise(juce::AudioBuffer<float>& buf, uint32_t seed = 0x51EED
         }
         const double r = std::sqrt(sumSq / juce::jmax(1, buf.getNumSamples()));
         const float scale = r > 1.0e-12 ? static_cast<float>(juce::Decibels::decibelsToGain(targetRmsDb) / r) : 1.0f;
-        for (int i = 0; i < buf.getNumSamples(); ++i) d[i] *= scale;
+        for (int i = 0; i < buf.getNumSamples(); ++i)
+            d[i] *= scale;
     }
 }
 
@@ -125,11 +135,14 @@ inline void fillSine(juce::AudioBuffer<float>& buf, double sampleRate, double fr
 
 inline float rms(const juce::AudioBuffer<float>& buf, int channel = 0, int start = 0, int num = -1)
 {
-    if (num < 0) num = buf.getNumSamples() - start;
-    if (num <= 0) return 0.0f;
+    if (num < 0)
+        num = buf.getNumSamples() - start;
+    if (num <= 0)
+        return 0.0f;
     double acc = 0.0;
     const auto* d = buf.getReadPointer(channel);
-    for (int i = 0; i < num; ++i) acc += static_cast<double>(d[start + i]) * d[start + i];
+    for (int i = 0; i < num; ++i)
+        acc += static_cast<double>(d[start + i]) * d[start + i];
     return static_cast<float>(std::sqrt(acc / num));
 }
 
@@ -146,7 +159,8 @@ inline bool allFinite(const juce::AudioBuffer<float>& buf)
 {
     for (int ch = 0; ch < buf.getNumChannels(); ++ch)
         for (int i = 0; i < buf.getNumSamples(); ++i)
-            if (! std::isfinite(buf.getSample(ch, i))) return false;
+            if (!std::isfinite(buf.getSample(ch, i)))
+                return false;
     return true;
 }
 
@@ -158,18 +172,16 @@ inline std::vector<float> magnitudeSpectrumDb(const float* signal, int fftSize, 
     std::vector<float> scratch(static_cast<size_t>(fftSize) * 2, 0.0f);
     for (int i = 0; i < fftSize; ++i)
     {
-        const float w = applyWindow
-            ? 0.5f * (1.0f - std::cos(juce::MathConstants<float>::twoPi * static_cast<float>(i)
-                                      / static_cast<float>(fftSize - 1)))
-            : 1.0f;
+        const float w = applyWindow ? 0.5f * (1.0f - std::cos(juce::MathConstants<float>::twoPi *
+                                                              static_cast<float>(i) / static_cast<float>(fftSize - 1)))
+                                    : 1.0f;
         scratch[static_cast<size_t>(i)] = signal[i] * w;
     }
     fft.performFrequencyOnlyForwardTransform(scratch.data(), true);
 
     std::vector<float> out(static_cast<size_t>(fftSize / 2));
     for (int i = 0; i < fftSize / 2; ++i)
-        out[static_cast<size_t>(i)] =
-            juce::Decibels::gainToDecibels(scratch[static_cast<size_t>(i)] + 1.0e-20f);
+        out[static_cast<size_t>(i)] = juce::Decibels::gainToDecibels(scratch[static_cast<size_t>(i)] + 1.0e-20f);
     return out;
 }
 
@@ -189,14 +201,13 @@ inline std::vector<float> impulseResponseMagnitudeDb(const float* impulseRespons
     juce::dsp::FFT fft(order);
     std::vector<float> scratch(static_cast<size_t>(fftSize) * 2, 0.0f);
     for (int i = 0; i < fftSize; ++i)
-        scratch[static_cast<size_t>(i)] = impulseResponse[i];   // no window: the IR is already finite
+        scratch[static_cast<size_t>(i)] = impulseResponse[i]; // no window: the IR is already finite
 
     fft.performFrequencyOnlyForwardTransform(scratch.data(), true);
 
     std::vector<float> out(static_cast<size_t>(fftSize / 2));
     for (int i = 0; i < fftSize / 2; ++i)
-        out[static_cast<size_t>(i)] =
-            juce::Decibels::gainToDecibels(scratch[static_cast<size_t>(i)] + 1.0e-20f);
+        out[static_cast<size_t>(i)] = juce::Decibels::gainToDecibels(scratch[static_cast<size_t>(i)] + 1.0e-20f);
     return out;
 }
 

@@ -19,7 +19,7 @@ struct Result
 Result run(int numBands, OversamplingFactor os, double sampleRate, int blockSize, double seconds)
 {
     EmberEngine engine;
-    engine.prepare({ sampleRate, static_cast<juce::uint32>(blockSize), 2 });
+    engine.prepare({sampleRate, static_cast<juce::uint32>(blockSize), 2});
     engine.setOversamplingFactor(os);
 
     std::array<BandParams, kMaxBands> bands;
@@ -46,7 +46,9 @@ Result run(int numBands, OversamplingFactor os, double sampleRate, int blockSize
     uint32_t s = 0x1234u;
     auto noise = [&s]() noexcept
     {
-        s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+        s ^= s << 13;
+        s ^= s >> 17;
+        s ^= s << 5;
         return static_cast<float>(static_cast<int32_t>(s)) / 2147483648.0f * 0.25f;
     };
 
@@ -56,7 +58,8 @@ Result run(int numBands, OversamplingFactor os, double sampleRate, int blockSize
     for (int i = 0; i < 50; ++i)
     {
         for (int ch = 0; ch < 2; ++ch)
-            for (int j = 0; j < blockSize; ++j) buf.setSample(ch, j, noise());
+            for (int j = 0; j < blockSize; ++j)
+                buf.setSample(ch, j, noise());
         engine.process(buf);
     }
 
@@ -64,14 +67,15 @@ Result run(int numBands, OversamplingFactor os, double sampleRate, int blockSize
     for (int i = 0; i < totalBlocks; ++i)
     {
         for (int ch = 0; ch < 2; ++ch)
-            for (int j = 0; j < blockSize; ++j) buf.setSample(ch, j, noise());
+            for (int j = 0; j < blockSize; ++j)
+                buf.setSample(ch, j, noise());
         engine.process(buf);
     }
     const auto end = std::chrono::steady_clock::now();
 
     const double elapsed = std::chrono::duration<double>(end - start).count();
     const double audio = (totalBlocks * static_cast<double>(blockSize)) / sampleRate;
-    return { audio, elapsed, 100.0 * elapsed / audio };
+    return {audio, elapsed, 100.0 * elapsed / audio};
 }
 } // namespace
 
@@ -81,15 +85,22 @@ int main()
     std::printf("---------------------------------------------------------------\n");
     std::printf("%-42s %10s\n", "configuration", "%% of core");
 
-    struct Case { const char* name; int bands; OversamplingFactor os; double rate; int block; };
+    struct Case
+    {
+        const char* name;
+        int bands;
+        OversamplingFactor os;
+        double rate;
+        int block;
+    };
     const Case cases[] = {
-        { "stereo 48k, 6 bands, 4x  (spec target <= 3%)", 6, OversamplingFactor::x4,  48000.0, 512 },
-        { "stereo 48k, 6 bands, 2x",                      6, OversamplingFactor::x2,  48000.0, 512 },
-        { "stereo 48k, 6 bands, off",                     6, OversamplingFactor::Off, 48000.0, 512 },
-        { "stereo 48k, 3 bands, 4x",                      3, OversamplingFactor::x4,  48000.0, 512 },
-        { "stereo 96k, 6 bands, 4x",                      6, OversamplingFactor::x4,  96000.0, 512 },
-        { "stereo 48k, 6 bands, 16x",                     6, OversamplingFactor::x16, 48000.0, 512 },
-        { "stereo 48k, 6 bands, 4x, 64-sample blocks",    6, OversamplingFactor::x4,  48000.0, 64  },
+        {"stereo 48k, 6 bands, 4x  (spec target <= 3%)", 6, OversamplingFactor::x4, 48000.0, 512},
+        {"stereo 48k, 6 bands, 2x", 6, OversamplingFactor::x2, 48000.0, 512},
+        {"stereo 48k, 6 bands, off", 6, OversamplingFactor::Off, 48000.0, 512},
+        {"stereo 48k, 3 bands, 4x", 3, OversamplingFactor::x4, 48000.0, 512},
+        {"stereo 96k, 6 bands, 4x", 6, OversamplingFactor::x4, 96000.0, 512},
+        {"stereo 48k, 6 bands, 16x", 6, OversamplingFactor::x16, 48000.0, 512},
+        {"stereo 48k, 6 bands, 4x, 64-sample blocks", 6, OversamplingFactor::x4, 48000.0, 64},
     };
 
     double headline = 0.0;
@@ -97,7 +108,8 @@ int main()
     {
         const auto r = run(c.bands, c.os, c.rate, c.block, 10.0);
         std::printf("%-42s %9.2f%%\n", c.name, r.percentOfOneCore);
-        if (headline == 0.0) headline = r.percentOfOneCore;
+        if (headline == 0.0)
+            headline = r.percentOfOneCore;
     }
     std::printf("---------------------------------------------------------------\n");
     std::printf("headline (6 bands, 4x, 48k): %.2f%% of one core\n\n", headline);

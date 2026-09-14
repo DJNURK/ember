@@ -46,8 +46,7 @@ public:
 
     /** Split `input` (numChannels x numSamples) into `getNumBands()` buffers.
         `bandOut[b]` must already be sized >= numChannels x numSamples. */
-    void process(const juce::AudioBuffer<float>& input,
-                 std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut,
+    void process(const juce::AudioBuffer<float>& input, std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut,
                  int numSamples) noexcept;
 
     /** Latency introduced by the current mode, in samples at the host rate. */

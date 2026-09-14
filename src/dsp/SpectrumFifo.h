@@ -16,8 +16,8 @@ namespace ember
 */
 struct SpectrumFrame
 {
-    std::array<float, kSpectrumBins> inputDb {};
-    std::array<float, kSpectrumBins> outputDb {};
+    std::array<float, kSpectrumBins> inputDb{};
+    std::array<float, kSpectrumBins> outputDb{};
 };
 
 class SpectrumFifo
@@ -35,7 +35,7 @@ public:
     /** GUI thread. Returns false if nothing has been published yet. */
     bool readLatest(SpectrumFrame& dest) const noexcept
     {
-        if (! hasData.load(std::memory_order_acquire))
+        if (!hasData.load(std::memory_order_acquire))
             return false;
         const int slot = writeIndex.load(std::memory_order_acquire);
         dest = slots[static_cast<size_t>(slot)];
@@ -44,8 +44,8 @@ public:
 
 private:
     static constexpr int kNumSlots = 4;
-    std::array<SpectrumFrame, kNumSlots> slots {};
-    std::atomic<int> writeIndex { 0 };
-    std::atomic<bool> hasData { false };
+    std::array<SpectrumFrame, kNumSlots> slots{};
+    std::atomic<int> writeIndex{0};
+    std::atomic<bool> hasData{false};
 };
 } // namespace ember

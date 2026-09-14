@@ -76,58 +76,58 @@ private:
 
     std::array<BandChain, kMaxBands> bands;
     Crossover crossoverA, crossoverB;
-    Crossover* activeCrossover { &crossoverA };
-    Crossover* previousCrossover { nullptr };
+    Crossover* activeCrossover{&crossoverA};
+    Crossover* previousCrossover{nullptr};
 
     std::array<juce::AudioBuffer<float>, kMaxBands> bandBuffers;
     std::array<juce::AudioBuffer<float>, kMaxBands> altBandBuffers;
     juce::AudioBuffer<float> dryBuffer, sumBuffer, msBuffer;
 
     /** Whole-sample latency, as in BandChain: no interpolation needed. */
-    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> globalDryDelay { 8192 };
+    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> globalDryDelay{8192};
 
     // Band-count crossfade
-    float bandFade { 1.0f };
-    float bandFadeStep { 1.0f };
-    int activeNumBands { 3 };
-    int previousNumBands { 3 };
+    float bandFade{1.0f};
+    float bandFadeStep{1.0f};
+    int activeNumBands{3};
+    int previousNumBands{3};
 
     /** Last crossover edges actually pushed into the filters. Frequencies are
         only re-sent when one genuinely moves: in linear-phase mode a re-send
         costs a FIR redesign plus an FFT per edge on the calling thread, which
         is the audio thread here, and at 192 kHz that is more than a whole
         32-sample control block's budget. A static crossover must cost nothing. */
-    float appliedCrossoverHz[kMaxCrossovers] { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
-    int appliedNumBands { -1 };
+    float appliedCrossoverHz[kMaxCrossovers]{0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    int appliedNumBands{-1};
 
-    std::array<juce::SmoothedValue<float>, kMaxBands> bandGateGain;   // solo / bypass-to-silence
-    std::array<std::atomic<float>, kMaxBands> bandLevels {};
+    std::array<juce::SmoothedValue<float>, kMaxBands> bandGateGain; // solo / bypass-to-silence
+    std::array<std::atomic<float>, kMaxBands> bandLevels{};
 
     juce::SmoothedValue<float> smoothedInputGain, smoothedOutputGain, smoothedGlobalMix, smoothedAutoGain;
 
     // Auto-gain: slow RMS comparison of the dry and wet paths.
-    float dryRms { 0.0f }, wetRms { 0.0f };
-    float autoGainCoeff { 0.0f };
+    float dryRms{0.0f}, wetRms{0.0f};
+    float autoGainCoeff{0.0f};
 
     // Spectrum
-    juce::dsp::FFT fft { kSpectrumFFTOrder };
-    std::array<float, kSpectrumFFTSize> window {};
-    std::array<float, kSpectrumFFTSize> inputAccum {}, outputAccum {};
-    std::array<float, 2 * kSpectrumFFTSize> fftScratch {};
-    int accumIndex { 0 };
+    juce::dsp::FFT fft{kSpectrumFFTOrder};
+    std::array<float, kSpectrumFFTSize> window{};
+    std::array<float, kSpectrumFFTSize> inputAccum{}, outputAccum{};
+    std::array<float, 2 * kSpectrumFFTSize> fftScratch{};
+    int accumIndex{0};
     SpectrumFifo spectrumFifo;
-    std::atomic<bool> spectrumEnabled { false };
+    std::atomic<bool> spectrumEnabled{false};
     SpectrumFrame scratchFrame;
 
     GlobalParams globalParams;
     std::array<BandParams, kMaxBands> bandParams;
 
-    double sampleRate { 44100.0 };
-    int maxBlockSize { 512 };
-    int numChannels { 2 };
-    OversamplingFactor osFactor { OversamplingFactor::x2 };
-    bool linearPhaseOversampling { false };
-    int latencySamples { 0 };
+    double sampleRate{44100.0};
+    int maxBlockSize{512};
+    int numChannels{2};
+    OversamplingFactor osFactor{OversamplingFactor::x2};
+    bool linearPhaseOversampling{false};
+    int latencySamples{0};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EmberEngine)
 };

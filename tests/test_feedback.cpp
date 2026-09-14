@@ -16,9 +16,9 @@ TEST_CASE("feedback loop stays bounded for 60 s of full-scale noise", "[feedback
     constexpr int block = 512;
     const int totalBlocks = static_cast<int>((60.0 * rate) / block);
 
-    for (float amount : { 1.0f, 0.95f, 0.75f })
+    for (float amount : {1.0f, 0.95f, 0.75f})
     {
-        for (float freq : { 20.0f, 200.0f, 2000.0f })
+        for (float freq : {20.0f, 200.0f, 2000.0f})
         {
             FeedbackLoop fb;
             fb.prepare(rate, block, 2);
@@ -32,10 +32,9 @@ TEST_CASE("feedback loop stays bounded for 60 s of full-scale noise", "[feedback
             {
                 fillWhiteNoise(buf, 0x1000u + static_cast<uint32_t>(i), 1.0f);
                 fb.process(buf.getArrayOfWritePointers(), 2, block);
-                if (! allFinite(buf))
+                if (!allFinite(buf))
                 {
-                    INFO("non-finite output at amount " << amount << ", freq " << freq
-                         << ", block " << i);
+                    INFO("non-finite output at amount " << amount << ", freq " << freq << ", block " << i);
                     REQUIRE(false);
                 }
                 worst = juce::jmax(worst, peak(buf));

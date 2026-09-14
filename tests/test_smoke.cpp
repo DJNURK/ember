@@ -4,7 +4,7 @@
 TEST_CASE("engine prepares and processes without crashing", "[smoke]")
 {
     ember::EmberEngine engine;
-    engine.prepare({ 48000.0, 512, 2 });
+    engine.prepare({48000.0, 512, 2});
     juce::AudioBuffer<float> buffer(2, 512);
     buffer.clear();
     engine.process(buffer);

@@ -14,8 +14,8 @@ public:
     void process(float* const* channels, int numChannels, int numSamples) noexcept;
 
 private:
-    double coeff { 0.9995 };
-    std::array<float, 2> x1 {}, y1 {};
+    double coeff{0.9995};
+    std::array<float, 2> x1{}, y1{};
 };
 
 /**
@@ -44,14 +44,14 @@ public:
 
 private:
     struct Impl;
-    double sampleRate { 44100.0 };
-    float amount { 0.0f }, freq { 200.0f };
+    double sampleRate{44100.0};
+    float amount{0.0f}, freq{200.0f};
     std::array<std::vector<float>, 2> delayLine;
-    std::array<float, 2> svfIc1 {}, svfIc2 {};
-    std::array<int, 2> writePos {};
-    float g { 0.0f }, k { 0.0f }, a1 { 0.0f }, a2 { 0.0f }, a3 { 0.0f };
-    float delaySamples { 1.0f };
-    int lineLength { 0 };
+    std::array<float, 2> svfIc1{}, svfIc2{};
+    std::array<int, 2> writePos{};
+    float g{0.0f}, k{0.0f}, a1{0.0f}, a2{0.0f}, a3{0.0f};
+    float delaySamples{1.0f};
+    int lineLength{0};
 };
 
 /**
@@ -66,18 +66,18 @@ class Dynamics
 public:
     void prepare(double sampleRate, int maxBlockSize, int numChannels);
     void reset() noexcept;
-    void setAmount(float bipolarAmount) noexcept;   // -1 .. +1
+    void setAmount(float bipolarAmount) noexcept; // -1 .. +1
     void process(float* const* channels, int numChannels, int numSamples) noexcept;
 
     /** Current gain reduction in dB (negative), for the GUI meter. */
     float getGainReductionDb() const noexcept { return gainReductionDb; }
 
 private:
-    double sampleRate { 44100.0 };
-    float amount { 0.0f };
-    float rmsState { 0.0f }, peakState { 0.0f }, envState { 1.0f };
-    float gainReductionDb { 0.0f };
-    float attackCoeff { 0.0f }, releaseCoeff { 0.0f }, rmsCoeff { 0.0f };
+    double sampleRate{44100.0};
+    float amount{0.0f};
+    float rmsState{0.0f}, peakState{0.0f}, envState{1.0f};
+    float gainReductionDb{0.0f};
+    float attackCoeff{0.0f}, releaseCoeff{0.0f}, rmsCoeff{0.0f};
 };
 
 /** Post-saturation Low / Mid / High tone shaping, +/- 12 dB at fixed musical
@@ -93,8 +93,8 @@ public:
 private:
     using Filter = juce::dsp::IIR::Filter<float>;
     using Coeffs = juce::dsp::IIR::Coefficients<float>;
-    double sampleRate { 44100.0 };
-    float lastLow { 0.0f }, lastMid { 0.0f }, lastHigh { 0.0f };
-    std::array<std::array<Filter, 3>, 2> filters;  // [channel][low, mid, high]
+    double sampleRate{44100.0};
+    float lastLow{0.0f}, lastMid{0.0f}, lastHigh{0.0f};
+    std::array<std::array<Filter, 3>, 2> filters; // [channel][low, mid, high]
 };
 } // namespace ember

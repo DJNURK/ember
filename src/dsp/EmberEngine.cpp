@@ -34,8 +34,8 @@ void EmberEngine::prepare(const juce::dsp::ProcessSpec& spec)
     const int bandLatency = static_cast<int>(std::ceil(bands[0].getLatencySamples()));
     latencySamples = bandLatency + activeCrossover->getLatencySamples();
 
-    globalDryDelay.prepare({ sampleRate, static_cast<juce::uint32>(maxBlockSize),
-                             static_cast<juce::uint32>(numChannels) });
+    globalDryDelay.prepare(
+        {sampleRate, static_cast<juce::uint32>(maxBlockSize), static_cast<juce::uint32>(numChannels)});
     globalDryDelay.setMaximumDelayInSamples(juce::jmax(8, latencySamples + 8));
     globalDryDelay.setDelay(static_cast<float>(latencySamples));
 
@@ -63,8 +63,8 @@ void EmberEngine::prepare(const juce::dsp::ProcessSpec& spec)
 
     for (int i = 0; i < kSpectrumFFTSize; ++i)
         window[static_cast<size_t>(i)] =
-            0.5f * (1.0f - std::cos(juce::MathConstants<float>::twoPi * static_cast<float>(i)
-                                    / static_cast<float>(kSpectrumFFTSize - 1)));
+            0.5f * (1.0f - std::cos(juce::MathConstants<float>::twoPi * static_cast<float>(i) /
+                                    static_cast<float>(kSpectrumFFTSize - 1)));
 
     reset();
 }
@@ -90,7 +90,7 @@ void EmberEngine::reset()
     dryRms = wetRms = 0.0f;
     bandFade = 1.0f;
     previousCrossover = nullptr;
-    appliedNumBands = -1;      // force the next setParameters to re-send
+    appliedNumBands = -1; // force the next setParameters to re-send
 
     for (auto& l : bandLevels)
         l.store(0.0f, std::memory_order_relaxed);
@@ -136,7 +136,10 @@ void EmberEngine::setCrossoverMode(CrossoverMode mode)
     globalDryDelay.setDelay(static_cast<float>(latencySamples));
 }
 
-int EmberEngine::getLatencySamples() const noexcept { return latencySamples; }
+int EmberEngine::getLatencySamples() const noexcept
+{
+    return latencySamples;
+}
 
 float EmberEngine::getBandGainReductionDb(int band) const noexcept
 {
@@ -145,9 +148,7 @@ float EmberEngine::getBandGainReductionDb(int band) const noexcept
 
 float EmberEngine::getBandLevel(int band) const noexcept
 {
-    return band >= 0 && band < kMaxBands
-               ? bandLevels[static_cast<size_t>(band)].load(std::memory_order_relaxed)
-               : 0.0f;
+    return band >= 0 && band < kMaxBands ? bandLevels[static_cast<size_t>(band)].load(std::memory_order_relaxed) : 0.0f;
 }
 
 void EmberEngine::setParameters(const GlobalParams& global, const BandParams* bandsIn, int numBandParams) noexcept
@@ -160,7 +161,7 @@ void EmberEngine::setParameters(const GlobalParams& global, const BandParams* ba
     // on the audio thread.
     const int numEdges = juce::jmax(0, requested - 1);
     bool edgesMoved = (requested != appliedNumBands);
-    for (int i = 0; i < numEdges && ! edgesMoved; ++i)
+    for (int i = 0; i < numEdges && !edgesMoved; ++i)
         edgesMoved = std::abs(global.crossoverHz[i] - appliedCrossoverHz[i]) > 1.0e-3f;
 
     if (requested != activeNumBands)
@@ -207,7 +208,7 @@ void EmberEngine::setParameters(const GlobalParams& global, const BandParams* ba
 
         // Solo mutes every non-soloed band; without any solo, all bands pass.
         // This is a gain ramp rather than a hard mute so it cannot click.
-        const bool audible = (b < activeNumBands) && (! anySolo || bandsIn[b].solo);
+        const bool audible = (b < activeNumBands) && (!anySolo || bandsIn[b].solo);
         bandGateGain[static_cast<size_t>(b)].setTargetValue(audible ? 1.0f : 0.0f);
     }
     for (int b = n; b < kMaxBands; ++b)
@@ -224,7 +225,7 @@ void EmberEngine::process(juce::AudioBuffer<float>& buffer) noexcept
 
     // ---- input gain ----
     {
-        float* p[2] = { nullptr, nullptr };
+        float* p[2] = {nullptr, nullptr};
         for (int ch = 0; ch < numCh && ch < 2; ++ch)
             p[ch] = buffer.getWritePointer(ch);
 
@@ -326,8 +327,8 @@ void EmberEngine::process(juce::AudioBuffer<float>& buffer) noexcept
         const float gg1 = gate.getCurrentValue();
         const float dgg = (gg1 - gg0) / static_cast<float>(juce::jmax(1, numSamples));
 
-        const float* src[2] = { nullptr, nullptr };
-        float* dst[2] = { nullptr, nullptr };
+        const float* src[2] = {nullptr, nullptr};
+        float* dst[2] = {nullptr, nullptr};
         for (int ch = 0; ch < numCh && ch < 2; ++ch)
         {
             src[ch] = bb.getReadPointer(ch);
@@ -385,9 +386,8 @@ void EmberEngine::process(juce::AudioBuffer<float>& buffer) noexcept
         }
         // Only trust the ratio once there is something to measure, and clamp it
         // so a near-silent wet path cannot ask for enormous make-up gain.
-        const float target = (wetRms > 1.0e-9f && dryRms > 1.0e-9f)
-                                 ? juce::jlimit(0.25f, 4.0f, std::sqrt(dryRms / wetRms))
-                                 : 1.0f;
+        const float target =
+            (wetRms > 1.0e-9f && dryRms > 1.0e-9f) ? juce::jlimit(0.25f, 4.0f, std::sqrt(dryRms / wetRms)) : 1.0f;
         smoothedAutoGain.setTargetValue(target);
     }
     else
@@ -397,9 +397,9 @@ void EmberEngine::process(juce::AudioBuffer<float>& buffer) noexcept
 
     // ---- global mix, auto-gain, output gain ----
     {
-        float* out[2] = { nullptr, nullptr };
-        const float* wetp[2] = { nullptr, nullptr };
-        const float* dryp[2] = { nullptr, nullptr };
+        float* out[2] = {nullptr, nullptr};
+        const float* wetp[2] = {nullptr, nullptr};
+        const float* dryp[2] = {nullptr, nullptr};
         for (int ch = 0; ch < numCh && ch < 2; ++ch)
         {
             out[ch] = buffer.getWritePointer(ch);
@@ -426,7 +426,9 @@ void EmberEngine::process(juce::AudioBuffer<float>& buffer) noexcept
                 const float wet = wetp[ch][i] * ag;
                 out[ch][i] = (mix * wet + (1.0f - mix) * dryp[ch][i]) * og;
             }
-            ag += dAg; mix += dMx; og += dOg;
+            ag += dAg;
+            mix += dMx;
+            og += dOg;
         }
     }
 
@@ -471,8 +473,7 @@ void EmberEngine::accumulateSpectrum(const float* input, const float* output, in
         for (int bin = 0; bin < kSpectrumBins; ++bin)
         {
             const float mag = fftScratch[static_cast<size_t>(bin)] * norm;
-            dest[static_cast<size_t>(bin)] =
-                juce::jmax(-120.0f, juce::Decibels::gainToDecibels(mag + 1.0e-12f));
+            dest[static_cast<size_t>(bin)] = juce::jmax(-120.0f, juce::Decibels::gainToDecibels(mag + 1.0e-12f));
         }
     };
 

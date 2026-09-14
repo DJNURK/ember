@@ -11,10 +11,10 @@ namespace ember
     count, filter movement) from the drive amount. */
 struct StyleParams
 {
-    double sampleRate { 44100.0 }; ///< OVERSAMPLED rate — styles run inside the oversampler.
-    float driveDb { 0.0f };        ///< 0 .. 40 dB, already smoothed.
-    float driveLin { 1.0f };       ///< juce::Decibels::decibelsToGain (driveDb)
-    float amount01 { 0.0f };       ///< driveDb / 40, clamped to [0, 1].
+    double sampleRate{44100.0}; ///< OVERSAMPLED rate — styles run inside the oversampler.
+    float driveDb{0.0f};        ///< 0 .. 40 dB, already smoothed.
+    float driveLin{1.0f};       ///< juce::Decibels::decibelsToGain (driveDb)
+    float amount01{0.0f};       ///< driveDb / 40, clamped to [0, 1].
 };
 
 /**

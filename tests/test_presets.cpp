@@ -52,14 +52,13 @@ juce::Array<FactoryPreset> loadFactoryPresets()
     {
         const auto* res = BinaryData::namedResourceList[i];
         const juce::String original(BinaryData::getNamedResourceOriginalFilename(res));
-        if (! original.endsWithIgnoreCase(".xml"))
+        if (!original.endsWithIgnoreCase(".xml"))
             continue;
         int size = 0;
         const char* data = BinaryData::getNamedResource(res, size);
         if (data == nullptr || size <= 0)
             continue;
-        out.add({ juce::String(res), original,
-                  juce::String(juce::CharPointer_UTF8(data), static_cast<size_t>(size)) });
+        out.add({juce::String(res), original, juce::String(juce::CharPointer_UTF8(data), static_cast<size_t>(size))});
     }
     return out;
 }
@@ -87,7 +86,7 @@ TEST_CASE("the factory library ships the presets the specification asks for", "[
         REQUIRE(category.isNotEmpty());
 
         INFO("duplicate preset name: " << name);
-        REQUIRE(! names.contains(name));
+        REQUIRE(!names.contains(name));
         names.add(name);
         categories.addIfNotAlreadyThere(category);
     }
@@ -103,7 +102,7 @@ TEST_CASE("every factory preset references real parameters and legal values", "[
     // is clamped, which is worse: it loads looking correct and sounds wrong.
     LayoutProbe probe;
     auto presets = loadFactoryPresets();
-    REQUIRE(! presets.isEmpty());
+    REQUIRE(!presets.isEmpty());
 
     for (const auto& p : presets)
     {
@@ -134,8 +133,7 @@ TEST_CASE("every factory preset references real parameters and legal values", "[
             REQUIRE(std::isfinite(value));
 
             const auto& range = param->getNormalisableRange();
-            INFO(p.fileName << ": " << id << " = " << value
-                 << " outside [" << range.start << ", " << range.end << "]");
+            INFO(p.fileName << ": " << id << " = " << value << " outside [" << range.start << ", " << range.end << "]");
             REQUIRE(value >= range.start - 1.0e-4f);
             REQUIRE(value <= range.end + 1.0e-4f);
         }
@@ -163,7 +161,7 @@ TEST_CASE("factory preset modulation graphs are well formed", "[presets][modulat
         REQUIRE(xml != nullptr);
         const auto tree = juce::ValueTree::fromXml(*xml);
         const auto mod = tree.getChildWithName(ModStateIds::modulation);
-        if (! mod.isValid())
+        if (!mod.isValid())
             continue;
 
         ++presetsWithModulation;

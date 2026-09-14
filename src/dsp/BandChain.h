@@ -65,17 +65,17 @@ private:
     void applyLevelPanWidth(juce::AudioBuffer<float>& buffer, int numSamples) noexcept;
 
     std::array<std::unique_ptr<SaturationStyle>, static_cast<size_t>(kNumStyles)> styles;
-    SaturationStyle* currentStyle { nullptr };
-    SaturationStyle* fadingStyle { nullptr };
-    float styleFade { 1.0f };          ///< 1 = fully on currentStyle
-    float styleFadeStep { 1.0f };
+    SaturationStyle* currentStyle{nullptr};
+    SaturationStyle* fadingStyle{nullptr};
+    float styleFade{1.0f}; ///< 1 = fully on currentStyle
+    float styleFadeStep{1.0f};
 
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampler;
     /** The oversampler is built with integer-latency compensation, so this
         delay is always a whole number of samples and needs no interpolation. A
         Lagrange interpolator here costs four multiply-adds per sample per
         channel to compute a fraction that is always zero. */
-    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> dryDelay { 256 };
+    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> dryDelay{256};
 
     DCBlocker dcBlocker;
     FeedbackLoop feedback;
@@ -85,15 +85,15 @@ private:
     juce::AudioBuffer<float> dryBuffer;
     juce::AudioBuffer<float> fadeBuffer;
 
-    const StyleCalibrator* calibrator { nullptr };
+    const StyleCalibrator* calibrator{nullptr};
 
     BandParams params;
-    double hostRate { 44100.0 };
-    double osRate { 44100.0 };
-    int maxBlock { 512 };
-    int channels { 2 };
-    int osFactorMultiplier { 1 };
-    float latencySamples { 0.0f };
+    double hostRate{44100.0};
+    double osRate{44100.0};
+    int maxBlock{512};
+    int channels{2};
+    int osFactorMultiplier{1};
+    float latencySamples{0.0f};
 
     juce::SmoothedValue<float> smoothedDriveDb, smoothedMix, smoothedLevelGain;
     juce::SmoothedValue<float> smoothedPan, smoothedWidth, smoothedCompGain;

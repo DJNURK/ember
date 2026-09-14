@@ -42,7 +42,7 @@ juce::AudioBuffer<float> splitAndSum(Crossover& xo, const juce::AudioBuffer<floa
     return summed;
 }
 
-const float kFreqs[kMaxCrossovers] = { 120.0f, 600.0f, 2500.0f, 6000.0f, 12000.0f };
+const float kFreqs[kMaxCrossovers] = {120.0f, 600.0f, 2500.0f, 6000.0f, 12000.0f};
 } // namespace
 
 TEST_CASE("crossover band sum is magnitude-flat for every band count", "[crossover][null]")
@@ -55,7 +55,7 @@ TEST_CASE("crossover band sum is magnitude-flat for every band count", "[crossov
     //
     // Measured from the impulse response so the result is the exact transfer
     // function rather than a windowed approximation.
-    constexpr int kIrLength = 32768;   // 0.68 s at 48 kHz: long enough to decay
+    constexpr int kIrLength = 32768; // 0.68 s at 48 kHz: long enough to decay
 
     for (int numBands = 1; numBands <= kMaxBands; ++numBands)
     {
@@ -91,11 +91,15 @@ TEST_CASE("crossover band sum is magnitude-flat for every band count", "[crossov
         for (int bin = firstBin; bin < lastBin; ++bin)
         {
             const float dev = std::abs(mag[static_cast<size_t>(bin)]);
-            if (dev > worst) { worst = dev; worstBin = bin; }
+            if (dev > worst)
+            {
+                worst = dev;
+                worstBin = bin;
+            }
         }
 
-        INFO("numBands = " << numBands << ", worst magnitude deviation = " << worst
-             << " dB at " << (worstBin * kRate / kIrLength) << " Hz");
+        INFO("numBands = " << numBands << ", worst magnitude deviation = " << worst << " dB at "
+                           << (worstBin * kRate / kIrLength) << " Hz");
         REQUIRE(worst < 0.01f);
     }
 }
@@ -150,16 +154,15 @@ TEST_CASE("linear phase crossover nulls against the delayed input", "[crossover]
         double residual = 0.0, reference = 0.0;
         for (int i = 0; i < count; ++i)
         {
-            const double d = static_cast<double>(summed.getSample(0, start + i))
-                           - input.getSample(0, start + i - latency);
+            const double d =
+                static_cast<double>(summed.getSample(0, start + i)) - input.getSample(0, start + i - latency);
             residual += d * d;
-            reference += static_cast<double>(input.getSample(0, start + i - latency))
-                       * input.getSample(0, start + i - latency);
+            reference +=
+                static_cast<double>(input.getSample(0, start + i - latency)) * input.getSample(0, start + i - latency);
         }
         const double residualDb = 10.0 * std::log10((residual / juce::jmax(1.0e-30, reference)) + 1.0e-30);
 
-        INFO("numBands = " << numBands << ", latency = " << latency
-             << ", residual = " << residualDb << " dB");
+        INFO("numBands = " << numBands << ", latency = " << latency << ", residual = " << residualDb << " dB");
         REQUIRE(residualDb < -100.0);
     }
 }

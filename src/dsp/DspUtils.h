@@ -12,15 +12,20 @@ inline float sanitise(float x) noexcept
     return std::isfinite(x) ? x : 0.0f;
 }
 
-inline bool isFinite(float x) noexcept { return std::isfinite(x); }
+inline bool isFinite(float x) noexcept
+{
+    return std::isfinite(x);
+}
 
 /** Rational tanh approximation. Max error ~2e-4 over [-5, 5], monotonic, and
     exactly saturating at +/-1 outside it — roughly 5x faster than std::tanh and
     indistinguishable after oversampling. */
 inline float fastTanh(float x) noexcept
 {
-    if (x < -4.97f) return -1.0f;
-    if (x >  4.97f) return  1.0f;
+    if (x < -4.97f)
+        return -1.0f;
+    if (x > 4.97f)
+        return 1.0f;
     const float x2 = x * x;
     const float num = x * (135135.0f + x2 * (17325.0f + x2 * (378.0f + x2)));
     const float den = 135135.0f + x2 * (62370.0f + x2 * (3150.0f + x2 * 28.0f));
@@ -31,7 +36,8 @@ inline float fastTanh(float x) noexcept
 inline float softClipCubic(float x) noexcept
 {
     const float a = std::abs(x);
-    if (a >= 1.0f) return x > 0.0f ? (2.0f / 3.0f) : (-2.0f / 3.0f);
+    if (a >= 1.0f)
+        return x > 0.0f ? (2.0f / 3.0f) : (-2.0f / 3.0f);
     return x - (x * x * x) / 3.0f;
 }
 
@@ -54,8 +60,7 @@ public:
     void prepare(double sampleRate) noexcept { sr = sampleRate; }
     void setTimeConstant(float seconds) noexcept
     {
-        coeff = seconds <= 0.0f ? 0.0f
-                                : std::exp(-1.0f / (static_cast<float>(sr) * seconds));
+        coeff = seconds <= 0.0f ? 0.0f : std::exp(-1.0f / (static_cast<float>(sr) * seconds));
     }
     void setCoefficient(float c) noexcept { coeff = c; }
     void reset(float value = 0.0f) noexcept { state = value; }
@@ -67,8 +72,8 @@ public:
     float getState() const noexcept { return state; }
 
 private:
-    double sr { 44100.0 };
-    float coeff { 0.0f }, state { 0.0f };
+    double sr{44100.0};
+    float coeff{0.0f}, state{0.0f};
 };
 
 /** Topology-preserving state-variable filter (Zavalishin). Used for tone
@@ -77,7 +82,11 @@ private:
 class SvfTPT
 {
 public:
-    void prepare(double sampleRate) noexcept { sr = sampleRate; reset(); }
+    void prepare(double sampleRate) noexcept
+    {
+        sr = sampleRate;
+        reset();
+    }
     void reset() noexcept { ic1 = ic2 = 0.0f; }
 
     void setCutoffQ(float freqHz, float q) noexcept
@@ -90,7 +99,10 @@ public:
         a3 = g * a2;
     }
 
-    struct Outputs { float lp, bp, hp; };
+    struct Outputs
+    {
+        float lp, bp, hp;
+    };
 
     Outputs process(float x) noexcept
     {
@@ -99,7 +111,7 @@ public:
         const float v2 = ic2 + a2 * ic1 + a3 * v3;
         ic1 = 2.0f * v1 - ic1;
         ic2 = 2.0f * v2 - ic2;
-        return { v2, v1, x - k * v1 - v2 };
+        return {v2, v1, x - k * v1 - v2};
     }
 
     float processBandpass(float x) noexcept { return process(x).bp; }
@@ -107,13 +119,13 @@ public:
     /** Reset if the state has gone non-finite. Called once per control block. */
     void sanitiseState() noexcept
     {
-        if (! (std::isfinite(ic1) && std::isfinite(ic2)))
+        if (!(std::isfinite(ic1) && std::isfinite(ic2)))
             ic1 = ic2 = 0.0f;
     }
 
 private:
-    double sr { 44100.0 };
-    float g { 0.0f }, k { 1.0f }, a1 { 0.0f }, a2 { 0.0f }, a3 { 0.0f };
-    float ic1 { 0.0f }, ic2 { 0.0f };
+    double sr{44100.0};
+    float g{0.0f}, k{1.0f}, a1{0.0f}, a2{0.0f}, a3{0.0f};
+    float ic1{0.0f}, ic2{0.0f};
 };
 } // namespace ember::dsputil

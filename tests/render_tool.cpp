@@ -25,7 +25,7 @@ void writeWav(const juce::File& file, const juce::AudioBuffer<float>& buffer, do
     if (stream == nullptr)
         return;
 
-    const auto options = juce::AudioFormatWriterOptions {}
+    const auto options = juce::AudioFormatWriterOptions{}
                              .withSampleRate(sampleRate)
                              .withNumChannels(buffer.getNumChannels())
                              .withBitsPerSample(24);
@@ -62,8 +62,8 @@ void makeDrumLikeImpulses(juce::AudioBuffer<float>& buf, double sampleRate)
             const double t = i / sampleRate;
             const float env = static_cast<float>(std::exp(-t * 25.0));
             const float body = static_cast<float>(std::sin(juce::MathConstants<double>::twoPi * 65.0 * t));
-            const float snap = static_cast<float>(std::sin(juce::MathConstants<double>::twoPi * 1800.0 * t))
-                             * static_cast<float>(std::exp(-t * 180.0));
+            const float snap = static_cast<float>(std::sin(juce::MathConstants<double>::twoPi * 1800.0 * t)) *
+                               static_cast<float>(std::exp(-t * 180.0));
             for (int ch = 0; ch < buf.getNumChannels(); ++ch)
                 buf.setSample(ch, start + i, 0.7f * env * (body + 0.4f * snap));
         }
@@ -74,7 +74,8 @@ float peakOf(const juce::AudioBuffer<float>& b)
 {
     float p = 0.0f;
     for (int ch = 0; ch < b.getNumChannels(); ++ch)
-        for (int i = 0; i < b.getNumSamples(); ++i) p = juce::jmax(p, std::abs(b.getSample(ch, i)));
+        for (int i = 0; i < b.getNumSamples(); ++i)
+            p = juce::jmax(p, std::abs(b.getSample(ch, i)));
     return p;
 }
 
@@ -83,17 +84,21 @@ float rmsOf(const juce::AudioBuffer<float>& b)
     double acc = 0.0;
     int count = 0;
     for (int ch = 0; ch < b.getNumChannels(); ++ch)
-        for (int i = 0; i < b.getNumSamples(); ++i) { acc += static_cast<double>(b.getSample(ch, i)) * b.getSample(ch, i); ++count; }
+        for (int i = 0; i < b.getNumSamples(); ++i)
+        {
+            acc += static_cast<double>(b.getSample(ch, i)) * b.getSample(ch, i);
+            ++count;
+        }
     return static_cast<float>(std::sqrt(acc / juce::jmax(1, count)));
 }
 
 /** Returns the engine latency used for the render, so callers can align the
     result against the source. */
-int renderThrough(const juce::AudioBuffer<float>& source, juce::AudioBuffer<float>& dest,
-                  const GlobalParams& g, const std::array<BandParams, kMaxBands>& bands)
+int renderThrough(const juce::AudioBuffer<float>& source, juce::AudioBuffer<float>& dest, const GlobalParams& g,
+                  const std::array<BandParams, kMaxBands>& bands)
 {
     EmberEngine engine;
-    engine.prepare({ kRate, static_cast<juce::uint32>(kBlock), 2 });
+    engine.prepare({kRate, static_cast<juce::uint32>(kBlock), 2});
     engine.setOversamplingFactor(g.oversampling);
     engine.setCrossoverMode(g.crossoverMode);
     engine.setParameters(g, bands.data(), kMaxBands);
@@ -119,8 +124,7 @@ int renderThrough(const juce::AudioBuffer<float>& source, juce::AudioBuffer<floa
 /** Residual of `processed` against `source` delayed by `latency`, in dB
     relative to the source. This is what "transparent at unity settings"
     actually means, and it is worth measuring rather than asserting. */
-double nullDepthDb(const juce::AudioBuffer<float>& source, const juce::AudioBuffer<float>& processed,
-                   int latency)
+double nullDepthDb(const juce::AudioBuffer<float>& source, const juce::AudioBuffer<float>& processed, int latency)
 {
     const int start = latency + 4096;
     const int count = source.getNumSamples() - start - 4096;
@@ -159,7 +163,9 @@ int main(int argc, char** argv)
         for (int ch = 0; ch < 2; ++ch)
             for (int i = 0; i < n; ++i)
             {
-                s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+                s ^= s << 13;
+                s ^= s >> 17;
+                s ^= s << 5;
                 noise.setSample(ch, i, static_cast<float>(static_cast<int32_t>(s)) / 2147483648.0f * 0.25f);
             }
     }
@@ -171,9 +177,8 @@ int main(int argc, char** argv)
     std::printf("\n%-40s %10s %10s %12s\n", "render", "peak", "rms dB", "null vs dry");
     std::printf("-------------------------------------------------------------\n");
 
-    auto renderCase = [&](const char* name, const juce::AudioBuffer<float>& src,
-                          const GlobalParams& g, const std::array<BandParams, kMaxBands>& bands,
-                          bool measureNull = false)
+    auto renderCase = [&](const char* name, const juce::AudioBuffer<float>& src, const GlobalParams& g,
+                          const std::array<BandParams, kMaxBands>& bands, bool measureNull = false)
     {
         juce::AudioBuffer<float> out;
         const int latency = renderThrough(src, out, g, bands);
@@ -181,8 +186,7 @@ int main(int argc, char** argv)
 
         if (measureNull)
             std::printf("%-40s %10.3f %10.2f %9.1f dB\n", name, peakOf(out),
-                        juce::Decibels::gainToDecibels(rmsOf(out) + 1.0e-12f),
-                        nullDepthDb(src, out, latency));
+                        juce::Decibels::gainToDecibels(rmsOf(out) + 1.0e-12f), nullDepthDb(src, out, latency));
         else
             std::printf("%-40s %10.3f %10.2f\n", name, peakOf(out),
                         juce::Decibels::gainToDecibels(rmsOf(out) + 1.0e-12f));
@@ -202,10 +206,16 @@ int main(int argc, char** argv)
     //    but the phase is rotated. The magnitude flatness is what
     //    tests/test_crossover.cpp asserts to 0.01 dB.
     {
-        GlobalParams g; g.numBands = 4; g.oversampling = OversamplingFactor::x2;
+        GlobalParams g;
+        g.numBands = 4;
+        g.oversampling = OversamplingFactor::x2;
         g.crossoverMode = CrossoverMode::LinearPhase;
         std::array<BandParams, kMaxBands> bands;
-        for (auto& p : bands) { p.driveDb = 0.0f; p.mix01 = 0.0f; }
+        for (auto& p : bands)
+        {
+            p.driveDb = 0.0f;
+            p.mix01 = 0.0f;
+        }
         renderCase("01-crossover-dry-linearphase-noise", noise, g, bands, true);
 
         g.crossoverMode = CrossoverMode::MinimumPhaseLR4;
@@ -214,9 +224,15 @@ int main(int argc, char** argv)
 
     // 2. Gentlest setting of the default style, for reference by ear.
     {
-        GlobalParams g; g.numBands = 4; g.oversampling = OversamplingFactor::x2;
+        GlobalParams g;
+        g.numBands = 4;
+        g.oversampling = OversamplingFactor::x2;
         std::array<BandParams, kMaxBands> bands;
-        for (auto& p : bands) { p.driveDb = 0.0f; p.mix01 = 1.0f; }
+        for (auto& p : bands)
+        {
+            p.driveDb = 0.0f;
+            p.mix01 = 1.0f;
+        }
         renderCase("01-lowest-drive-sweep", sweep, g, bands);
         renderCase("01-lowest-drive-noise", noise, g, bands);
     }
@@ -224,42 +240,68 @@ int main(int argc, char** argv)
     // 2. One render per saturation style, single band, moderate drive.
     for (int i = 0; i < kNumStyles; ++i)
     {
-        GlobalParams g; g.numBands = 1; g.oversampling = OversamplingFactor::x4;
+        GlobalParams g;
+        g.numBands = 1;
+        g.oversampling = OversamplingFactor::x4;
         std::array<BandParams, kMaxBands> bands;
-        for (auto& p : bands) { p.style = static_cast<StyleID>(i); p.driveDb = 18.0f; p.mix01 = 1.0f; }
-        juce::String name = juce::String::formatted("02-style-%02d-", i)
-                          + juce::String(getStyleName(static_cast<StyleID>(i))).replaceCharacter(' ', '-').toLowerCase();
+        for (auto& p : bands)
+        {
+            p.style = static_cast<StyleID>(i);
+            p.driveDb = 18.0f;
+            p.mix01 = 1.0f;
+        }
+        juce::String name =
+            juce::String::formatted("02-style-%02d-", i) +
+            juce::String(getStyleName(static_cast<StyleID>(i))).replaceCharacter(' ', '-').toLowerCase();
         renderCase(name.toRawUTF8(), drums, g, bands);
     }
 
     // 3. Feedback character sweep.
-    for (float fb : { 0.3f, 0.6f, 0.9f })
+    for (float fb : {0.3f, 0.6f, 0.9f})
     {
-        GlobalParams g; g.numBands = 3; g.oversampling = OversamplingFactor::x4;
+        GlobalParams g;
+        g.numBands = 3;
+        g.oversampling = OversamplingFactor::x4;
         std::array<BandParams, kMaxBands> bands;
         for (auto& p : bands)
         {
-            p.style = StyleID::WarmTube; p.driveDb = 20.0f; p.feedback01 = fb; p.feedbackFreq = 320.0f;
+            p.style = StyleID::WarmTube;
+            p.driveDb = 20.0f;
+            p.feedback01 = fb;
+            p.feedbackFreq = 320.0f;
         }
-        renderCase(juce::String::formatted("03-feedback-%02d", static_cast<int>(fb * 100)).toRawUTF8(),
-                   drums, g, bands);
+        renderCase(juce::String::formatted("03-feedback-%02d", static_cast<int>(fb * 100)).toRawUTF8(), drums, g,
+                   bands);
     }
 
     // 4. Dynamics either side of zero.
-    for (float dyn : { -1.0f, -0.5f, 0.5f, 1.0f })
+    for (float dyn : {-1.0f, -0.5f, 0.5f, 1.0f})
     {
-        GlobalParams g; g.numBands = 3;
+        GlobalParams g;
+        g.numBands = 3;
         std::array<BandParams, kMaxBands> bands;
-        for (auto& p : bands) { p.style = StyleID::CleanTape; p.driveDb = 10.0f; p.dynamics = dyn; }
-        renderCase(juce::String::formatted("04-dynamics-%+03d", static_cast<int>(dyn * 100)).toRawUTF8(),
-                   drums, g, bands);
+        for (auto& p : bands)
+        {
+            p.style = StyleID::CleanTape;
+            p.driveDb = 10.0f;
+            p.dynamics = dyn;
+        }
+        renderCase(juce::String::formatted("04-dynamics-%+03d", static_cast<int>(dyn * 100)).toRawUTF8(), drums, g,
+                   bands);
     }
 
     // 5. Mid/side mode and auto-gain.
     {
-        GlobalParams g; g.numBands = 3; g.stereoMode = StereoMode::MidSide; g.autoGain = true;
+        GlobalParams g;
+        g.numBands = 3;
+        g.stereoMode = StereoMode::MidSide;
+        g.autoGain = true;
         std::array<BandParams, kMaxBands> bands;
-        for (auto& p : bands) { p.style = StyleID::Transformer; p.driveDb = 24.0f; }
+        for (auto& p : bands)
+        {
+            p.style = StyleID::Transformer;
+            p.driveDb = 24.0f;
+        }
         renderCase("05-midside-autogain", drums, g, bands);
     }
 

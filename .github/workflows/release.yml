@@ -108,6 +108,17 @@ jobs:
           restore-keys: |
             windows-deps-
 
+      - name: Install Ninja (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ninja --no-progress -y
+        shell: pwsh
+
+      - name: Set up MSVC developer environment (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Configure
         shell: bash
         run: |

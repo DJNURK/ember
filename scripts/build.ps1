@@ -7,7 +7,7 @@
     Builds the Ember plug-in (VST3 + Standalone) through the presets in
     CMakePresets.json, so this script and CI build exactly the same way.
     Uses the windows-release / windows-debug presets, which both use the
-    Visual Studio 17 2022 generator targeting x64.
+    Ninja generator with the MSVC toolchain, targeting x64.
 
     macOS and Linux use scripts/build.sh instead.
 
@@ -98,7 +98,7 @@ usage: .\scripts\build.ps1 [options]
   -Help                           Show this help and exit.
 
 Presets (CMakePresets.json): windows-release (default) | windows-debug
-  Generator: Visual Studio 17 2022, architecture x64.
+  Generator: Ninja with the MSVC toolchain (x64).
 
 Build directory: build\<preset>\
 Artefacts:       build\<preset>\Ember_artefacts\<config>\{VST3,Standalone}\
@@ -185,17 +185,45 @@ Install it with:
 '@
 }
 
-# Soft check only: the presets use the Visual Studio 17 2022 generator, and a
-# missing toolchain otherwise shows up as a confusing CMake error much later.
-$pf86 = ${env:ProgramFiles(x86)}
-$vsWhere = if ($pf86) { Join-Path $pf86 'Microsoft Visual Studio\Installer\vswhere.exe' } else { '' }
-if (-not ($vsWhere -and (Test-Path $vsWhere)) -and -not $env:VSINSTALLDIR) {
+# The windows-* presets use the Ninja generator, which needs cl.exe on PATH.
+# (They used to pin "Visual Studio 17 2022", but CMake has no way to say
+# "whatever Visual Studio is installed", and that pin broke as soon as a machine
+# had a newer one.) If we are not already inside a Developer prompt, find the
+# installation with vswhere and import its environment, so this script works
+# from an ordinary PowerShell window.
+function Import-VisualStudioEnvironment {
+    if (Get-Command cl.exe -ErrorAction SilentlyContinue) { return $true }
+
+    $pf86 = ${env:ProgramFiles(x86)}
+    $vsWhere = if ($pf86) { Join-Path $pf86 'Microsoft Visual Studio\Installer\vswhere.exe' } else { '' }
+    if (-not ($vsWhere -and (Test-Path $vsWhere))) { return $false }
+
+    $vsRoot = & $vsWhere -latest -products * `
+        -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+        -property installationPath 2>$null
+    if (-not $vsRoot) { return $false }
+
+    $vcvars = Join-Path $vsRoot 'VC\Auxiliary\Build\vcvars64.bat'
+    if (-not (Test-Path $vcvars)) { return $false }
+
+    Write-Step "importing Visual Studio environment from $vsRoot"
+    # Run vcvars64 in a child cmd and copy the resulting environment back.
+    & cmd.exe /c "`"$vcvars`" >nul 2>&1 && set" | ForEach-Object {
+        if ($_ -match '^([^=]+)=(.*)$') {
+            Set-Item -Path ("env:" + $matches[1]) -Value $matches[2] -ErrorAction SilentlyContinue
+        }
+    }
+    return [bool](Get-Command cl.exe -ErrorAction SilentlyContinue)
+}
+
+if (-not (Import-VisualStudioEnvironment)) {
     Write-Warn @'
-Visual Studio 2022 was not detected. The windows-* presets use the
-"Visual Studio 17 2022" generator, which needs VS 2022 (any edition) or the
-Build Tools with the "Desktop development with C++" workload:
+No MSVC toolchain was found. The windows-* presets build with Ninja and need
+cl.exe on PATH, which means Visual Studio 2022 or newer (any edition) or the
+Build Tools, with the "Desktop development with C++" workload:
     winget install --id Microsoft.VisualStudio.2022.BuildTools
-Continuing anyway - CMake will report the real error if it is genuinely absent.
+Either run this from a "Developer PowerShell for VS" window, or install the
+above. Continuing anyway - CMake will report the real error if it is absent.
 '@
 }
 

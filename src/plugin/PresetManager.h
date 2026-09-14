@@ -20,13 +20,12 @@ public:
     struct PresetInfo
     {
         juce::String name;
-        juce::String category;   ///< "Drums", "Bass", ... ; folder name for user presets
-        juce::File file;         ///< invalid for factory presets
-        bool isFactory { false };
+        juce::String category; ///< "Drums", "Bass", ... ; folder name for user presets
+        juce::File file;       ///< invalid for factory presets
+        bool isFactory{false};
     };
 
-    PresetManager(juce::AudioProcessorValueTreeState& state,
-                  std::function<juce::ValueTree()> getModulationTree,
+    PresetManager(juce::AudioProcessorValueTreeState& state, std::function<juce::ValueTree()> getModulationTree,
                   std::function<void(const juce::ValueTree&)> setModulationTree);
 
     /** ~/Documents/EmberAudio/Ember/Presets (or the platform equivalent). */
@@ -71,11 +70,11 @@ private:
     std::function<void(const juce::ValueTree&)> setModTree;
 
     juce::Array<PresetInfo> presets;
-    juce::HashMap<juce::String, juce::String> factoryXml;   // name -> xml text
+    juce::HashMap<juce::String, juce::String> factoryXml; // name -> xml text
 
-    juce::String currentName { "Init" };
-    juce::String currentCategory { "Factory" };
-    bool modified { false };
+    juce::String currentName{"Init"};
+    juce::String currentCategory{"Factory"};
+    bool modified{false};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetManager)
 };

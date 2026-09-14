@@ -35,7 +35,7 @@ namespace ember::adaa
     `state` must be one float per channel, owned by the caller and cleared in
     `reset()`.
 */
-template <typename ShaperFn, typename AntiderivFn>
+template<typename ShaperFn, typename AntiderivFn>
 inline float process1(float x, float& state, ShaperFn f, AntiderivFn F1, float eps = 1.0e-5f) noexcept
 {
     const double xd = static_cast<double>(x);
@@ -53,7 +53,10 @@ inline float process1(float x, float& state, ShaperFn f, AntiderivFn F1, float e
 }
 
 // ---------------------------------------------------------------- hard clip
-inline double hardClipF(double x) noexcept { return std::clamp(x, -1.0, 1.0); }
+inline double hardClipF(double x) noexcept
+{
+    return std::clamp(x, -1.0, 1.0);
+}
 
 /** Antiderivative of hard clip: x^2/2 inside, |x| - 1/2 outside. */
 inline double hardClipF1(double x) noexcept
@@ -62,12 +65,24 @@ inline double hardClipF1(double x) noexcept
 }
 
 // ---------------------------------------------------------------- full-wave rectifier
-inline double rectifyF(double x) noexcept { return std::abs(x); }
-inline double rectifyF1(double x) noexcept { return 0.5 * x * std::abs(x); }
+inline double rectifyF(double x) noexcept
+{
+    return std::abs(x);
+}
+inline double rectifyF1(double x) noexcept
+{
+    return 0.5 * x * std::abs(x);
+}
 
 // ---------------------------------------------------------------- half-wave rectifier
-inline double halfRectifyF(double x) noexcept { return x > 0.0 ? x : 0.0; }
-inline double halfRectifyF1(double x) noexcept { return x > 0.0 ? 0.5 * x * x : 0.0; }
+inline double halfRectifyF(double x) noexcept
+{
+    return x > 0.0 ? x : 0.0;
+}
+inline double halfRectifyF1(double x) noexcept
+{
+    return x > 0.0 ? 0.5 * x * x : 0.0;
+}
 
 // ---------------------------------------------------------------- triangular wavefolder
 /** Folds x into [-1, 1] as a triangle wave of period 4. */
@@ -83,11 +98,10 @@ inline double foldF1(double x) noexcept
     const double s = x < 0.0 ? -1.0 : 1.0;
     const double a = std::abs(x);
     const double period = std::floor((a + 1.0) / 4.0);
-    const double t = (a + 1.0) - 4.0 * period;   // t in [0, 4)
+    const double t = (a + 1.0) - 4.0 * period; // t in [0, 4)
     // Integral of the triangle over one period is zero, so only the partial
     // period contributes; the -1 offset in foldF contributes -a.
-    const double partial = (t <= 2.0) ? 0.5 * t * t
-                                      : 2.0 - 0.5 * (4.0 - t) * (4.0 - t) + 2.0;
+    const double partial = (t <= 2.0) ? 0.5 * t * t : 2.0 - 0.5 * (4.0 - t) * (4.0 - t) + 2.0;
     return s * (partial - 0.5 - a);
 }
 } // namespace ember::adaa

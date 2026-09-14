@@ -24,7 +24,7 @@ namespace ember
 class StyleCalibrator
 {
 public:
-    static constexpr int kNumDrivePoints = 41;   // 0..40 dB inclusive, 1 dB apart
+    static constexpr int kNumDrivePoints = 41; // 0..40 dB inclusive, 1 dB apart
     static constexpr float kMaxDriveDb = 40.0f;
 
     /** Build or fetch the cached table for this rate. Message/prepare thread only. */
@@ -38,6 +38,6 @@ public:
 
 private:
     explicit StyleCalibrator(double oversampledSampleRate);
-    std::array<std::array<float, kNumDrivePoints>, kNumStyles> tableDb {};
+    std::array<std::array<float, kNumDrivePoints>, kNumStyles> tableDb{};
 };
 } // namespace ember
