@@ -423,10 +423,13 @@ The editor can be inspected without a display, which is how the layout is
 checked on CI and on machines that do not grant screen-recording permission:
 
 ```sh
-cmake --build build --target ember_rendereditor
-./build/tests/ember_rendereditor shots/default.png 1100 640
-./build/tests/ember_rendereditor shots/minimum.png 800 480
-./build/tests/ember_rendereditor shots/large.png   1600 1100
+# <preset> is whichever configure preset you built with, e.g. macos-release.
+cmake --build --preset <preset> --target ember_rendereditor
+
+BIN=build/<preset>/tests/ember_rendereditor
+"$BIN" shots/default.png 1100 640
+"$BIN" shots/minimum.png  800 480
+"$BIN" shots/large.png   1600 1100
 ```
 
 It builds a real processor, pushes audio through it so the spectrum and meters
