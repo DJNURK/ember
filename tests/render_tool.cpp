@@ -87,12 +87,15 @@ float rmsOf(const juce::AudioBuffer<float>& b)
     return static_cast<float>(std::sqrt(acc / juce::jmax(1, count)));
 }
 
-void renderThrough(const juce::AudioBuffer<float>& source, juce::AudioBuffer<float>& dest,
-                   const GlobalParams& g, const std::array<BandParams, kMaxBands>& bands)
+/** Returns the engine latency used for the render, so callers can align the
+    result against the source. */
+int renderThrough(const juce::AudioBuffer<float>& source, juce::AudioBuffer<float>& dest,
+                  const GlobalParams& g, const std::array<BandParams, kMaxBands>& bands)
 {
     EmberEngine engine;
     engine.prepare({ kRate, static_cast<juce::uint32>(kBlock), 2 });
     engine.setOversamplingFactor(g.oversampling);
+    engine.setCrossoverMode(g.crossoverMode);
     engine.setParameters(g, bands.data(), kMaxBands);
 
     dest.setSize(source.getNumChannels(), source.getNumSamples());
@@ -110,6 +113,32 @@ void renderThrough(const juce::AudioBuffer<float>& source, juce::AudioBuffer<flo
         for (int ch = 0; ch < dest.getNumChannels(); ++ch)
             dest.copyFrom(ch, pos, chunk, ch, 0, n);
     }
+    return engine.getLatencySamples();
+}
+
+/** Residual of `processed` against `source` delayed by `latency`, in dB
+    relative to the source. This is what "transparent at unity settings"
+    actually means, and it is worth measuring rather than asserting. */
+double nullDepthDb(const juce::AudioBuffer<float>& source, const juce::AudioBuffer<float>& processed,
+                   int latency)
+{
+    const int start = latency + 4096;
+    const int count = source.getNumSamples() - start - 4096;
+    if (count <= 0)
+        return 0.0;
+
+    double residual = 0.0, reference = 0.0;
+    for (int ch = 0; ch < source.getNumChannels(); ++ch)
+    {
+        for (int i = 0; i < count; ++i)
+        {
+            const double ref = source.getSample(ch, start + i - latency);
+            const double d = processed.getSample(ch, start + i) - ref;
+            residual += d * d;
+            reference += ref * ref;
+        }
+    }
+    return 10.0 * std::log10((residual / juce::jmax(1.0e-30, reference)) + 1.0e-30);
 }
 } // namespace
 
@@ -139,26 +168,57 @@ int main(int argc, char** argv)
     writeWav(outDir.getChildFile("00-source-drums.wav"), drums, kRate);
     writeWav(outDir.getChildFile("00-source-noise.wav"), noise, kRate);
 
-    std::printf("\n%-40s %10s %10s\n", "render", "peak", "rms dB");
+    std::printf("\n%-40s %10s %10s %12s\n", "render", "peak", "rms dB", "null vs dry");
     std::printf("-------------------------------------------------------------\n");
 
     auto renderCase = [&](const char* name, const juce::AudioBuffer<float>& src,
-                          const GlobalParams& g, const std::array<BandParams, kMaxBands>& bands)
+                          const GlobalParams& g, const std::array<BandParams, kMaxBands>& bands,
+                          bool measureNull = false)
     {
         juce::AudioBuffer<float> out;
-        renderThrough(src, out, g, bands);
+        const int latency = renderThrough(src, out, g, bands);
         writeWav(outDir.getChildFile(juce::String(name) + ".wav"), out, kRate);
-        std::printf("%-40s %10.3f %10.2f\n", name, peakOf(out),
-                    juce::Decibels::gainToDecibels(rmsOf(out) + 1.0e-12f));
+
+        if (measureNull)
+            std::printf("%-40s %10.3f %10.2f %9.1f dB\n", name, peakOf(out),
+                        juce::Decibels::gainToDecibels(rmsOf(out) + 1.0e-12f),
+                        nullDepthDb(src, out, latency));
+        else
+            std::printf("%-40s %10.3f %10.2f\n", name, peakOf(out),
+                        juce::Decibels::gainToDecibels(rmsOf(out) + 1.0e-12f));
     };
 
-    // 1. Transparency: unity settings must come out essentially unchanged.
+    // 1. Transparency of the dry path through the crossover.
+    //
+    //    Note what this does and does not claim. Drive at 0 dB is NOT a bypass:
+    //    every style still applies its transfer curve, so a "unity" render is
+    //    the sound of that style at its gentlest, not the input. What must be
+    //    transparent is the band split itself, which is measured by taking all
+    //    band mixes fully dry and nulling against the latency-aligned input.
+    //
+    //    In linear-phase mode that null should be very deep. In minimum-phase
+    //    mode it will NOT be, and that is correct rather than a defect: a
+    //    Linkwitz-Riley crossover sums to an allpass, so the magnitude is flat
+    //    but the phase is rotated. The magnitude flatness is what
+    //    tests/test_crossover.cpp asserts to 0.01 dB.
+    {
+        GlobalParams g; g.numBands = 4; g.oversampling = OversamplingFactor::x2;
+        g.crossoverMode = CrossoverMode::LinearPhase;
+        std::array<BandParams, kMaxBands> bands;
+        for (auto& p : bands) { p.driveDb = 0.0f; p.mix01 = 0.0f; }
+        renderCase("01-crossover-dry-linearphase-noise", noise, g, bands, true);
+
+        g.crossoverMode = CrossoverMode::MinimumPhaseLR4;
+        renderCase("01-crossover-dry-minphase-noise", noise, g, bands, true);
+    }
+
+    // 2. Gentlest setting of the default style, for reference by ear.
     {
         GlobalParams g; g.numBands = 4; g.oversampling = OversamplingFactor::x2;
         std::array<BandParams, kMaxBands> bands;
         for (auto& p : bands) { p.driveDb = 0.0f; p.mix01 = 1.0f; }
-        renderCase("01-unity-sweep", sweep, g, bands);
-        renderCase("01-unity-noise", noise, g, bands);
+        renderCase("01-lowest-drive-sweep", sweep, g, bands);
+        renderCase("01-lowest-drive-noise", noise, g, bands);
     }
 
     // 2. One render per saturation style, single band, moderate drive.
