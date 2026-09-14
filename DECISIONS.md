@@ -1,0 +1,99 @@
+# Ember — Design Decisions
+
+Decisions made autonomously while implementing the spec, with rationale. Where the spec
+asked for something impossible or inadvisable, the closest sound alternative is described
+here rather than silently dropped.
+
+## Toolchain
+
+**D1 — JUCE 8.0.15 pinned via `FetchContent`.** Latest 8.x at time of writing.
+Pinned by tag (not branch) so builds are reproducible. `GIT_SHALLOW` keeps the
+clone small in CI.
+*Licensing:* JUCE 8 is GPLv3 for open-source distribution; closed-source distribution
+requires a commercial JUCE licence. Ember is therefore released under GPLv3. This is
+stated in `LICENSE` and the README.
+
+**D2 — CMake 4.3 / Ninja, no Projucer.** Presets in `CMakePresets.json`.
+
+**D3 — Catch2 v3.16.0** for unit tests, `catch_discover_tests` so every `TEST_CASE`
+becomes a `ctest` entry.
+
+**D4 — pluginval v1.0.4** fetched as a prebuilt release binary in CI rather than built
+from source; it is a test harness, not a shipped dependency.
+
+## DSP
+
+**D5 — Crossovers: LR4 as a cascaded-tree with all-pass compensation.** A naive chain of
+LR4 splits is *not* magnitude-flat for more than two bands: each band above the first
+picks up the phase rotation of the crossovers below it. Ember therefore compensates every
+band with the second-order all-pass sections of the crossovers it did not pass through,
+which restores the LR property (sum of all bands = unity magnitude, 360°/crossover phase
+rotation). Verified by the null test in `tests/test_crossover.cpp`.
+
+**D6 — Oversampling: `juce::dsp::Oversampling`, equiripple FIR half-band polyphase.**
+The spec asks for polyphase half-band. JUCE offers IIR (minimum-phase, low latency) and
+FIR equiripple (linear-phase, higher latency but no phase smear and much better stopband).
+Ember uses **FIR equiripple** for the realtime path and reports its latency exactly; the
+separate offline/render setting can select a higher factor. Rationale: aliasing
+suppression is the point of the feature, and the FIR's latency is reported so the host
+compensates it.
+
+**D7 — Antiderivative anti-aliasing (ADAA, 1st order) for hard-edged shapers**
+(hard clip, wavefolder, rectifiers). ADAA cuts aliasing by ~20–30 dB at a given
+oversampling factor, which lets those styles meet the < −80 dBFS alias gate without
+running at 16×. Smooth `tanh`-class shapers do not need it and pay no cost.
+ADAA needs an ill-conditioned-difference guard: when `|x[n] − x[n−1]|` is below a
+threshold the shaper falls back to the direct evaluation.
+
+**D8 — Drive law.** Drive is specified 0–40 dB and applied as a smoothed linear gain
+before the shaper, with a per-style **gain-match** curve measured offline (pink-noise RMS
+through each shaper at each drive point, fitted) and applied after. This is what makes
+"switching style doesn't jump in level" and "consistent perceived loudness at 0 dB drive"
+true rather than aspirational.
+
+**D9 — Feedback loop stability.** The resonant feedback path is a fractional-delay line
+tuned to the feedback frequency plus a state-variable bandpass, and is *unconditionally*
+bounded by a `tanh` soft limiter inside the loop plus a hard ceiling. Feedback gain is
+capped below unity at the loop's peak magnitude, so it cannot run away even with the
+bandpass Q at maximum. Verified by a 60 s noise stability test.
+
+**D10 — Linear-phase mode: FFT partitioned-convolution crossovers.** Implemented as
+FIR band filters derived from the same crossover frequencies, convolved via
+`juce::dsp::Convolution` in a uniform-partition mode, with latency reported through
+`setLatencySamples`. Linear phase is *not* free: it costs latency and pre-ringing, so it
+is off by default.
+
+**D11 — Modulation at control rate 32 samples, linearly interpolated per sample.**
+Sources evaluate once per control block; each connection's contribution is ramped across
+the block so no zipper noise reaches the audio. 64 connection slots are preallocated
+(spec asks for ≥ 50); the graph is a flat source→target list evaluated in dependency order
+with cycle detection at edit time, so source-modulating-source works without recursion at
+audio rate.
+
+**D12 — NaN/Inf and denormal policy.** `ScopedNoDenormals` at the top of `processBlock`;
+every feedback/recursive stage is sanitised per control block (non-finite state is reset
+to zero rather than propagating). A final output guard replaces non-finite samples with
+silence. This is cheap insurance against a single bad host buffer poisoning the state.
+
+## Scope
+
+**D13 — iOS AUv3 is an off-by-default CMake option** (`EMBER_BUILD_AUV3`). It is a stretch
+goal per the spec; the target is wired but not part of the default release matrix.
+VST3 does not exist on iOS/Android, as the spec notes.
+
+**D14 — AU registers as `kAudioUnitType_MusicEffect` (`aumf`), not `aufx`.**
+Ember declares MIDI input because the spec requires MIDI modulation sources
+(velocity, CC, mod wheel, note) and MIDI Learn. `auval` warns that an AU
+implementing `MusicDeviceMIDIEvent` while typed `aufx` is mis-declared, and more
+importantly Logic Pro will not route MIDI to an `aufx` unit — the MIDI sources
+would silently never fire. `aumf` is the correct type for a MIDI-receiving
+effect and is what comparable plugins use.
+
+**D15 — Per-style gain matching is measured at `prepare()`, not hand-tuned.**
+`StyleCalibrator` runs a fixed, deterministic pink-noise burst through every
+style at 1 dB drive steps and stores the RMS deviation in a lookup table, which
+the band chain interpolates at runtime. This makes "consistent perceived
+loudness at 0 dB drive" and "switching styles doesn't jump in level" true by
+construction rather than by hand-fitted constants that rot as the shapers are
+tuned. The table depends only on sample rate, so it is computed once per rate,
+cached, and shared by all six bands.

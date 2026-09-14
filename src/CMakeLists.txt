@@ -1,0 +1,52 @@
+# ------------------------------------------------------------------ DSP core
+# Pure-DSP static library: no GUI, no plugin wrapper. Linked by both the plugin
+# and the test/benchmark targets so DSP can be exercised headlessly.
+add_library(ember_dsp STATIC)
+
+target_sources(ember_dsp PRIVATE
+    dsp/EmberEngine.cpp)
+
+target_include_directories(ember_dsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_compile_definitions(ember_dsp PUBLIC
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_VST3_CAN_REPLACE_VST2=0
+    JUCE_DISPLAY_SPLASH_SCREEN=0
+    JUCE_STRICT_REFCOUNTEDPOINTER=1
+    JUCE_MODAL_LOOPS_PERMITTED=0)
+
+target_link_libraries(ember_dsp
+    PUBLIC
+        juce::juce_dsp
+        juce::juce_audio_basics
+        juce::juce_audio_processors
+    PRIVATE
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+
+set_target_properties(ember_dsp PROPERTIES FOLDER "Ember")
+
+# ------------------------------------------------------------------ Plugin
+target_sources(Ember PRIVATE
+    plugin/PluginProcessor.cpp
+    plugin/PluginEditor.cpp)
+
+target_compile_definitions(Ember PUBLIC
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_VST3_CAN_REPLACE_VST2=0
+    JUCE_DISPLAY_SPLASH_SCREEN=0
+    JUCE_STRICT_REFCOUNTEDPOINTER=1
+    JUCE_MODAL_LOOPS_PERMITTED=0
+    JUCE_REPORT_APP_USAGE=0)
+
+target_link_libraries(Ember
+    PRIVATE
+        ember_dsp
+        juce::juce_audio_utils
+        juce::juce_gui_extra
+    PUBLIC
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_lto_flags
+        juce::juce_recommended_warning_flags)
