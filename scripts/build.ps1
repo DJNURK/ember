@@ -64,6 +64,16 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# PowerShell 7.3+ added $PSNativeCommandUseErrorActionPreference, on by default:
+# it turns a non-zero exit code from a native program into a terminating error
+# when $ErrorActionPreference is 'Stop'. That would throw inside Invoke-Checked
+# before its own $LASTEXITCODE check runs, replacing the actionable message with
+# a raw PowerShell exception. Opt out where the variable exists; it is absent on
+# Windows PowerShell 5.1, where native exit codes never throw in the first place.
+if (Test-Path 'variable:\PSNativeCommandUseErrorActionPreference') {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
+
 $Root = Split-Path -Parent $PSScriptRoot
 
 function Write-Step  { param([string]$Message) Write-Host "==> $Message" -ForegroundColor Cyan }

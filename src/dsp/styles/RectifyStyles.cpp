@@ -55,16 +55,27 @@ inline void processRectifier(float* const* channelData, int numChannels, int num
                              RectFn rectF, RectF1Fn rectF1) noexcept
 {
     const int channels = juce::jmin(numChannels, static_cast<int>(state.size()));
-    const float dry = 1.0f - blend;
 
-    const auto shaper = [dry, blend, rectF](float v) noexcept
+    // Everything the ADAA kernel evaluates is double, deliberately.
+    // `adaa::process1` divides a difference of two nearly-equal antiderivative
+    // values by the step between samples; in float32 that cancellation injects
+    // more broadband noise than the aliasing the kernel exists to remove, so
+    // process1 widens the subtraction and the quotient to double. Taking a
+    // float here would undo that: the antiderivative reaches ~2000 at full
+    // drive, where a float ulp is 2.4e-4, and rounding it on the way in throws
+    // away exactly the bits process1 is trying to preserve. The blend weights
+    // are double for the same reason.
+    const double blendD = static_cast<double>(blend);
+    const double dryD   = 1.0 - blendD;
+
+    const auto shaper = [dryD, blendD, rectF](double v) noexcept
     {
-        return dry * v + blend * rectF(v);
+        return dryD * v + blendD * rectF(v);
     };
 
-    const auto antiderivative = [dry, blend, rectF1](float v) noexcept
+    const auto antiderivative = [dryD, blendD, rectF1](double v) noexcept
     {
-        return dry * (0.5f * v * v) + blend * rectF1(v);
+        return dryD * (0.5 * v * v) + blendD * rectF1(v);
     };
 
     for (int ch = 0; ch < channels; ++ch)
@@ -118,8 +129,8 @@ void SmudgeStyle::process(float* const* channelData, int numChannels, int numSam
 
     processRectifier(channelData, numChannels, numSamples, adaaState, drive, blend,
                      kSmudgeInScale, kSmudgeOutScale,
-                     [](float v) noexcept { return adaa::halfRectifyF(v); },
-                     [](float v) noexcept { return adaa::halfRectifyF1(v); });
+                     [](double v) noexcept { return adaa::halfRectifyF(v); },
+                     [](double v) noexcept { return adaa::halfRectifyF1(v); });
 }
 
 // ================================================================ Rectify
@@ -148,7 +159,7 @@ void RectifyStyle::process(float* const* channelData, int numChannels, int numSa
 
     processRectifier(channelData, numChannels, numSamples, adaaState, drive, blend,
                      kRectifyInScale, kRectifyOutScale,
-                     [](float v) noexcept { return adaa::rectifyF(v); },
-                     [](float v) noexcept { return adaa::rectifyF1(v); });
+                     [](double v) noexcept { return adaa::rectifyF(v); },
+                     [](double v) noexcept { return adaa::rectifyF1(v); });
 }
 } // namespace ember

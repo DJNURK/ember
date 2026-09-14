@@ -8,10 +8,17 @@ namespace ember
 /**
     Foldback — triangular wavefolder (category Destroy).
 
-    Drive is applied as a straight pre-gain, so raising it pushes the signal
+    Drive is applied as a monotonic pre-gain, so raising it pushes the signal
     further past the fold threshold and the triangle wraps more times: below
     +/-1 the transfer curve is the identity, above it the output folds back and
     keeps folding, one extra fold per 2.0 of input.
+
+    The pre-gain is `driveLin ^ 0.65` rather than `driveLin` itself, which
+    spends the knob over 1x .. ~20x (up to ten folds of a full-scale signal)
+    instead of 1x .. 100x. Past roughly ten folds the character stops changing
+    and only alias energy accumulates, so the compressed map costs nothing
+    audible and buys ~26 dB of alias rejection at the top of the range. See
+    the rationale at `kFoldDriveExponent` in the .cpp.
 
     A raw wavefolder is one of the most aggressive alias generators in audio —
     every fold is a slope discontinuity — so the shaper runs through

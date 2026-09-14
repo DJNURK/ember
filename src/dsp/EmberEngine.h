@@ -41,6 +41,10 @@ public:
 
     /** Message/prepare thread only — reallocates the oversamplers. */
     void setOversamplingFactor(OversamplingFactor factor);
+
+    /** Select the oversampling filter family. See BandChain::prepare.
+        Message/prepare thread only — it reallocates the oversamplers. */
+    void setOversamplingQuality(bool linearPhase);
     void setCrossoverMode(CrossoverMode mode);
 
     /** Control-rate update. Realtime-safe. */
@@ -52,6 +56,14 @@ public:
     int getLatencySamples() const noexcept;
 
     SpectrumFifo& getSpectrumFifo() noexcept { return spectrumFifo; }
+
+    /** The FFT is skipped entirely while no editor is open. A session can hold
+        dozens of instances with the window closed, and analysing spectra nobody
+        is looking at is the easiest CPU in the plugin to give back. */
+    void setSpectrumEnabled(bool shouldAnalyse) noexcept
+    {
+        spectrumEnabled.store(shouldAnalyse, std::memory_order_relaxed);
+    }
 
     float getBandGainReductionDb(int band) const noexcept;
 
@@ -71,7 +83,8 @@ private:
     std::array<juce::AudioBuffer<float>, kMaxBands> altBandBuffers;
     juce::AudioBuffer<float> dryBuffer, sumBuffer, msBuffer;
 
-    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Lagrange3rd> globalDryDelay { 8192 };
+    /** Whole-sample latency, as in BandChain: no interpolation needed. */
+    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> globalDryDelay { 8192 };
 
     // Band-count crossfade
     float bandFade { 1.0f };
@@ -95,6 +108,7 @@ private:
     std::array<float, 2 * kSpectrumFFTSize> fftScratch {};
     int accumIndex { 0 };
     SpectrumFifo spectrumFifo;
+    std::atomic<bool> spectrumEnabled { false };
     SpectrumFrame scratchFrame;
 
     GlobalParams globalParams;
@@ -104,6 +118,7 @@ private:
     int maxBlockSize { 512 };
     int numChannels { 2 };
     OversamplingFactor osFactor { OversamplingFactor::x2 };
+    bool linearPhaseOversampling { false };
     int latencySamples { 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EmberEngine)

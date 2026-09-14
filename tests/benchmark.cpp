@@ -77,8 +77,6 @@ Result run(int numBands, OversamplingFactor os, double sampleRate, int blockSize
 
 int main()
 {
-    juce::ScopedJuceInitialiser_GUI juceInit;
-
     std::printf("\nEmber offline CPU benchmark\n");
     std::printf("---------------------------------------------------------------\n");
     std::printf("%-42s %10s\n", "configuration", "%% of core");

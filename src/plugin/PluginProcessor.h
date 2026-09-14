@@ -105,7 +105,6 @@ private:
     void parameterChanged(const juce::String& parameterID, float newValue) override;
     void buildModulationTargetTable();
     void resolveParameters(int numSamples) noexcept;
-    void handleMidiLearn(const juce::MidiBuffer& midi);
     void applyMidiMappings(const juce::MidiBuffer& midi);
     juce::ValueTree captureFullState() const;
     void restoreFullState(const juce::ValueTree& tree);

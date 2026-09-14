@@ -130,9 +130,16 @@ public:
 
     /** Replace the shape. MESSAGE THREAD ONLY: it writes the inactive half of a
         double buffer and publishes it with a release store, so the audio thread
-        either sees the whole old shape or the whole new one. Points are clamped
-        and sorted here so the audio thread never has to. `numPoints` is clamped
-        to [0, kMaxLfoPoints]; fewer than two points produces a constant. */
+        sees the whole new shape at once rather than a half-written one. Points
+        are clamped and sorted here so the audio thread never has to.
+        `numPoints` is clamped to [0, kMaxLfoPoints] and `points` must hold that
+        many entries; fewer than two points produces a constant.
+
+        (Two `setShape` calls less than one control block apart could in
+        principle let the audio thread read the buffer being rewritten. Shapes
+        are edited at human speed, and every stored point is clamped before it
+        is written, so the worst case is one block of a blended shape — still
+        finite, still within [-1, +1]. It is not worth a triple buffer.) */
     void setShape (const LfoPoint* points, int numPoints);
 
     /** Restore the default shape (a smooth cosine-like 3-point curve). Message

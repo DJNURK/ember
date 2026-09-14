@@ -13,7 +13,8 @@ BandChain::BandChain()
 
 BandChain::~BandChain() = default;
 
-void BandChain::prepare(double hostSampleRate, int maxBlockSize, int numChannels, OversamplingFactor factor)
+void BandChain::prepare(double hostSampleRate, int maxBlockSize, int numChannels, OversamplingFactor factor,
+                        bool linearPhaseOversampling)
 {
     hostRate = hostSampleRate;
     maxBlock = juce::jmax(1, maxBlockSize);
@@ -26,7 +27,8 @@ void BandChain::prepare(double hostSampleRate, int maxBlockSize, int numChannels
     {
         oversampler = std::make_unique<juce::dsp::Oversampling<float>>(
             static_cast<size_t>(channels), static_cast<size_t>(numStages),
-            juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple,
+            linearPhaseOversampling ? juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple
+                                    : juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR,
             true,   // maximum quality
             true);  // integer latency where possible
         oversampler->initProcessing(static_cast<size_t>(maxBlock));
@@ -159,6 +161,7 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
         }
     }
 
+
     // A fully bypassed band still has to come out with the same latency as its
     // neighbours, otherwise the band sum combs. The dry path above already
     // carries that delay, so bypass is just "use the dry path".
@@ -273,14 +276,28 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
     applyLevelPanWidth(buffer, numSamples);
 
     // ---- band dry/wet ----
-    for (int i = 0; i < numSamples; ++i)
+    // Pointers hoisted out of the sample loop: getWritePointer/getSample per
+    // sample per channel is a measurable cost in a six-band chain.
     {
-        const float mix = smoothedMix.getNextValue();
-        for (int ch = 0; ch < numCh; ++ch)
+        float* wet[2] = { nullptr, nullptr };
+        const float* dry[2] = { nullptr, nullptr };
+        for (int ch = 0; ch < numCh && ch < 2; ++ch)
         {
-            auto* w = buffer.getWritePointer(ch);
-            const float dry = dryBuffer.getSample(ch, i);
-            w[i] = dsputil::sanitise(mix * w[i] + (1.0f - mix) * dry);
+            wet[ch] = buffer.getWritePointer(ch);
+            dry[ch] = dryBuffer.getReadPointer(ch);
+        }
+
+        const float m0 = smoothedMix.getCurrentValue();
+        smoothedMix.skip(numSamples);
+        const float m1 = smoothedMix.getCurrentValue();
+        const float dm = (m1 - m0) / static_cast<float>(juce::jmax(1, numSamples));
+
+        float mix = m0;
+        for (int i = 0; i < numSamples; ++i)
+        {
+            for (int ch = 0; ch < numCh; ++ch)
+                wet[ch][i] = mix * wet[ch][i] + (1.0f - mix) * dry[ch][i];
+            mix += dm;
         }
     }
 }
@@ -288,41 +305,67 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
 void BandChain::applyLevelPanWidth(juce::AudioBuffer<float>& buffer, int numSamples) noexcept
 {
     const int numCh = juce::jmin(channels, buffer.getNumChannels());
+    if (numCh <= 0 || numSamples <= 0)
+        return;
+
+    // These three values are all smoothed, so instead of evaluating the pan law
+    // per sample — two transcendental calls each — evaluate it once at each end
+    // of the block and interpolate the resulting gains. Over a 20 ms smoothing
+    // ramp the difference from the exact curve is inaudible, and it takes the
+    // trig out of the inner loop entirely.
+    auto panGains = [](float pan, float& gl, float& gr) noexcept
+    {
+        const float theta = (juce::jlimit(-1.0f, 1.0f, pan) + 1.0f) * 0.25f * juce::MathConstants<float>::pi;
+        gl = std::cos(theta) * juce::MathConstants<float>::sqrt2;   // unity at centre
+        gr = std::sin(theta) * juce::MathConstants<float>::sqrt2;
+    };
+
+    const float lv0 = smoothedLevelGain.getCurrentValue();
+    const float pan0 = smoothedPan.getCurrentValue();
+    const float wd0 = smoothedWidth.getCurrentValue();
+    smoothedLevelGain.skip(numSamples);
+    smoothedPan.skip(numSamples);
+    smoothedWidth.skip(numSamples);
+    const float lv1 = smoothedLevelGain.getCurrentValue();
+    const float pan1 = smoothedPan.getCurrentValue();
+    const float wd1 = smoothedWidth.getCurrentValue();
+
+    const float inv = 1.0f / static_cast<float>(juce::jmax(1, numSamples));
 
     if (numCh >= 2)
     {
+        float gl0 = 1.0f, gr0 = 1.0f, gl1 = 1.0f, gr1 = 1.0f;
+        panGains(pan0, gl0, gr0);
+        panGains(pan1, gl1, gr1);
+
+        const float dLv = (lv1 - lv0) * inv;
+        const float dWd = (wd1 - wd0) * inv;
+        const float dGl = (gl1 - gl0) * inv;
+        const float dGr = (gr1 - gr0) * inv;
+
         auto* l = buffer.getWritePointer(0);
         auto* r = buffer.getWritePointer(1);
+
+        float lv = lv0, wd = wd0, gl = gl0, gr = gr0;
         for (int i = 0; i < numSamples; ++i)
         {
-            const float gain = smoothedLevelGain.getNextValue();
-            const float pan = smoothedPan.getNextValue();
-            const float width = smoothedWidth.getNextValue();
-
             // Mid/side width first, then constant-power pan.
             const float mid = 0.5f * (l[i] + r[i]);
-            const float side = 0.5f * (l[i] - r[i]) * width;
-            float a = mid + side;
-            float b = mid - side;
-
-            // Constant-power pan, normalised so the centre position is unity:
-            // cos(pi/4) * sqrt2 == 1.
-            const float theta = (pan + 1.0f) * 0.25f * juce::MathConstants<float>::pi;
-            const float gl = std::cos(theta) * juce::MathConstants<float>::sqrt2;
-            const float gr = std::sin(theta) * juce::MathConstants<float>::sqrt2;
-            l[i] = a * gl * gain;
-            r[i] = b * gr * gain;
+            const float side = 0.5f * (l[i] - r[i]) * wd;
+            l[i] = (mid + side) * gl * lv;
+            r[i] = (mid - side) * gr * lv;
+            lv += dLv; wd += dWd; gl += dGl; gr += dGr;
         }
     }
-    else if (numCh == 1)
+    else
     {
         auto* m = buffer.getWritePointer(0);
+        const float dLv = (lv1 - lv0) * inv;
+        float lv = lv0;
         for (int i = 0; i < numSamples; ++i)
         {
-            const float gain = smoothedLevelGain.getNextValue();
-            smoothedPan.getNextValue();
-            smoothedWidth.getNextValue();
-            m[i] *= gain;
+            m[i] *= lv;
+            lv += dLv;
         }
     }
 }

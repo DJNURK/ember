@@ -19,16 +19,19 @@ void writeWav(const juce::File& file, const juce::AudioBuffer<float>& buffer, do
     file.getParentDirectory().createDirectory();
     file.deleteFile();
     juce::WavAudioFormat format;
-    if (auto stream = std::unique_ptr<juce::FileOutputStream>(file.createOutputStream()))
-    {
-        if (auto writer = std::unique_ptr<juce::AudioFormatWriter>(
-                format.createWriterFor(stream.get(), sampleRate,
-                                       static_cast<unsigned int>(buffer.getNumChannels()), 24, {}, 0)))
-        {
-            stream.release();
-            writer->writeFromAudioSampleBuffer(buffer, 0, buffer.getNumSamples());
-        }
-    }
+    // JUCE 8 takes the stream by reference to a unique_ptr and claims ownership
+    // only on success, so the local must be an OutputStream pointer.
+    std::unique_ptr<juce::OutputStream> stream(file.createOutputStream().release());
+    if (stream == nullptr)
+        return;
+
+    const auto options = juce::AudioFormatWriterOptions {}
+                             .withSampleRate(sampleRate)
+                             .withNumChannels(buffer.getNumChannels())
+                             .withBitsPerSample(24);
+
+    if (auto writer = format.createWriterFor(stream, options))
+        writer->writeFromAudioSampleBuffer(buffer, 0, buffer.getNumSamples());
 }
 
 void makeSweep(juce::AudioBuffer<float>& buf, double sampleRate, double f0, double f1)
@@ -112,8 +115,6 @@ void renderThrough(const juce::AudioBuffer<float>& source, juce::AudioBuffer<flo
 
 int main(int argc, char** argv)
 {
-    juce::ScopedJuceInitialiser_GUI juceInit;
-
     juce::File outDir = argc > 1 ? juce::File(juce::String(argv[1]))
                                  : juce::File::getCurrentWorkingDirectory().getChildFile("test-renders");
     outDir.createDirectory();

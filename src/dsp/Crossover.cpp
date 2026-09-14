@@ -124,6 +124,12 @@ struct Crossover::Impl
         an unchanged edge never pays for a redesign. */
     std::array<float, static_cast<size_t>(kMaxCrossovers)> appliedFreqs { {} };
 
+    /** Edges whose linear-phase prototype no longer matches `appliedFreqs`.
+        Only ever set while MinimumPhaseLR4 is the active mode, where the
+        prototypes are not read by anything; flushed by prepare() and by the
+        switch into LinearPhase, both of which are off-the-audio-thread calls. */
+    std::array<bool, static_cast<size_t>(kMaxCrossovers)> firDirty { {} };
+
     // ------------------------------------------------------------ LR4 state
     using LrFilter = juce::dsp::LinkwitzRileyFilter<float>;
 
@@ -185,7 +191,28 @@ struct Crossover::Impl
         // Re-clamp and re-apply: the new rate may have moved the ceiling, and
         // the FIR prototypes have to be designed against the new rate.
         applyFrequencies(true);
+        refreshPrototypes();
         resetState();
+    }
+
+    /** Bring every stale linear-phase prototype back in sync with the applied
+        edge frequencies. Off the audio thread only: prepare() and the switch
+        into LinearPhase, which the header already documents as expensive. */
+    void refreshPrototypes() noexcept
+    {
+        if (! prepared)
+            return;
+
+        for (int i = 0; i < kMaxCrossovers; ++i)
+        {
+            const size_t idx = static_cast<size_t>(i);
+
+            if (! firDirty[idx])
+                continue;
+
+            designLowpass(i, appliedFreqs[idx]);
+            firDirty[idx] = false;
+        }
     }
 
     void resetState() noexcept
@@ -331,8 +358,25 @@ struct Crossover::Impl
             for (auto& row : allpass)
                 row[idx].setCutoffFrequency(f);
 
-            if (prepared)
+            // A prototype redesign is a full window-method FIR plus a forward
+            // FFT — tens of microseconds per edge. EmberEngine drives this
+            // setter from processBlock() once per control block, so paying for
+            // it in MinimumPhaseLR4 mode, where no prototype is ever read, is
+            // pure audio-thread waste (at 192 kHz, five moving edges cost more
+            // than a whole 32-sample control block). Defer it instead: the
+            // switch into LinearPhase flushes whatever went stale.
+            if (! prepared)
+                continue;
+
+            if (mode == CrossoverMode::LinearPhase)
+            {
                 designLowpass(i, f);
+                firDirty[idx] = false;
+            }
+            else
+            {
+                firDirty[idx] = true;
+            }
         }
     }
 
@@ -520,7 +564,14 @@ struct Crossover::Impl
         const int nb = juce::jlimit(kMinBands, kMaxBands, numBands);
 
         int ns = juce::jmin(numSamples, input.getNumSamples());
-        int nCh = juce::jmin(input.getNumChannels(), numChannels);
+
+        // Before prepare() there is no filter state to bound the channel count
+        // against, and `numChannels` is still 0 — clamping to it would return
+        // early and leave the caller's band buffers holding whatever was in
+        // them, which is exactly what the pass-through fallback below exists to
+        // avoid. Fall back to the input's own channel count until prepared.
+        int nCh = prepared ? juce::jmin(input.getNumChannels(), numChannels)
+                           : input.getNumChannels();
 
         for (int b = 0; b < nb; ++b)
         {
@@ -600,6 +651,12 @@ void Crossover::setMode(CrossoverMode mode)
 
     impl->mode = (mode == CrossoverMode::LinearPhase) ? CrossoverMode::LinearPhase
                                                       : CrossoverMode::MinimumPhaseLR4;
+
+    // Any prototype that went stale while the LR4 path was live is rebuilt
+    // here, where the header already sanctions the cost.
+    if (impl->mode == CrossoverMode::LinearPhase)
+        impl->refreshPrototypes();
+
     impl->resetState();
 }
 

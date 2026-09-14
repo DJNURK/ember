@@ -20,7 +20,7 @@ void EmberEngine::prepare(const juce::dsp::ProcessSpec& spec)
     previousCrossover = nullptr;
 
     for (auto& b : bands)
-        b.prepare(sampleRate, maxBlockSize, numChannels, osFactor);
+        b.prepare(sampleRate, maxBlockSize, numChannels, osFactor, linearPhaseOversampling);
 
     for (auto& buf : bandBuffers)
         buf.setSize(numChannels, maxBlockSize, false, false, true);
@@ -95,13 +95,27 @@ void EmberEngine::reset()
         l.store(0.0f, std::memory_order_relaxed);
 }
 
+void EmberEngine::setOversamplingQuality(bool linearPhase)
+{
+    if (linearPhase == linearPhaseOversampling)
+        return;
+    linearPhaseOversampling = linearPhase;
+    for (auto& b : bands)
+        b.prepare(sampleRate, maxBlockSize, numChannels, osFactor, linearPhaseOversampling);
+
+    const int bandLatency = static_cast<int>(std::ceil(bands[0].getLatencySamples()));
+    latencySamples = bandLatency + activeCrossover->getLatencySamples();
+    globalDryDelay.setMaximumDelayInSamples(juce::jmax(8, latencySamples + 8));
+    globalDryDelay.setDelay(static_cast<float>(latencySamples));
+}
+
 void EmberEngine::setOversamplingFactor(OversamplingFactor factor)
 {
     if (factor == osFactor)
         return;
     osFactor = factor;
     for (auto& b : bands)
-        b.prepare(sampleRate, maxBlockSize, numChannels, osFactor);
+        b.prepare(sampleRate, maxBlockSize, numChannels, osFactor, linearPhaseOversampling);
 
     const int bandLatency = static_cast<int>(std::ceil(bands[0].getLatencySamples()));
     latencySamples = bandLatency + activeCrossover->getLatencySamples();
@@ -191,11 +205,23 @@ void EmberEngine::process(juce::AudioBuffer<float>& buffer) noexcept
     const int numCh = juce::jmin(numChannels, buffer.getNumChannels());
 
     // ---- input gain ----
-    for (int i = 0; i < numSamples; ++i)
     {
-        const float g = smoothedInputGain.getNextValue();
-        for (int ch = 0; ch < numCh; ++ch)
-            buffer.getWritePointer(ch)[i] *= g;
+        float* p[2] = { nullptr, nullptr };
+        for (int ch = 0; ch < numCh && ch < 2; ++ch)
+            p[ch] = buffer.getWritePointer(ch);
+
+        const float g0 = smoothedInputGain.getCurrentValue();
+        smoothedInputGain.skip(numSamples);
+        const float g1 = smoothedInputGain.getCurrentValue();
+        const float dg = (g1 - g0) / static_cast<float>(juce::jmax(1, numSamples));
+
+        float g = g0;
+        for (int i = 0; i < numSamples; ++i)
+        {
+            for (int ch = 0; ch < numCh; ++ch)
+                p[ch][i] *= g;
+            g += dg;
+        }
     }
 
     // ---- dry tap for the global mix, delayed by the plugin's own latency ----
@@ -241,7 +267,8 @@ void EmberEngine::process(juce::AudioBuffer<float>& buffer) noexcept
         // Every band advances through the same fade ramp, so the end point is
         // the same for all of them and can be computed once.
         const float fadeAtEnd = bandFade + bandFadeStep * static_cast<float>(numSamples);
-        for (int b = 0; b < kMaxBands; ++b)
+        const int fadeBands = juce::jmax(activeNumBands, previousNumBands);
+        for (int b = 0; b < fadeBands; ++b)
         {
             auto& dst = bandBuffers[static_cast<size_t>(b)];
             const bool inNew = b < activeNumBands;
@@ -275,15 +302,30 @@ void EmberEngine::process(juce::AudioBuffer<float>& buffer) noexcept
 
         float peak = 0.0f;
         auto& gate = bandGateGain[static_cast<size_t>(b)];
+
+        const float gg0 = gate.getCurrentValue();
+        gate.skip(numSamples);
+        const float gg1 = gate.getCurrentValue();
+        const float dgg = (gg1 - gg0) / static_cast<float>(juce::jmax(1, numSamples));
+
+        const float* src[2] = { nullptr, nullptr };
+        float* dst[2] = { nullptr, nullptr };
+        for (int ch = 0; ch < numCh && ch < 2; ++ch)
+        {
+            src[ch] = bb.getReadPointer(ch);
+            dst[ch] = sumBuffer.getWritePointer(ch);
+        }
+
+        float g = gg0;
         for (int i = 0; i < numSamples; ++i)
         {
-            const float g = gate.getNextValue();
             for (int ch = 0; ch < numCh; ++ch)
             {
-                const float v = dsputil::sanitise(bb.getSample(ch, i) * g);
-                sumBuffer.getWritePointer(ch)[i] += v;
+                const float v = src[ch][i] * g;
+                dst[ch][i] += v;
                 peak = juce::jmax(peak, std::abs(v));
             }
+            g += dgg;
         }
         bandLevels[static_cast<size_t>(b)].store(peak, std::memory_order_relaxed);
     }
@@ -336,20 +378,42 @@ void EmberEngine::process(juce::AudioBuffer<float>& buffer) noexcept
     }
 
     // ---- global mix, auto-gain, output gain ----
-    for (int i = 0; i < numSamples; ++i)
     {
-        const float ag = smoothedAutoGain.getNextValue();
-        const float mix = smoothedGlobalMix.getNextValue();
-        const float og = smoothedOutputGain.getNextValue();
-        for (int ch = 0; ch < numCh; ++ch)
+        float* out[2] = { nullptr, nullptr };
+        const float* wetp[2] = { nullptr, nullptr };
+        const float* dryp[2] = { nullptr, nullptr };
+        for (int ch = 0; ch < numCh && ch < 2; ++ch)
         {
-            const float wet = sumBuffer.getSample(ch, i) * ag;
-            const float dry = dryBuffer.getSample(ch, i);
-            buffer.getWritePointer(ch)[i] = dsputil::sanitise((mix * wet + (1.0f - mix) * dry) * og);
+            out[ch] = buffer.getWritePointer(ch);
+            wetp[ch] = sumBuffer.getReadPointer(ch);
+            dryp[ch] = dryBuffer.getReadPointer(ch);
+        }
+
+        const float inv = 1.0f / static_cast<float>(juce::jmax(1, numSamples));
+        const float ag0 = smoothedAutoGain.getCurrentValue();
+        const float mx0 = smoothedGlobalMix.getCurrentValue();
+        const float og0 = smoothedOutputGain.getCurrentValue();
+        smoothedAutoGain.skip(numSamples);
+        smoothedGlobalMix.skip(numSamples);
+        smoothedOutputGain.skip(numSamples);
+        const float dAg = (smoothedAutoGain.getCurrentValue() - ag0) * inv;
+        const float dMx = (smoothedGlobalMix.getCurrentValue() - mx0) * inv;
+        const float dOg = (smoothedOutputGain.getCurrentValue() - og0) * inv;
+
+        float ag = ag0, mix = mx0, og = og0;
+        for (int i = 0; i < numSamples; ++i)
+        {
+            for (int ch = 0; ch < numCh; ++ch)
+            {
+                const float wet = wetp[ch][i] * ag;
+                out[ch][i] = (mix * wet + (1.0f - mix) * dryp[ch][i]) * og;
+            }
+            ag += dAg; mix += dMx; og += dOg;
         }
     }
 
-    pushSpectrum(dryBuffer, buffer, numSamples);
+    if (spectrumEnabled.load(std::memory_order_relaxed))
+        pushSpectrum(dryBuffer, buffer, numSamples);
 }
 
 void EmberEngine::pushSpectrum(const juce::AudioBuffer<float>& in, const juce::AudioBuffer<float>& out,

@@ -39,6 +39,10 @@ shopt -s nullglob
 TARGETS=()
 for d in "$ROOT"/build/*/Ember_artefacts/*/VST3/Ember.vst3 "$ROOT"/build/Ember_artefacts/*/VST3/Ember.vst3 \
          "$HOME"/Library/Audio/Plug-Ins/Components/Ember.component; do
+  # nullglob only drops words that CONTAIN glob metacharacters. Once "$HOME"
+  # expands, the AU path has none, so on Linux it survives as a literal
+  # non-existent path and pluginval fails the job even though the VST3 is fine.
+  [ -e "$d" ] || continue
   TARGETS+=("$d")
 done
 
@@ -50,7 +54,7 @@ fi
 FAILED=0
 for t in "${TARGETS[@]}"; do
   echo "==> pluginval (strictness $STRICTNESS): $t"
-  if ! "$PV_BIN" --strictness-level "$STRICTNESS" --validate-in-process \
+  if ! "$PV_BIN" --strictness-level "$STRICTNESS" \
         --repeat "$REPEAT" --timeout-ms 600000 --validate "$t"; then
     echo "!! FAILED: $t" >&2
     FAILED=1

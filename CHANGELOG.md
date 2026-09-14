@@ -102,7 +102,7 @@ First public release of Ember, a multiband analog saturation and distortion plug
 - `ember_dsp`, a host-free static library holding the whole audio engine, so the DSP can be
   tested headlessly.
 - Catch2 unit tests covering crossover summing, per-style behaviour, aliasing floors,
-  feedback stability, parameter smoothing and state round-tripping.
+  feedback stability and parameter smoothing.
 - `ember_benchmark`, an offline realtime-factor report across band counts, oversampling
   factors, sample rates and buffer sizes.
 - `ember_render`, an offline render tool that writes reference WAVs to `test-renders/` for

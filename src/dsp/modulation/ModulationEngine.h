@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <vector>
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_data_structures/juce_data_structures.h>
@@ -100,12 +101,25 @@ namespace ModStateIds
     Graph edits never block the audio thread and never let it observe a
     half-edited graph. The editor owns a dense master array of connections and
     compiles it into an `EvaluationPlan` — connections sorted into dependency
-    order, plus the topological source order and the target-owner map. The plan
-    lives in a double buffer; the editor fills the inactive half and publishes
-    it with a release store of the buffer index. After publishing, the EDITOR
-    (never the audio thread) waits briefly until the audio thread is no longer
-    inside the old half, so the next edit cannot overwrite a buffer that is
-    still being read.
+    order, plus the topological source order and the target-owner map.
+
+    The plan reaches the audio thread through a lock-free triple buffer. Three
+    preallocated plans and ONE atomic word holding their roles — write slot,
+    pending slot, read slot, plus a "fresh" flag. The editor fills the write
+    slot and swaps write <-> pending with a single compare-exchange; the audio
+    thread, when the flag is set, swaps read <-> pending with a single
+    compare-exchange at the top of the block. Because each side's hand-over is
+    one atomic operation, the three roles are always a permutation of the three
+    buffers: the editor's buffer is never the one being read, neither side ever
+    waits or allocates, and no edit rate can make them collide.
+
+    (Two things this replaced, both of which ThreadSanitizer catches within
+    seconds: a plain double buffer — the audio thread cannot atomically load
+    the live index AND mark it in use, so an edit landing in that window
+    scribbles on the plan being read; and a pointer mailbox where the audio
+    thread takes the new plan and hands the old one back as two separate
+    atomics — between them it holds two buffers and the editor can be left with
+    none.)
 
     ---------------------------------------------------------------- ordering
     A source may modulate another source's parameter. `addConnection` therefore
@@ -201,7 +215,14 @@ public:
     // ------------------------------------------------- source-owned targets
     /** Register `targetIndex` as `field` of modulation source `flatSourceIndex`
         so that source-to-source modulation is dependency-ordered. Pass
-        `flatSourceIndex < 0` to unregister. Message thread; rebuilds the plan. */
+        `flatSourceIndex < 0` to unregister. Message thread; rebuilds the plan.
+
+        Register ownership BEFORE loading or building the graph: `addConnection`
+        can only reject a cycle it can see, so registering an owner afterwards
+        could in principle close one. If that happens the engine keeps every
+        routing and falls back to flat (index) evaluation order, which is still
+        finite and stable — a source-to-source routing then simply lands one
+        control block late. */
     void setTargetOwner (int targetIndex, int flatSourceIndex, ModSourceField field);
 
     /** Forget every registration made with `setTargetOwner`. Message thread. */
@@ -283,7 +304,7 @@ private:
 
     // ---- message thread
     void rebuildPlan();
-    void publishPlan (int newIndex);
+    void publishPlan();
     bool topologicalOrder (const ModConnection* conns, int numConns,
                            std::array<int, kNumModSources>& outOrder) const;
     int  ownerOfTarget (int targetIndex) const noexcept;
@@ -313,10 +334,12 @@ private:
 
     std::vector<TargetOwner> targetOwners;
 
-    // ---- plan hand-off
-    std::array<EvaluationPlan, 2> plans {};
-    std::atomic<int>              liveIndex { 0 };
-    std::atomic<int>              readingIndex { -1 };
+    // ---- plan hand-off (see the class comment: lock-free triple buffer)
+    std::array<EvaluationPlan, 3> planStorage {};
+    /** Packed slot roles: bits 0-1 write, 2-3 pending, 4-5 read, bit 8 "fresh". */
+    std::atomic<std::uint32_t>    planSlots { 0 };
+    int                           readPlanIndex { 0 };    ///< audio thread only
+    int                           writePlanIndex { 1 };   ///< message thread only
 
     // ---- audio-thread state
     std::vector<float>                                   offsets;

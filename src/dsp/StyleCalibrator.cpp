@@ -36,7 +36,7 @@ constexpr int kMeasureSamples = 6144;
 
 constexpr int kStimulusSamples = kWarmupSamples + kMeasureSamples;
 
-/** Nominal operating level(-18 dBFS RMS, the usual alignment level). Gain
+/** Nominal operating level (-18 dBFS RMS, the usual alignment level). Gain
     compensation for a nonlinearity is only meaningful at a stated input level;
     this is the level the table is calibrated for. Styles whose output level is
     strongly non-monotonic in input level — Foldback above all, where the fold
@@ -53,9 +53,9 @@ constexpr float kMaxCompensationDb = 40.0f;
     falls back to unity rather than to a huge boost. */
 constexpr double kSilenceFloor = 1.0e-7;
 
-/** dB between adjacent table entries(1.0 for the 0..40 dB / 41 point table). */
+/** dB between adjacent table entries (1.0 for the 0..40 dB / 41 point table). */
 constexpr float kDriveStepDb =
-    StyleCalibrator::kMaxDriveDb / static_cast<float> (StyleCalibrator::kNumDrivePoints - 1);
+    StyleCalibrator::kMaxDriveDb / static_cast<float>(StyleCalibrator::kNumDrivePoints - 1);
 
 /** Marsaglia xorshift32. Deterministic, no library RNG involved: std::mt19937
     would also be portable but the distribution adaptors are not specified
@@ -68,16 +68,16 @@ public:
 
     std::uint32_t nextBits() noexcept
     {
-        state = static_cast<std::uint32_t> (state ^ (state << 13));
-        state = static_cast<std::uint32_t> (state ^ (state >> 17));
-        state = static_cast<std::uint32_t> (state ^ (state << 5));
+        state = static_cast<std::uint32_t>(state ^ (state << 13));
+        state = static_cast<std::uint32_t>(state ^ (state >> 17));
+        state = static_cast<std::uint32_t>(state ^ (state << 5));
         return state;
     }
 
     /** Uniform in [-1, 1). */
     float nextBipolar() noexcept
     {
-        return static_cast<float> (static_cast<std::int32_t> (nextBits())) / 2147483648.0f;
+        return static_cast<float>(static_cast<std::int32_t>(nextBits())) / 2147483648.0f;
     }
 
 private:
@@ -103,42 +103,42 @@ private:
 
     Flat is also the only assumption-free choice: the calibrator is handed one
     number, the oversampled rate, and cannot tell 96 kHz of host rate with no
-    oversampling(where the band really is full of signal up to Nyquist) from
+    oversampling (where the band really is full of signal up to Nyquist) from
     48 kHz at 2x (where it is not). Weighting the whole band evenly measures the
     style over its entire operating range rather than over a guess about how
     much of that range the host will actually excite. */
 std::vector<float> makeStimulus()
 {
-    std::vector<float> signal(static_cast<std::size_t> (kStimulusSamples), 0.0f);
+    std::vector<float> signal(static_cast<std::size_t>(kStimulusSamples), 0.0f);
 
     Xorshift32 rng { kNoiseSeed };
 
     double mean = 0.0;
 
-    for(int i = 0; i < kStimulusSamples; ++i)
+    for (int i = 0; i < kStimulusSamples; ++i)
     {
         const float v = rng.nextBipolar();
-        signal[static_cast<std::size_t> (i)] = v;
-        mean += static_cast<double> (v);
+        signal[static_cast<std::size_t>(i)] = v;
+        mean += static_cast<double>(v);
     }
 
     // Strip the residual DC of a finite noise burst: asymmetric and rectifying
     // styles would otherwise be measured against an offset no real signal has.
-    mean /= static_cast<double> (kStimulusSamples);
+    mean /= static_cast<double>(kStimulusSamples);
 
     double sumSquares = 0.0;
 
-    for(auto& v : signal)
+    for (auto& v : signal)
     {
-        v -= static_cast<float> (mean);
-        sumSquares += static_cast<double> (v) * static_cast<double> (v);
+        v -= static_cast<float>(mean);
+        sumSquares += static_cast<double>(v) * static_cast<double>(v);
     }
 
-    const double rms = std::sqrt(sumSquares / static_cast<double> (kStimulusSamples));
-    const double target = static_cast<double> (juce::Decibels::decibelsToGain(kStimulusLevelDb));
-    const float scale = (rms > kSilenceFloor) ? static_cast<float> (target / rms) : 1.0f;
+    const double rms = std::sqrt(sumSquares / static_cast<double>(kStimulusSamples));
+    const double target = static_cast<double>(juce::Decibels::decibelsToGain(kStimulusLevelDb));
+    const float scale = (rms > kSilenceFloor) ? static_cast<float>(target / rms) : 1.0f;
 
-    for(auto& v : signal)
+    for (auto& v : signal)
         v *= scale;
 
     return signal;
@@ -149,34 +149,34 @@ std::vector<float> makeStimulus()
     the window is not finite — the caller treats that as an unmeasurable style. */
 double windowRms(const float* data, int start, int count) noexcept
 {
-    if(data == nullptr || count <= 0)
+    if (data == nullptr || count <= 0)
         return 0.0;
 
     double acc = 0.0;
 
-    for(int i = 0; i < count; ++i)
+    for (int i = 0; i < count; ++i)
     {
-        const double v = static_cast<double> (data[static_cast<std::size_t> (start + i)]);
+        const double v = static_cast<double>(data[static_cast<std::size_t>(start + i)]);
 
-        if(! std::isfinite(v))
+        if (! std::isfinite(v))
             return 0.0;
 
         acc += v * v;
     }
 
-    return std::sqrt(acc / static_cast<double> (count));
+    return std::sqrt(acc / static_cast<double>(count));
 }
 
 /** Drive an isolated instance of one style with the stimulus and report the
     gain, in dB, that restores the input RMS. Off the audio thread. */
 float measureCompensationDb(StyleID id, float driveDb, double rate,
-                             const std::vector<float>& stimulus,
-                             std::vector<float>& scratch,
-                             double inputRms)
+                            const std::vector<float>& stimulus,
+                            std::vector<float>& scratch,
+                            double inputRms)
 {
     auto style = createSaturationStyle(id);
 
-    if(style == nullptr)                       // the factory promises non-null
+    if (style == nullptr)                       // the factory promises non-null
         return 0.0f;                            // but never trust it silently
 
     style->prepare(rate, kStimulusSamples, 1);
@@ -197,41 +197,41 @@ float measureCompensationDb(StyleID id, float driveDb, double rate,
 
     // Silent, or NaN/Inf somewhere in the window: there is nothing to match, so
     // leave the level alone instead of inventing a correction.
-    if(! (outRms > kSilenceFloor) || ! (inputRms > kSilenceFloor))
+    if (! (outRms > kSilenceFloor) || ! (inputRms > kSilenceFloor))
         return 0.0f;
 
     const double db = 20.0 * std::log10(inputRms / outRms);
 
-    if(! std::isfinite(db))
+    if (! std::isfinite(db))
         return 0.0f;
 
-    return juce::jlimit(-kMaxCompensationDb, kMaxCompensationDb, static_cast<float> (db));
+    return juce::jlimit(-kMaxCompensationDb, kMaxCompensationDb, static_cast<float>(db));
 }
 } // namespace
 
 //==============================================================================
 StyleCalibrator::StyleCalibrator(double oversampledSampleRate)
 {
-    // Oversampled rates run from 44.1 k(no oversampling) to 192 k x 16; the
+    // Oversampled rates run from 44.1 k (no oversampling) to 192 k x 16; the
     // clamp only guards against a host reporting nonsense during prepare.
     const double rate = juce::jlimit(8000.0, 1.0e7, std::isfinite(oversampledSampleRate)
-                                                         ? oversampledSampleRate
-                                                         : 44100.0);
+                                                        ? oversampledSampleRate
+                                                        : 44100.0);
 
     const std::vector<float> stimulus = makeStimulus();
     const double inputRms = windowRms(stimulus.data(), kWarmupSamples, kMeasureSamples);
 
-    std::vector<float> scratch(static_cast<std::size_t> (kStimulusSamples), 0.0f);
+    std::vector<float> scratch(static_cast<std::size_t>(kStimulusSamples), 0.0f);
 
-    for(int s = 0; s < kNumStyles; ++s)
+    for (int s = 0; s < kNumStyles; ++s)
     {
-        const auto id = static_cast<StyleID> (s);
+        const auto id = static_cast<StyleID>(s);
 
-        for(int d = 0; d < kNumDrivePoints; ++d)
+        for (int d = 0; d < kNumDrivePoints; ++d)
         {
-            const float driveDb = juce::jmin(kMaxDriveDb, static_cast<float> (d) * kDriveStepDb);
+            const float driveDb = juce::jmin(kMaxDriveDb, static_cast<float>(d) * kDriveStepDb);
 
-            tableDb[static_cast<std::size_t> (s)][static_cast<std::size_t> (d)]
+            tableDb[static_cast<std::size_t>(s)][static_cast<std::size_t>(d)]
                 = measureCompensationDb(id, driveDb, rate, stimulus, scratch, inputRms);
         }
     }
@@ -243,20 +243,20 @@ float StyleCalibrator::compensationDb(StyleID id, float driveDb) const noexcept
     // Realtime-safe: two clamps, one table lookup, one lerp. No allocation, no
     // lock, no virtual call, nothing that depends on the style's identity
     // beyond an integer index.
-    const int styleIndex = juce::jlimit(0, kNumStyles - 1, static_cast<int> (id));
+    const int styleIndex = juce::jlimit(0, kNumStyles - 1, static_cast<int>(id));
 
     // jlimit propagates NaN, so screen it out before clamping rather than after.
     const float safeDrive = juce::jlimit(0.0f, kMaxDriveDb,
-                                          std::isfinite(driveDb) ? driveDb : 0.0f);
+                                         std::isfinite(driveDb) ? driveDb : 0.0f);
 
     const float pos = safeDrive * (1.0f / kDriveStepDb);
-    const int lower = juce::jlimit(0, kNumDrivePoints - 1, static_cast<int> (pos));
+    const int lower = juce::jlimit(0, kNumDrivePoints - 1, static_cast<int>(pos));
     const int upper = juce::jmin(lower + 1, kNumDrivePoints - 1);
-    const float frac = juce::jlimit(0.0f, 1.0f, pos - static_cast<float> (lower));
+    const float frac = juce::jlimit(0.0f, 1.0f, pos - static_cast<float>(lower));
 
-    const auto& row = tableDb[static_cast<std::size_t> (styleIndex)];
-    const float a = row[static_cast<std::size_t> (lower)];
-    const float b = row[static_cast<std::size_t> (upper)];
+    const auto& row = tableDb[static_cast<std::size_t>(styleIndex)];
+    const float a = row[static_cast<std::size_t>(lower)];
+    const float b = row[static_cast<std::size_t>(upper)];
 
     return a + frac * (b - a);
 }
@@ -286,7 +286,7 @@ const StyleCalibrator& StyleCalibrator::getForSampleRate(double oversampledSampl
     // build so two threads racing on the same new rate build the table once.
     //
     // std::map, not unordered_map or a vector: callers keep the returned
-    // reference for the lifetime of their prepare(BandChain stores a pointer),
+    // reference for the lifetime of their prepare (BandChain stores a pointer),
     // and a node-based container never moves an element when a later rate is
     // added.
     static juce::CriticalSection cacheLock;
@@ -296,19 +296,19 @@ const StyleCalibrator& StyleCalibrator::getForSampleRate(double oversampledSampl
     // float bit between calls, and an exact-equality key would miss the cache
     // and rebuild the table every time.
     const double clamped = juce::jlimit(8000.0, 1.0e7, std::isfinite(oversampledSampleRate)
-                                                            ? oversampledSampleRate
-                                                            : 44100.0);
-    const int key = static_cast<int> (std::lround(clamped));
+                                                           ? oversampledSampleRate
+                                                           : 44100.0);
+    const int key = static_cast<int>(std::lround(clamped));
 
     const juce::ScopedLock lock(cacheLock);
 
     auto entry = cache.find(key);
 
-    if(entry == cache.end())
+    if (entry == cache.end())
     {
         // Not make_unique: the constructor is private, and only members of this
         // class may call it.
-        std::unique_ptr<StyleCalibrator> built(new StyleCalibrator(static_cast<double> (key)));
+        std::unique_ptr<StyleCalibrator> built(new StyleCalibrator(static_cast<double>(key)));
         entry = cache.emplace(key, std::move(built)).first;
     }
 

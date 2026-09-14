@@ -37,8 +37,16 @@ public:
     BandChain();
     ~BandChain();
 
-    /** Allocates. Message/prepare thread only. */
-    void prepare(double hostSampleRate, int maxBlockSize, int numChannels, OversamplingFactor factor);
+    /** Allocates. Message/prepare thread only.
+
+        `linearPhaseOversampling` selects the half-band filter family:
+          - false (realtime): polyphase IIR. Minimum phase, low latency, and
+            roughly 3% of a core cheaper across six bands at 4x.
+          - true (offline render / HQ): equiripple FIR. Linear phase, so the
+            delayed dry path lines up exactly and the dry/wet blends do not
+            comb, at a noticeably higher cost. */
+    void prepare(double hostSampleRate, int maxBlockSize, int numChannels, OversamplingFactor factor,
+                 bool linearPhaseOversampling = false);
     void reset() noexcept;
 
     /** Control-rate parameter update. Realtime-safe. */
@@ -63,7 +71,11 @@ private:
     float styleFadeStep { 1.0f };
 
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampler;
-    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Lagrange3rd> dryDelay { 256 };
+    /** The oversampler is built with integer-latency compensation, so this
+        delay is always a whole number of samples and needs no interpolation. A
+        Lagrange interpolator here costs four multiply-adds per sample per
+        channel to compute a fraction that is always zero. */
+    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> dryDelay { 256 };
 
     DCBlocker dcBlocker;
     FeedbackLoop feedback;

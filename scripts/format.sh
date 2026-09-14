@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# Ember — clang-format entry point shared by humans and CI.
+# Ember — clang-format entry point for local use.
 #
-#   scripts/format.sh                 reformat every tracked C++ source in place
-#   scripts/format.sh --check         verify formatting, change nothing (CI mode)
-#   scripts/format.sh src/dsp/X.cpp   restrict to specific files
+#   scripts/format.sh                        reformat every tracked C++ source in place
+#   scripts/format.sh --check                verify formatting, change nothing
+#   scripts/format.sh src/dsp/Crossover.cpp  restrict to specific files
+#
+# NOTE: the "clang-format" job in .github/workflows/ci.yml does not invoke this
+# script — it runs the equivalent git ls-files + clang-format --dry-run --Werror
+# inline. Both are kept to the same file set; if you change the selection here,
+# change it there too (or switch that job to `scripts/format.sh --check`).
 #
 # Style comes from the repo's .clang-format (LLVM base, Allman braces, 4 spaces,
 # 120 columns). Only tracked sources under src/ and tests/ are considered, so the
@@ -32,7 +37,7 @@ Ember source formatter
 usage: scripts/format.sh [--check] [--help] [file ...]
 
   --check      Do not rewrite anything: run clang-format --dry-run --Werror and
-               exit non-zero if any file would change. This is what CI runs.
+               exit non-zero if any file would change. Same check CI performs.
   --help, -h   Show this help and exit.
   file ...     Optional explicit paths (relative to the repo root or absolute).
                Without any, every tracked C/C++ source under src/ and tests/ is
@@ -138,7 +143,11 @@ if [ ${#EXPLICIT[@]} -gt 0 ]; then
     for arg in "${EXPLICIT[@]}"; do
         # Normalise absolute paths that live inside the repo to repo-relative.
         case "$arg" in
-            "$ROOT"/*) arg="${arg#$ROOT/}" ;;
+            # $ROOT is quoted inside the expansion too: an unquoted pattern would
+            # treat glob metacharacters in the repo path (e.g. a directory named
+            # "Ember [v2]") as a bracket expression, silently skip the strip, and
+            # leave an absolute path that the build-tree check below cannot match.
+            "$ROOT"/*) arg="${arg#"$ROOT"/}" ;;
             ./*)       arg="${arg#./}" ;;
         esac
         is_cxx_source "$arg" || die "not a C/C++ source file: $arg"

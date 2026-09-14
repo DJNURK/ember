@@ -1,6 +1,7 @@
 #include "plugin/ParameterIDs.h"
 #include "dsp/styles/SaturationStyle.h"
 
+#include <array>
 #include <cmath>
 #include <memory>
 
@@ -9,9 +10,11 @@ namespace ember::pid
 namespace
 {
 // ---------------------------------------------------------------------------
-// Local helpers. Everything here has internal linkage; none of it is reachable
-// from the audio thread — parameter construction and ID lookup are message
-// thread only, the audio thread reads cached atomics instead.
+// Local helpers, all internal linkage. Layout construction and the choice
+// tables are message thread only. The ID builders are NOT: the processor
+// resolves its parameters through them once per control block on the audio
+// thread, so every ID string is built once into an IdTable and thereafter only
+// copied (a refcount bump), never allocated.
 // ---------------------------------------------------------------------------
 
 /** Version hint carried by every juce::ParameterID. Bump ONLY if a parameter's
@@ -38,6 +41,37 @@ juce::String makeName (const char* prefix, int zeroBasedIndex, const char* suffi
 {
     return juce::String (prefix) + " " + juce::String (zeroBasedIndex + 1) + " " + suffix;
 }
+
+/** An immutable table of the ids "<prefix><1..kCount><suffix>", built once on
+    first use and then only ever copied.
+
+    The declared signatures hand a juce::String back by value, and the processor
+    resolves every global, crossover and band parameter through these builders
+    once per 32-sample control block -- that is, on the AUDIO THREAD.
+    Constructing a juce::String allocates; copying one is an atomic refcount
+    bump on a buffer this table keeps alive for the life of the process. Each id
+    is therefore built exactly once, off the audio thread (the layout is created
+    in the processor's constructor and touches every builder), which removes the
+    only heap allocation this file could put in an audio-thread path. */
+template<int kCount>
+class IdTable
+{
+public:
+    IdTable(const char* prefix, const char* suffix)
+    {
+        for (int i = 0; i < kCount; ++i)
+            entries[static_cast<size_t>(i)] = makeId(prefix, i, suffix);
+    }
+
+    /** Shares the cached buffer: no allocation, and a bad index still clamps. */
+    const juce::String& operator[](int index) const noexcept
+    {
+        return entries[static_cast<size_t>(safeIndex(index, kCount))];
+    }
+
+private:
+    std::array<juce::String, static_cast<size_t>(kCount)> entries;
+};
 
 /** A logarithmic range whose midpoint on the control lands on `centre`.
 
@@ -144,47 +178,47 @@ juce::StringArray buildModulatableIds()
 } // namespace
 
 // --------------------------------------------------------------------- IDs
-juce::String crossover (int i)    { return makeId ("xover", safeIndex (i, kMaxCrossovers)); }
+juce::String crossover (int i) { static const IdTable<kMaxCrossovers> t ("xover", ""); return t[i]; }
 
-juce::String drive (int band)        { return makeId ("band", safeIndex (band, kMaxBands), "Drive"); }
-juce::String bandMix (int band)      { return makeId ("band", safeIndex (band, kMaxBands), "Mix"); }
-juce::String level (int band)        { return makeId ("band", safeIndex (band, kMaxBands), "Level"); }
-juce::String pan (int band)          { return makeId ("band", safeIndex (band, kMaxBands), "Pan"); }
-juce::String width (int band)        { return makeId ("band", safeIndex (band, kMaxBands), "Width"); }
-juce::String style (int band)        { return makeId ("band", safeIndex (band, kMaxBands), "Style"); }
-juce::String feedback (int band)     { return makeId ("band", safeIndex (band, kMaxBands), "Feedback"); }
-juce::String feedbackFreq (int band) { return makeId ("band", safeIndex (band, kMaxBands), "FeedbackFreq"); }
-juce::String dynamics (int band)     { return makeId ("band", safeIndex (band, kMaxBands), "Dynamics"); }
-juce::String toneLow (int band)      { return makeId ("band", safeIndex (band, kMaxBands), "ToneLow"); }
-juce::String toneMid (int band)      { return makeId ("band", safeIndex (band, kMaxBands), "ToneMid"); }
-juce::String toneHigh (int band)     { return makeId ("band", safeIndex (band, kMaxBands), "ToneHigh"); }
-juce::String bypass (int band)       { return makeId ("band", safeIndex (band, kMaxBands), "Bypass"); }
-juce::String solo (int band)         { return makeId ("band", safeIndex (band, kMaxBands), "Solo"); }
+juce::String drive (int band)        { static const IdTable<kMaxBands> t ("band", "Drive");        return t[band]; }
+juce::String bandMix (int band)      { static const IdTable<kMaxBands> t ("band", "Mix");          return t[band]; }
+juce::String level (int band)        { static const IdTable<kMaxBands> t ("band", "Level");        return t[band]; }
+juce::String pan (int band)          { static const IdTable<kMaxBands> t ("band", "Pan");          return t[band]; }
+juce::String width (int band)        { static const IdTable<kMaxBands> t ("band", "Width");        return t[band]; }
+juce::String style (int band)        { static const IdTable<kMaxBands> t ("band", "Style");        return t[band]; }
+juce::String feedback (int band)     { static const IdTable<kMaxBands> t ("band", "Feedback");     return t[band]; }
+juce::String feedbackFreq (int band) { static const IdTable<kMaxBands> t ("band", "FeedbackFreq"); return t[band]; }
+juce::String dynamics (int band)     { static const IdTable<kMaxBands> t ("band", "Dynamics");     return t[band]; }
+juce::String toneLow (int band)      { static const IdTable<kMaxBands> t ("band", "ToneLow");      return t[band]; }
+juce::String toneMid (int band)      { static const IdTable<kMaxBands> t ("band", "ToneMid");      return t[band]; }
+juce::String toneHigh (int band)     { static const IdTable<kMaxBands> t ("band", "ToneHigh");     return t[band]; }
+juce::String bypass (int band)       { static const IdTable<kMaxBands> t ("band", "Bypass");       return t[band]; }
+juce::String solo (int band)         { static const IdTable<kMaxBands> t ("band", "Solo");         return t[band]; }
 
-juce::String lfoRate (int i)   { return makeId ("lfo", safeIndex (i, kNumXLFOs), "Rate"); }
-juce::String lfoSync (int i)   { return makeId ("lfo", safeIndex (i, kNumXLFOs), "Sync"); }
-juce::String lfoPhase (int i)  { return makeId ("lfo", safeIndex (i, kNumXLFOs), "Phase"); }
-juce::String lfoSmooth (int i) { return makeId ("lfo", safeIndex (i, kNumXLFOs), "Smooth"); }
-juce::String lfoSteps (int i)  { return makeId ("lfo", safeIndex (i, kNumXLFOs), "Steps"); }
-juce::String lfoDepth (int i)  { return makeId ("lfo", safeIndex (i, kNumXLFOs), "Depth"); }
+juce::String lfoRate (int i)   { static const IdTable<kNumXLFOs> t ("lfo", "Rate");   return t[i]; }
+juce::String lfoSync (int i)   { static const IdTable<kNumXLFOs> t ("lfo", "Sync");   return t[i]; }
+juce::String lfoPhase (int i)  { static const IdTable<kNumXLFOs> t ("lfo", "Phase");  return t[i]; }
+juce::String lfoSmooth (int i) { static const IdTable<kNumXLFOs> t ("lfo", "Smooth"); return t[i]; }
+juce::String lfoSteps (int i)  { static const IdTable<kNumXLFOs> t ("lfo", "Steps");  return t[i]; }
+juce::String lfoDepth (int i)  { static const IdTable<kNumXLFOs> t ("lfo", "Depth");  return t[i]; }
 
-juce::String egAttack (int i)    { return makeId ("eg", safeIndex (i, kNumEnvGenerators), "Attack"); }
-juce::String egDecay (int i)     { return makeId ("eg", safeIndex (i, kNumEnvGenerators), "Decay"); }
-juce::String egSustain (int i)   { return makeId ("eg", safeIndex (i, kNumEnvGenerators), "Sustain"); }
-juce::String egRelease (int i)   { return makeId ("eg", safeIndex (i, kNumEnvGenerators), "Release"); }
-juce::String egThreshold (int i) { return makeId ("eg", safeIndex (i, kNumEnvGenerators), "Threshold"); }
-juce::String egTrigger (int i)   { return makeId ("eg", safeIndex (i, kNumEnvGenerators), "Trigger"); }
+juce::String egAttack (int i)    { static const IdTable<kNumEnvGenerators> t ("eg", "Attack");    return t[i]; }
+juce::String egDecay (int i)     { static const IdTable<kNumEnvGenerators> t ("eg", "Decay");     return t[i]; }
+juce::String egSustain (int i)   { static const IdTable<kNumEnvGenerators> t ("eg", "Sustain");   return t[i]; }
+juce::String egRelease (int i)   { static const IdTable<kNumEnvGenerators> t ("eg", "Release");   return t[i]; }
+juce::String egThreshold (int i) { static const IdTable<kNumEnvGenerators> t ("eg", "Threshold"); return t[i]; }
+juce::String egTrigger (int i)   { static const IdTable<kNumEnvGenerators> t ("eg", "Trigger");   return t[i]; }
 
-juce::String efAttack (int i)  { return makeId ("ef", safeIndex (i, kNumEnvFollowers), "Attack"); }
-juce::String efRelease (int i) { return makeId ("ef", safeIndex (i, kNumEnvFollowers), "Release"); }
-juce::String efBand (int i)    { return makeId ("ef", safeIndex (i, kNumEnvFollowers), "Band"); }
-juce::String efGain (int i)    { return makeId ("ef", safeIndex (i, kNumEnvFollowers), "Gain"); }
+juce::String efAttack (int i)  { static const IdTable<kNumEnvFollowers> t ("ef", "Attack");  return t[i]; }
+juce::String efRelease (int i) { static const IdTable<kNumEnvFollowers> t ("ef", "Release"); return t[i]; }
+juce::String efBand (int i)    { static const IdTable<kNumEnvFollowers> t ("ef", "Band");    return t[i]; }
+juce::String efGain (int i)    { static const IdTable<kNumEnvFollowers> t ("ef", "Gain");    return t[i]; }
 
-juce::String midiType (int i)   { return makeId ("midi", safeIndex (i, kNumMidiSources), "Type"); }
-juce::String midiCC (int i)     { return makeId ("midi", safeIndex (i, kNumMidiSources), "CC"); }
-juce::String midiSmooth (int i) { return makeId ("midi", safeIndex (i, kNumMidiSources), "Smooth"); }
+juce::String midiType (int i)   { static const IdTable<kNumMidiSources> t ("midi", "Type");   return t[i]; }
+juce::String midiCC (int i)     { static const IdTable<kNumMidiSources> t ("midi", "CC");     return t[i]; }
+juce::String midiSmooth (int i) { static const IdTable<kNumMidiSources> t ("midi", "Smooth"); return t[i]; }
 
-juce::String macro (int i)      { return makeId ("macro", safeIndex (i, kNumMacros)); }
+juce::String macro (int i)      { static const IdTable<kNumMacros> t ("macro", ""); return t[i]; }
 
 // ----------------------------------------------------------------- choices
 juce::StringArray styleChoices()

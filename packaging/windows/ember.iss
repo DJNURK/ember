@@ -12,7 +12,7 @@
 ;         /DEmberSourceDir=C:\path\to\build\windows-release\Ember_artefacts\Release ^
 ;         /DEmberOutputDir=C:\path\to\build\packages
 ;
-;  All three defines are optional; the defaults below assume the layout produced
+;  All four defines are optional; the defaults below assume the layout produced
 ;  by `cmake --build --preset windows-release`. Prefer absolute paths for
 ;  /DEmberSourceDir - a relative one is resolved against this script's folder.
 ;
@@ -28,15 +28,15 @@
 #endif
 
 #ifndef EmberSourceDir
-  #define EmberSourceDir SourcePath + "..\..\build\windows-release\Ember_artefacts\Release"
+  #define EmberSourceDir AddBackslash(SourcePath) + "..\..\build\windows-release\Ember_artefacts\Release"
 #endif
 
 #ifndef EmberOutputDir
-  #define EmberOutputDir SourcePath + "..\..\build\packages"
+  #define EmberOutputDir AddBackslash(SourcePath) + "..\..\build\packages"
 #endif
 
 #ifndef EmberLicenseFile
-  #define EmberLicenseFile SourcePath + "..\..\LICENSE"
+  #define EmberLicenseFile AddBackslash(SourcePath) + "..\..\LICENSE"
 #endif
 
 #define EmberName      "Ember"
@@ -44,11 +44,12 @@
 #define EmberUrl       "https://example.invalid/ember"
 
 ; A relative /DEmberSourceDir is resolved against the folder holding this script,
-; so that the [Files] entries and the existence checks below agree.
+; so that the [Files] entries and the existence checks below agree. SourcePath
+; carries no trailing backslash, hence AddBackslash() on every join with it.
 #if DirExists(EmberSourceDir)
   #define EmberSrc EmberSourceDir
 #else
-  #define EmberSrc SourcePath + EmberSourceDir
+  #define EmberSrc AddBackslash(SourcePath) + EmberSourceDir
 #endif
 
 #define EmberVst3Dir       EmberSrc + "\VST3\Ember.vst3"

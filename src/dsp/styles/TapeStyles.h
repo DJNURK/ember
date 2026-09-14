@@ -55,6 +55,20 @@ inline float clampDrive (float driveLin) noexcept
     return juce::jlimit (0.001f, 316.0f, dsputil::sanitise (driveLin));
 }
 
+/** Bound one input sample before it reaches a recursive stage.
+
+    `sanitise` alone is not enough for a filter that has gain: a *finite* host
+    sample near the float maximum can still overflow the first multiply to
+    infinity, and inf - inf is NaN, which then sits in the filter state for the
+    rest of the block. +/- 64 is ~+36 dBFS — far above anything a band can
+    legitimately carry, and every shaper in this file is fully saturated long
+    before it, so the bound costs no character while making overflow
+    impossible. (Same rail, and the same reasoning, as TubeStyles.) */
+inline float clampInput (float x) noexcept
+{
+    return dsputil::hardClip (dsputil::sanitise (x), 64.0f);
+}
+
 /** Final safety net applied to every sample a style writes: finite, and inside
     the +/- 8 bound the SaturationStyle contract guarantees. */
 inline float finish (float y) noexcept
@@ -146,9 +160,12 @@ private:
 
     `pre * de == 1` identically, and both are stable because 0 < a < b < 1. The
     de-emphasis has an impulse response whose l1 norm is exactly 1, so it can
-    never expand the bounded shaper output. Highs hit the curve first because
-    they arrive up to ~14 dB hotter; at low drive the shaper is near-linear and
-    the pair nulls, so the tone stays neutral while the character changes.
+    never expand the bounded shaper output; the pre-emphasis has an l1 norm of
+    `2 * shelf - 1` (at most 9), which is why its input is bounded rather than
+    only sanitised — see `tapedetail::clampInput`. Highs hit the curve first
+    because they arrive up to ~14 dB hotter; at low drive the shaper is
+    near-linear and the pair nulls, so the tone stays neutral while the
+    character changes.
 */
 class BrightTapeStyle final : public SaturationStyle
 {

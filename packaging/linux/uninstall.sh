@@ -7,8 +7,8 @@
 #   ./uninstall.sh --prefix DIR    # remove DIR/Ember.vst3
 #
 # Exactly the inverse of install.sh: it deletes the Ember.vst3 bundle it created
-# and nothing else — the ~/.vst3 directory itself is left alone because other
-# plug-ins live there.
+# and nothing else — a ~/.vst3 shared with other plug-ins is left in place, and
+# the directory itself is removed only when Ember was the last thing in it.
 # ---------------------------------------------------------------------------
 set -euo pipefail
 

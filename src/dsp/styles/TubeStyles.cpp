@@ -74,8 +74,21 @@ constexpr float kCleanInvInner = 1.0f / kCleanInner;
 // Warm Tube
 constexpr float kWarmShelfHz     = 220.0f;
 constexpr float kWarmShelfQ      = 0.6f;
-constexpr float kWarmShelfMin    = 0.45f;   ///< low-band boost at 0 dB drive (~+3.2 dB)
-constexpr float kWarmShelfRange   = 0.85f;  ///< extra boost at 40 dB drive (~+8.3 dB total)
+/** Low-band boost at 0 dB drive: DC gain is `1 + kWarmShelfMin` (+2.3 dB).
+
+    This one is gain-match critical, not just taste. `StyleCalibrator` measures
+    every style's compensation on FLAT noise, but the spec's "+/-1 dB between
+    styles at 0 dB drive" is judged on PROGRAMME-like (pink) material, which has
+    roughly a third of its energy under this shelf's corner where flat noise has
+    almost none. A scalar trim cannot close that gap — the calibrator cancels
+    any scalar exactly — so the only lever is how much spectral tilt the style
+    adds at unity drive. At 0.45 (+3.2 dB) the measured deviation is 1.04 dB and
+    the gate fails; at 0.30 it is 0.67 dB. The shelf at FULL drive is unchanged:
+    `kWarmShelfRange` was raised by the same amount, so the endpoint is still
+    1.30 and the thick, bass-driven character at high drive is exactly as it
+    was. Raise this and re-run "[gainmatch]" before assuming it is free. */
+constexpr float kWarmShelfMin    = 0.30f;
+constexpr float kWarmShelfRange  = 1.00f;   ///< to 1.30 at 40 dB drive (~+7.2 dB total)
 constexpr float kWarmBiasBase    = 0.30f;
 constexpr float kWarmBiasRange   = 0.25f;
 constexpr float kWarmInner       = 0.9f;

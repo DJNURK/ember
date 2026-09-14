@@ -57,10 +57,10 @@ constexpr double kHoldRateTopHz = 200000.0;
     extension, which is what the sign flip below produces: identity on
     [-1, 1], then folding.
 */
-float foldShaper (float x) noexcept
+double foldShaper (double x) noexcept
 {
-    const float y = adaa::foldF (x);
-    return x < 0.0f ? -y : y;
+    const double y = adaa::foldF (x);
+    return x < 0.0 ? -y : y;
 }
 
 /**
@@ -83,17 +83,26 @@ float foldShaper (float x) noexcept
 
     F1 is even, as the antiderivative of an odd function must be.
 */
-float foldAntideriv (float x) noexcept
+double foldAntideriv (double x) noexcept
 {
-    const double a = std::abs (static_cast<double> (x));
+    const double a = std::abs (x);
     const double u = a + 1.0;
     const double t = u - 4.0 * std::floor (u * 0.25);        // t in [0, 4)
     const double h = t <= 2.0 ? 0.5 * t * t
                               : 4.0 * t - 0.5 * t * t - 4.0; // integral of the triangle
-    return static_cast<float> (h + 0.5 - t);
+    // Stays in double all the way out: rounding the result to float first costs
+    // ~6e-8 per evaluation, and `process1` divides the DIFFERENCE of two of
+    // these by a step as small as `kFoldAdaaEps`, which amplifies that to
+    // 5.3e-4 (-65 dB) of broadband error — measured against the double form.
+    return h + 0.5 - t;
 }
 
 // ---------------------------------------------------------------- helpers
+/** The hard ceiling `softBound` asymptotes to. Anything already produced by
+    `softBound` is inside this, so re-clamping to it is a no-op — which is what
+    lets the per-block state guard be idempotent. */
+constexpr float kSoftBoundCeiling = 6.0f;
+
 /** Output guard. Exactly transparent (and slope-continuous) up to +/-2, soft
     above it, hard-bounded at +/-6 — comfortably inside the +/-8 the style
     contract allows for any finite input. */
@@ -294,8 +303,14 @@ void DecimateStyle::process (float* const* channelData, int numChannels, int num
     if (! (std::isfinite (phase) && phase >= 0.0f && phase <= 1.0f))
         phase = 1.0f;
 
+    // Idempotent guard. `softBound` is NOT idempotent above +/-2 — re-applying
+    // it once per block would walk a held value back towards 2 a little further
+    // every block, which both drifts a sample that is supposed to be frozen and
+    // makes the output depend on how the host chops the buffer (BandChain
+    // already calls process() in control-block-sized chunks). Bounding happens
+    // once, where the sample is latched; here we only reject garbage.
     for (auto& h : held)
-        h = softBound (dsputil::sanitise (h));
+        h = juce::jlimit (-kSoftBoundCeiling, kSoftBoundCeiling, dsputil::sanitise (h));
 
     for (int n = 0; n < numSamples; ++n)
     {

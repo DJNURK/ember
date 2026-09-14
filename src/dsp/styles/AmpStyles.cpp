@@ -98,7 +98,14 @@ void AmpStyleBase::updateCoefficients(double sampleRate) noexcept
         cs.post.setTimeConstant(postTau);
     }
 
-    preparedSampleRate = sr;
+    // Remember the rate that was ASKED for, not the clamped fallback: `process`
+    // compares against this to decide whether the rate has changed. Storing the
+    // fallback instead would make an out-of-range or zero rate compare unequal
+    // on every single block, rebuilding every coefficient and — because
+    // `SvfTPT::prepare` resets — wiping the mid filters' state once per block
+    // for the rest of the session. A non-finite request cannot be compared at
+    // all, so it falls back to the rate the coefficients were actually built for.
+    preparedSampleRate = std::isfinite(sampleRate) ? sampleRate : sr;
 }
 
 void AmpStyleBase::process(float* const* channelData, int numChannels, int numSamples,

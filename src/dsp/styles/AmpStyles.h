@@ -99,6 +99,11 @@ private:
     void updateCoefficients(double sampleRate) noexcept;
 
     ampdetail::AmpChannelState channels[ampdetail::kMaxAmpChannels] {};
+
+    /** The rate the coefficients were last built *for*, as the caller asked for
+        it — including a value `updateCoefficients` had to substitute a fallback
+        for. Only used to detect a change, so it must record the request, not the
+        fallback, or an out-of-range rate would rebuild on every block. */
     double preparedSampleRate { 44100.0 };
 };
 

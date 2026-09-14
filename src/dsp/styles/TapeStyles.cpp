@@ -249,7 +249,14 @@ void BrightTapeStyle::process (float* const* channelData, int numChannels, int n
 
         for (int i = 0; i < numSamples; ++i)
         {
-            const float x = dsputil::sanitise (data[i]);
+            // Bounded, not merely sanitised: the pre-emphasis has gain (its l1
+            // norm is 2*shelf - 1, so at most 9), and an unbounded finite input
+            // would overflow `preB0 * x` to infinity. The next sample then adds
+            // +inf to -inf, NaN lands in preY1, and — because recursive state is
+            // only sanitised at the block boundary — the whole rest of the block
+            // comes out silent. With |x| <= 64 the state is bounded by 576 and
+            // that cannot happen.
+            const float x = tapedetail::clampInput (data[i]);
 
             const float pre = preB0 * x + preB1 * s.preX1 + preA1 * s.preY1;
             s.preX1 = x;

@@ -18,8 +18,13 @@ Nothing here builds the plug-in. Build first:
 ```sh
 cmake --preset macos-universal        # or linux-release / windows-release
 cmake --build --preset macos-universal
-ctest --preset macos-release          # and scripts/run-pluginval.sh
 ```
+
+Testing is not part of packaging, and `macos-universal` has no test preset: the gates
+(`ctest --preset macos-release` / `linux-release` / `windows-release`, and
+`scripts/run-pluginval.sh`) run from the matching test preset's own build directory.
+`.github/workflows/ci.yml` does that on every push; the release workflow only builds
+and packages.
 
 ---
 
@@ -155,22 +160,22 @@ Linux gets a tarball rather than a distro package, because VST3 hosts on Linux a
 ```
 Ember-1.0.0-Linux/
 ├── Ember.vst3/        (the bundle, containing Contents/x86_64-linux/Ember.so)
-├── Ember              (standalone binary, run directly from here)
 ├── install.sh
 ├── uninstall.sh
-├── LICENSE
-└── README.md
+└── LICENSE
 ```
 
-Build it by hand:
+The tarball carries that single top-level directory, so `install.sh` can find
+`Ember.vst3` next to itself and hand off to `./uninstall.sh` afterwards. Build it by
+hand:
 
 ```sh
-cmake --preset linux-release && cmake --build --preset linux-release
+cmake --preset linux-release && cmake --build --preset linux-release --target Ember_VST3
 STAGE=build/packages/Ember-1.0.0-Linux
 mkdir -p "$STAGE"
 cp -a build/linux-release/Ember_artefacts/Release/VST3/Ember.vst3 "$STAGE/"
-cp -a build/linux-release/Ember_artefacts/Release/Standalone/Ember "$STAGE/"
-cp packaging/linux/install.sh packaging/linux/uninstall.sh LICENSE README.md "$STAGE/"
+cp packaging/linux/install.sh packaging/linux/uninstall.sh LICENSE "$STAGE/"
+chmod +x "$STAGE/install.sh" "$STAGE/uninstall.sh"
 tar -C build/packages -czf build/packages/Ember-1.0.0-Linux.tar.gz Ember-1.0.0-Linux
 ```
 
@@ -190,28 +195,42 @@ it is empty.
 
 ## What CI expects
 
-`.github/workflows/release.yml` is the only consumer of these files. Its contract:
+`.github/workflows/release.yml` is the only consumer of these files; it runs on a `v*`
+tag or a manual dispatch. Its contract:
 
 1. Build Release on each runner with the matching preset — `macos-universal`,
-   `linux-release`, `windows-release` — and gate on `ctest` plus
-   `scripts/run-pluginval.sh` before packaging anything.
-2. Run the packaging entry point for the platform with the tag version (`v1.0.0` →
-   `1.0.0`) and write the result to `build/packages/`.
-3. Upload exactly these names to the Release:
-   `Ember-<version>-Windows.exe`, `Ember-<version>-macOS.pkg`,
-   `Ember-<version>-Linux.tar.gz`.
+   `linux-release`, `windows-release` — with `EMBER_BUILD_TESTS=OFF`. The `ctest` and
+   pluginval gates live in `ci.yml` and run on every push and pull request; the release
+   workflow builds and packages only.
+2. Call each entry point with the tag version (`v1.0.0` → `1.0.0`):
+   * Windows — `ISCC.exe /DEmberVersion=<v> /DEmberSourceDir=<Ember_artefacts\Release>`,
+     plus `/O` and `/F` to pin the output directory and file name. The other two defines
+     keep their defaults, so the repository `LICENSE` is the wizard's licence page.
+   * macOS — stage the three signed bundles into a `VST3/`, `AU/`, `Standalone/` tree and
+     run `build-pkg.sh <version> <that directory> <out.pkg>`: three positional arguments,
+     no options, no environment inputs. `INSTALLER_SIGN_ID` is deliberately left unset —
+     the workflow runs `productsign` and `notarytool` itself, so `notarize.sh` is the
+     hand equivalent of those steps rather than a CI step.
+   * Linux — `tar` `Ember.vst3` together with both scripts and `LICENSE`, under a single
+     `Ember-<version>-Linux/` directory.
+3. Collect everything in `dist/` and upload five assets:
+   `Ember-<version>-Windows.exe`, `Ember-<version>-Windows.zip`,
+   `Ember-<version>-macOS.pkg`, `Ember-<version>-macOS.zip`,
+   `Ember-<version>-Linux.tar.gz`. The two `.zip`s are raw bundles zipped by the
+   workflow — nothing in this directory produces them.
 
-Repository secrets, all optional — the workflow should skip signing and notarisation when
-they are absent so forks and pull requests still build installers:
+Repository secrets, all optional — without them the release is still produced, ad-hoc
+signed, so forks and pull requests still build installers:
 
 | Secret | Consumed as |
 |--------|-------------|
-| `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PWD` | base64 `.p12` imported into a temporary keychain before `codesign` |
-| `MACOS_INSTALLER_SIGN_ID` | `INSTALLER_SIGN_ID` for `build-pkg.sh` |
-| `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` | environment for `notarize.sh` |
+| `APPLE_CERT_P12_BASE64`, `APPLE_CERT_PASSWORD` | base64 `.p12` imported into a temporary keychain for `codesign` |
+| `APPLE_INSTALLER_CERT_P12_BASE64` | "Developer ID Installer" `.p12`, used by `productsign` on the finished `.pkg` |
+| `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` | `xcrun notarytool` credentials — the same three `notarize.sh` reads |
 
 Runner prerequisites: Xcode command line tools on macOS (`pkgbuild`, `productbuild`,
-`xcrun`), Inno Setup 6 on Windows (`iscc` on `PATH`), nothing beyond `tar` on Linux.
+`xcrun`), Inno Setup 6 on Windows (the workflow locates `ISCC.exe` or installs it with
+Chocolatey), nothing beyond `tar` on Linux.
 
 Version numbers live in exactly one place, `project(Ember VERSION 1.0.0)` in
 `CMakeLists.txt`. When bumping it, pass the same value to the packaging entry points; the
