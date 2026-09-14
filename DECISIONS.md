@@ -179,3 +179,24 @@ someone else's licence with a GPLv3 plugin and getting that interaction right;
 drawing the icons means they scale cleanly to any window size and DPI without a
 second set of assets, which matters for a GUI that is resizable from 800×480 to
 3000×2000. The directories are therefore empty and git does not track them.
+
+**D21 — Channel counts come from the buffer, never from the bus layout.**
+`AudioBuffer::getArrayOfWritePointers()` returns exactly
+`buffer.getNumChannels()` pointers. `getTotalNumOutputChannels()` reports what
+the *bus layout* advertises, and the two are not the same thing: a host may hand
+over a narrower buffer than the layout claims, and plugin validators
+deliberately probe that. Indexing or constructing a buffer view with the layout
+count therefore reads past the end of the pointer array.
+
+This is undefined behaviour of the worst kind for a cross-platform plugin — it
+survives wherever the stale pointer happens to still be mapped and faults
+wherever it is not. `EmberAudioProcessor::processBlock` had it, and it passed 36
+unit tests, ASan, UBSan, and `pluginval --strictness-level 10` on both macOS and
+Linux before a Windows CI run crashed on it. Nothing local was ever going to
+find it.
+
+Every audio-thread entry point now clamps with
+`jmin(getTotalNumOutputChannels(), buffer.getNumChannels())`. The DSP layer
+already did this correctly — `BandChain` and `EmberEngine` both clamp against
+their buffer — so the plugin wrapper was the only offender, but the rule is
+worth stating so it stays that way.
