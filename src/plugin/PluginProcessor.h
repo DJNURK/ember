@@ -62,7 +62,7 @@ public:
 
     /** The editor turns spectrum analysis on while it is open and off when it
         closes, so instances with no window pay nothing for FFTs. */
-    void getEngineSpectrumEnabled(bool shouldAnalyse) noexcept { engine.setSpectrumEnabled(shouldAnalyse); }
+    void setSpectrumAnalysisEnabled(bool shouldAnalyse) noexcept { engine.setSpectrumEnabled(shouldAnalyse); }
 
     /** Peak output level of a band, 0..1, for the band "heat" overlay. */
     float getBandLevel(int band) const noexcept { return engine.getBandLevel(band); }

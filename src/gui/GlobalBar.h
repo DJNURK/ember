@@ -2,6 +2,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <array>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -292,6 +293,9 @@ private:
     void showOverflowMenu();
     void addChoiceSubMenu(juce::PopupMenu& menu, const juce::String& title, const juce::String& parameterIDToUse);
     void setChoiceParameter(const juce::String& parameterIDToUse, int choiceIndex);
+
+    /** "11.6 ms · 512 samples", or a placeholder before `prepareToPlay`. */
+    juce::String latencyDescription() const;
 
     /** `base` px at the strip's own scale, clamped to a sane range. */
     int scaled(float base, int minimum, int maximum) const;

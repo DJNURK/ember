@@ -195,6 +195,7 @@ private:
     int hoveredBand{-1};
     int hoveredDivider{-1};
     int draggedDivider{-1};
+    bool dragFine{false};
     float dragStartX{0.0f};
     float dragStartHz{1000.0f};
 

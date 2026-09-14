@@ -8,7 +8,7 @@ EmberAudioProcessorEditor::EmberAudioProcessorEditor(EmberAudioProcessor& p)
     setLookAndFeel(&lookAndFeel);
 
     // The spectrum FFT only runs while a window is open.
-    processorRef.getEngineSpectrumEnabled(true);
+    processorRef.setSpectrumAnalysisEnabled(true);
 
     const auto stored = processorRef.getEditorBounds();
     setResizable(true, true);
@@ -19,7 +19,7 @@ EmberAudioProcessorEditor::EmberAudioProcessorEditor(EmberAudioProcessor& p)
 
 EmberAudioProcessorEditor::~EmberAudioProcessorEditor()
 {
-    processorRef.getEngineSpectrumEnabled(false);
+    processorRef.setSpectrumAnalysisEnabled(false);
     setLookAndFeel(nullptr);
 }
 
