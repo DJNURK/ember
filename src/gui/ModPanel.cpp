@@ -2277,7 +2277,8 @@ public:
         {
             // The column header lines up with the rows even when they are
             // scrolled sideways, so the titles never lie about what they label.
-            const auto strip = headerArea.withX(headerArea.getX() - rowViewport.getViewPositionX()).withWidth(contentWidth);
+            const auto strip =
+                headerArea.withX(headerArea.getX() - rowViewport.getViewPositionX()).withWidth(contentWidth);
             const auto columns = matrixColumns(strip.reduced(4, 0), owner.uiScale());
 
             const juce::Graphics::ScopedSaveState state(g);

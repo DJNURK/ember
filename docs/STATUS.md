@@ -75,8 +75,12 @@ cannot quietly drift.
 ## Known gaps
 
 - CPU target missed at the maximum configuration, as above.
-- CI and the release pipeline are written but have never run — there is no
-  remote repository yet, so no tag has been pushed and no installers have been
-  produced by the pipeline. Local packaging scripts are syntax-checked only.
-- Windows and Linux builds are untested: this host is macOS.
+- The release pipeline has not yet produced installers: no tag has been pushed.
+  The **macOS** path is verified by hand — `packaging/macos/build-pkg.sh` builds
+  a real 5.8 MB `.pkg`, and expanding it confirms `Ember.vst3` →
+  `/Library/Audio/Plug-Ins/VST3`, `Ember.component` →
+  `/Library/Audio/Plug-Ins/Components` and `Ember.app` → `/Applications`.
+  The **Windows** (Inno Setup) and **Linux** (tar.gz + install.sh) paths are
+  syntax-checked only and have never been executed.
+- Windows and Linux plugin builds are exercised by CI, not on this host.
 - The AUv3 target is wired behind `EMBER_BUILD_AUV3` but not built or validated.
