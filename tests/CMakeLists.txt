@@ -5,7 +5,8 @@ add_executable(ember_tests
     test_aliasing.cpp
     test_feedback.cpp
     test_smoothing.cpp
-    test_state.cpp)
+    test_state.cpp
+    test_presets.cpp)
 
 target_include_directories(ember_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(ember_tests PRIVATE
@@ -35,3 +36,13 @@ target_link_libraries(ember_render PRIVATE
     juce::juce_audio_formats
     juce::juce_recommended_config_flags)
 set_target_properties(ember_render PROPERTIES FOLDER "Ember")
+
+# Factory-preset generator. Emits resources/presets/*.xml from the real
+# parameter layout so ids, ranges and modulation target indices cannot drift
+# out of sync with the plugin.
+add_executable(ember_makepresets ${CMAKE_CURRENT_SOURCE_DIR}/../tools/make_presets.cpp)
+target_include_directories(ember_makepresets PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(ember_makepresets PRIVATE
+    ember_dsp
+    juce::juce_recommended_config_flags)
+set_target_properties(ember_makepresets PROPERTIES FOLDER "Ember")
