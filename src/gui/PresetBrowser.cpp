@@ -842,10 +842,7 @@ void PresetBrowser::resized()
     const float inset = juce::jmax(2.0f, 3.0f * uiScale);
 
     const auto insetWell = [inset](juce::Rectangle<float> area)
-    {
-        return area.reduced(juce::jmin(inset, area.getWidth() * 0.5f),
-                            juce::jmin(inset, area.getHeight() * 0.5f));
-    };
+    { return area.reduced(juce::jmin(inset, area.getWidth() * 0.5f), juce::jmin(inset, area.getHeight() * 0.5f)); };
 
     categoryList.setBounds(insetWell(categoryWell).toNearestInt());
     presetList.setBounds(insetWell(presetWell).toNearestInt());
@@ -1057,9 +1054,8 @@ void PresetBrowser::paintCategoryRow(int rowNumber, juce::Graphics& g, int width
     // How many presets this category holds, so the column carries information
     // rather than just being a filter. Cached by rebuildCategories(): counting
     // here would rescan the whole library once per row, per repaint.
-    const int count = juce::isPositiveAndBelow(rowNumber, categoryCounts.size())
-                          ? categoryCounts.getUnchecked(rowNumber)
-                          : 0;
+    const int count =
+        juce::isPositiveAndBelow(rowNumber, categoryCounts.size()) ? categoryCounts.getUnchecked(rowNumber) : 0;
 
     const float pad = textPaddingFor(row.getHeight());
     auto text = row.reduced(pad, 0.0f);

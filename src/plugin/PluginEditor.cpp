@@ -8,7 +8,14 @@ namespace
 // holds together from 800x480 up to 3000x2000.
 constexpr int kPresetBarHeight = 34;
 constexpr int kGlobalBarHeight = 74;
-constexpr int kBandPanelHeight = 196;
+// The band panel's content — style picker plus the saturation, stereo, feedback,
+// dynamics and tone groups — needs this much before it starts clipping. Measured
+// by rendering the editor offscreen, not guessed: at the previous 196 the style
+// combo was cut in half and none of the knobs were reachable at the default size.
+constexpr int kBandPanelHeight = 272;
+// Below this the spectrum stops being a usable editing surface, so the band
+// panel gives way first.
+constexpr int kMinSpectrumHeight = 150;
 constexpr int kEdge = 8;
 } // namespace
 
@@ -27,6 +34,11 @@ EmberAudioProcessorEditor::EmberAudioProcessorEditor(EmberAudioProcessor& p)
     wirePanels();
 
     bandPanel.setBand(processorRef.getSelectedBand());
+
+    // The modulation panel starts collapsed: at the default 1100x640 there is
+    // not room for it open as well as a usable spectrum and a complete band
+    // panel, and most sessions begin without any modulation at all.
+    modPanel.setCollapsed(true);
 
     // The spectrum FFT only runs while a window is open.
     processorRef.setSpectrumAnalysisEnabled(true);
@@ -110,8 +122,11 @@ void EmberAudioProcessorEditor::resized()
     modPanel.setBounds(area.removeFromBottom(modHeight));
     area.removeFromBottom(kEdge / 2);
 
-    bandPanel.setBounds(
-        area.removeFromBottom(juce::jmin(juce::roundToInt(kBandPanelHeight * scale), area.getHeight() / 2)));
+    // Give the band panel what its content actually needs, and only take it
+    // away when the spectrum would otherwise stop being a usable surface.
+    const int wantedBand = juce::roundToInt(kBandPanelHeight * scale);
+    const int affordable = juce::jmax(0, area.getHeight() - juce::roundToInt(kMinSpectrumHeight * scale));
+    bandPanel.setBounds(area.removeFromBottom(juce::jmin(wantedBand, affordable)));
     area.removeFromBottom(kEdge / 2);
 
     spectrum.setBounds(area);

@@ -30,7 +30,7 @@ Last updated: 2026-09-14. Everything below is measured on the host machine
 | Realtime CPU ≤ 3 % of one core (stereo 48 kHz, 6 bands, 4×) | **NOT met — 7.6 %.** See below |
 | ASan/UBSan clean | **pass** — all 28 tests / 36,771 assertions clean under `-fsanitize=address,undefined` locally on macOS; the Linux sanitiser job runs the same suite in CI |
 | Manual checklist in `docs/TESTING.md` | 34 renders produced in `test-renders/`; checklist not yet walked in a DAW |
-| GUI | built and automatically exercised — pluginval L10 constructs and destroys the editor, opens it while audio is processing, drives editor automation and runs parameter thread-safety checks, all passing. NOT visually inspected: this host grants the session neither screen-recording nor accessibility permission |
+| GUI | **pass** — pluginval L10 constructs and destroys the editor, opens it while audio is processing, drives editor automation and runs parameter thread-safety checks. Visually inspected by rendering the real editor offscreen with `ember_rendereditor` at 800×480, 1100×640 and 1100×1000; this found a clipped band panel at the default size that no test caught |
 
 ## CPU
 

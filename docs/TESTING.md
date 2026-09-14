@@ -417,6 +417,31 @@ at 10 dB drive, on drums.
 
 ---
 
+## 11b. Offscreen GUI renders
+
+The editor can be inspected without a display, which is how the layout is
+checked on CI and on machines that do not grant screen-recording permission:
+
+```sh
+cmake --build build --target ember_rendereditor
+./build/tests/ember_rendereditor shots/default.png 1100 640
+./build/tests/ember_rendereditor shots/minimum.png 800 480
+./build/tests/ember_rendereditor shots/large.png   1600 1100
+```
+
+It builds a real processor, pushes audio through it so the spectrum and meters
+have something to draw, runs the panels' timers, and writes what the editor
+actually paints.
+
+- [ ] Default size: every panel complete, nothing clipped, modulation collapsed.
+- [ ] Minimum size: the global bar abbreviates and moves overflow into its `…`
+      menu; knob captions drop but values stay; no text overlaps.
+- [ ] Large size: nothing stretched or stranded; the spectrum takes the extra
+      room rather than the fixed strips.
+
+Rendering at the minimum size is the one that matters — that is where a layout
+gives out, and a clipped panel is invisible to every unit test in the suite.
+
 ## 12. Sign-off
 
 - [ ] Every box above is ticked, or has a filed issue linked next to it.

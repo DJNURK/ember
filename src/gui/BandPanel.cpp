@@ -249,11 +249,29 @@ public:
             const auto textArea = strip.withTrimmedTop(3.0f);
             g.setFont(scaleFont);
 
-            g.setColour(expanding ? accent : EmberColours::textDisabled);
-            g.drawText("EXPAND", textArea, juce::Justification::centredLeft, false);
+            // At the minimum window size the two words meet in the middle and
+            // read as one. Fall back to the arrows, which carry the same meaning
+            // in the space available, and drop them entirely if even that will
+            // not fit.
+            const float needed = juce::GlyphArrangement::getStringWidth(scaleFont, "EXPAND") +
+                                 juce::GlyphArrangement::getStringWidth(scaleFont, "COMPRESS") + 10.0f;
 
-            g.setColour(compressing ? accent : EmberColours::textDisabled);
-            g.drawText("COMPRESS", textArea, juce::Justification::centredRight, false);
+            if (textArea.getWidth() >= needed)
+            {
+                g.setColour(expanding ? accent : EmberColours::textDisabled);
+                g.drawText("EXPAND", textArea, juce::Justification::centredLeft, false);
+
+                g.setColour(compressing ? accent : EmberColours::textDisabled);
+                g.drawText("COMPRESS", textArea, juce::Justification::centredRight, false);
+            }
+            else if (textArea.getWidth() >= 28.0f)
+            {
+                g.setColour(expanding ? accent : EmberColours::textDisabled);
+                g.drawText(juce::String::fromUTF8("\xe2\x86\x90"), textArea, juce::Justification::centredLeft, false);
+
+                g.setColour(compressing ? accent : EmberColours::textDisabled);
+                g.drawText(juce::String::fromUTF8("\xe2\x86\x92"), textArea, juce::Justification::centredRight, false);
+            }
         }
 
         if (meterCaptionArea.getHeight() > 6)

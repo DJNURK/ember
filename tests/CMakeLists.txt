@@ -47,3 +47,13 @@ target_link_libraries(ember_makepresets PRIVATE
     ember_dsp
     juce::juce_recommended_config_flags)
 set_target_properties(ember_makepresets PROPERTIES FOLDER "Ember")
+
+# Offscreen GUI renderer. The editor is otherwise only inspectable on a machine
+# with a display and screen-recording permission, which rules out CI; this walks
+# the real editor and writes a PNG of what it paints.
+add_executable(ember_rendereditor ${CMAKE_CURRENT_SOURCE_DIR}/../tools/render_editor.cpp)
+target_include_directories(ember_rendereditor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(ember_rendereditor PRIVATE
+    ember_dsp
+    juce::juce_recommended_config_flags)
+set_target_properties(ember_rendereditor PROPERTIES FOLDER "Ember")
