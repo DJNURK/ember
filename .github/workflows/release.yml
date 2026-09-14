@@ -212,6 +212,15 @@ jobs:
           # /O overrides OutputDir, so only the two below need passing — every other name would
           # either be ignored or collide with one the script #defines itself.
           # /O and /F override OutputDir / OutputBaseFilename, guaranteeing the asset name.
+          #
+          # Git Bash rewrites any argument that looks like a POSIX path, so ISCC's
+          # own switches - /O, /F, /D - are mangled into filenames before it ever
+          # sees them, and it fails with "You may not specify more than one script
+          # filename". Turning the conversion off for this command is the fix;
+          # without it the switches arrive as C:/Program Files/Git/O... instead.
+          export MSYS_NO_PATHCONV=1
+          export MSYS2_ARG_CONV_EXCL='*'
+
           "$ISCC" \
             /O"$DIST_W" \
             /F"Ember-$VERSION-Windows" \
