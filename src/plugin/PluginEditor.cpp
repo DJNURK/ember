@@ -124,7 +124,11 @@ void EmberAudioProcessorEditor::resized()
 
     // Give the band panel what its content actually needs, and only take it
     // away when the spectrum would otherwise stop being a usable surface.
-    const int wantedBand = juce::roundToInt(kBandPanelHeight * scale);
+    // The band panel's content stops needing more room well before the window
+    // does, so cap how far it grows and let the spectrum - which always benefits
+    // from height - take the rest.
+    const float bandScale = juce::jmin(scale, 1.35f);
+    const int wantedBand = juce::roundToInt(kBandPanelHeight * bandScale);
     const int affordable = juce::jmax(0, area.getHeight() - juce::roundToInt(kMinSpectrumHeight * scale));
     bandPanel.setBounds(area.removeFromBottom(juce::jmin(wantedBand, affordable)));
     area.removeFromBottom(kEdge / 2);
