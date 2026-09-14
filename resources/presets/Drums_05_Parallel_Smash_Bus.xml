@@ -1,36 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<EMBER_PRESET name="Init" category="Factory" pluginVersion="1.0.0">
+<EMBER_PRESET name="Parallel Smash Bus" category="Drums" pluginVersion="1.0.0">
   <EMBER>
     <PARAM id="autoGain" value="0.0"/>
     <PARAM id="band1Bypass" value="0.0"/>
-    <PARAM id="band1Drive" value="0.0"/>
-    <PARAM id="band1Dynamics" value="1.490116119384766e-6"/>
+    <PARAM id="band1Drive" value="26.0"/>
+    <PARAM id="band1Dynamics" value="70.0"/>
     <PARAM id="band1Feedback" value="0.0"/>
     <PARAM id="band1FeedbackFreq" value="199.9999847412109"/>
-    <PARAM id="band1Level" value="-5.364418029785156e-7"/>
+    <PARAM id="band1Level" value="-3.000000476837158"/>
     <PARAM id="band1Mix" value="100.0"/>
     <PARAM id="band1Pan" value="1.490116119384766e-6"/>
     <PARAM id="band1Solo" value="0.0"/>
-    <PARAM id="band1Style" value="0.0"/>
-    <PARAM id="band1ToneHigh" value="-2.682209014892578e-7"/>
-    <PARAM id="band1ToneLow" value="-2.682209014892578e-7"/>
+    <PARAM id="band1Style" value="9.0"/>
+    <PARAM id="band1ToneHigh" value="-2.000000238418579"/>
+    <PARAM id="band1ToneLow" value="1.999999642372131"/>
     <PARAM id="band1ToneMid" value="-2.682209014892578e-7"/>
     <PARAM id="band1Width" value="100.0"/>
     <PARAM id="band2Bypass" value="0.0"/>
-    <PARAM id="band2Drive" value="0.0"/>
-    <PARAM id="band2Dynamics" value="1.490116119384766e-6"/>
+    <PARAM id="band2Drive" value="30.0"/>
+    <PARAM id="band2Dynamics" value="80.0"/>
     <PARAM id="band2Feedback" value="0.0"/>
     <PARAM id="band2FeedbackFreq" value="199.9999847412109"/>
-    <PARAM id="band2Level" value="-5.364418029785156e-7"/>
+    <PARAM id="band2Level" value="-4.000000476837158"/>
     <PARAM id="band2Mix" value="100.0"/>
     <PARAM id="band2Pan" value="1.490116119384766e-6"/>
     <PARAM id="band2Solo" value="0.0"/>
-    <PARAM id="band2Style" value="0.0"/>
-    <PARAM id="band2ToneHigh" value="-2.682209014892578e-7"/>
-    <PARAM id="band2ToneLow" value="-2.682209014892578e-7"/>
-    <PARAM id="band2ToneMid" value="-2.682209014892578e-7"/>
-    <PARAM id="band2Width" value="100.0"/>
+    <PARAM id="band2Style" value="10.0"/>
+    <PARAM id="band2ToneHigh" value="-1.000000238418579"/>
+    <PARAM id="band2ToneLow" value="-3.000000238418579"/>
+    <PARAM id="band2ToneMid" value="1.999999642372131"/>
+    <PARAM id="band2Width" value="110.0"/>
     <PARAM id="band3Bypass" value="0.0"/>
     <PARAM id="band3Drive" value="0.0"/>
     <PARAM id="band3Dynamics" value="1.490116119384766e-6"/>
@@ -87,7 +87,7 @@
     <PARAM id="band6ToneLow" value="-2.682209014892578e-7"/>
     <PARAM id="band6ToneMid" value="-2.682209014892578e-7"/>
     <PARAM id="band6Width" value="100.0"/>
-    <PARAM id="dither" value="2.0"/>
+    <PARAM id="dither" value="0.0"/>
     <PARAM id="ef1Attack" value="5.000001430511475"/>
     <PARAM id="ef1Band" value="0.0"/>
     <PARAM id="ef1Gain" value="-5.364418029785156e-7"/>
@@ -161,19 +161,22 @@
     <PARAM id="midi4CC" value="1.0"/>
     <PARAM id="midi4Smooth" value="20.00000381469727"/>
     <PARAM id="midi4Type" value="0.0"/>
-    <PARAM id="mix" value="100.0"/>
-    <PARAM id="numBands" value="3.0"/>
-    <PARAM id="osFactor" value="1.0"/>
+    <PARAM id="mix" value="35.0"/>
+    <PARAM id="numBands" value="2.0"/>
+    <PARAM id="osFactor" value="3.0"/>
     <PARAM id="osOffline" value="3.0"/>
     <PARAM id="outGain" value="-5.364418029785156e-7"/>
     <PARAM id="stereoMode" value="0.0"/>
-    <PARAM id="xover1" value="120.0000305175781"/>
-    <PARAM id="xover2" value="599.9998168945312"/>
-    <PARAM id="xover3" value="2500.0"/>
-    <PARAM id="xover4" value="6000.00048828125"/>
-    <PARAM id="xover5" value="11999.9990234375"/>
+    <PARAM id="xover1" value="219.9999694824219"/>
+    <PARAM id="xover2" value="536.6472778320312"/>
+    <PARAM id="xover3" value="1309.046264648438"/>
+    <PARAM id="xover4" value="3193.1650390625"/>
+    <PARAM id="xover5" value="7789.103515625"/>
     <PARAM id="xoverMode" value="0.0"/>
     <PARAM id="xyX" value="50.0"/>
     <PARAM id="xyY" value="50.0"/>
   </EMBER>
+  <MODULATION>
+    <CONNECTION source="15" target="2" amount="0.5" curve="0" smoothing="5.0" enabled="1"/>
+  </MODULATION>
 </EMBER_PRESET>
