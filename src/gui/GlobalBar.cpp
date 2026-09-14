@@ -804,9 +804,12 @@ void GlobalBar::updateHistoryButtons()
 
         // JUCE only has a description when a transaction was given a name, so
         // fall back to something honest rather than an empty tooltip.
-        undoButton.setTooltip(canUndo ? (undoName.isNotEmpty() ? "Undo " + undoName
-                                                              : juce::String("Undo the last change"))
-                                      : juce::String("Nothing to undo"));
+        if (!canUndo)
+            undoButton.setTooltip("Nothing to undo");
+        else if (undoName.isNotEmpty())
+            undoButton.setTooltip("Undo " + undoName);
+        else
+            undoButton.setTooltip("Undo the last change");
     }
 
     if (canRedo != lastCanRedo || redoName != lastRedoDescription)
@@ -815,9 +818,13 @@ void GlobalBar::updateHistoryButtons()
         lastRedoDescription = redoName;
 
         redoButton.setEnabled(canRedo);
-        redoButton.setTooltip(canRedo ? (redoName.isNotEmpty() ? "Redo " + redoName
-                                                               : juce::String("Redo the last undone change"))
-                                      : juce::String("Nothing to redo"));
+
+        if (!canRedo)
+            redoButton.setTooltip("Nothing to redo");
+        else if (redoName.isNotEmpty())
+            redoButton.setTooltip("Redo " + redoName);
+        else
+            redoButton.setTooltip("Redo the last undone change");
     }
 }
 

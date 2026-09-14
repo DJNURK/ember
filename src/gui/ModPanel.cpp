@@ -22,6 +22,10 @@ constexpr int kRefreshHz = 30;
 /** How long a header message stays up, in timer ticks (about 4 seconds). */
 constexpr int kMessageTicks = kRefreshHz * 4;
 
+/** The tail of that time over which the message fades out — and the only part
+    of it during which the header has to repaint. */
+constexpr int kMessageFadeTicks = 12;
+
 /** Default amounts for a routing the user creates by dropping a source on a
     knob. A bipolar source sweeps both ways, so it gets half the span of a
     unipolar one and both end up moving the destination by the same total. */
@@ -562,6 +566,13 @@ public:
     /** Replaces the shape with one of the built-in starting points. */
     void applyPreset(int presetIndex)
     {
+        // Every index into `points` is about to mean something else, so no
+        // hover or drag may survive the swap.
+        hoverPoint = -1;
+        hoverSegment = -1;
+        dragPoint = -1;
+        dragSegment = -1;
+
         points.clear();
 
         const auto add = [this](float position, float value, ModCurve curve)
@@ -1137,6 +1148,13 @@ public:
         setTooltip("XY controller. Drag the puck; shift-drag for fine control, double-click to centre it.");
     }
 
+    /** The pad is destroyed whenever the detail pane switches source, which can
+        happen with a gesture still open (a drag interrupted by a preset load,
+        say). Leaving a parameter mid-gesture confuses the host's automation
+        recorder and trips JUCE's own begin/end pairing check, so an open
+        gesture is always closed here. */
+    ~XyPad() override { endGestureIfActive(); }
+
     void paint(juce::Graphics& g) override
     {
         const auto area = getLocalBounds().toFloat();
@@ -1181,11 +1199,7 @@ public:
         dragStartX = xValue;
         dragStartY = yValue;
 
-        if (xAttachment != nullptr)
-            xAttachment->beginGesture();
-
-        if (yAttachment != nullptr)
-            yAttachment->beginGesture();
+        beginGestureIfNeeded();
 
         // A plain click jumps the puck; the drag then continues from there.
         applyNormalised(normalisedFor(event.position));
@@ -1203,17 +1217,15 @@ public:
                          juce::jlimit(0.0f, 1.0f, dragStartY - delta.y / juce::jmax(1.0f, plot.getHeight()))});
     }
 
-    void mouseUp(const juce::MouseEvent&) override
-    {
-        if (xAttachment != nullptr)
-            xAttachment->endGesture();
-
-        if (yAttachment != nullptr)
-            yAttachment->endGesture();
-    }
+    void mouseUp(const juce::MouseEvent&) override { endGestureIfActive(); }
 
     void mouseDoubleClick(const juce::MouseEvent&) override
     {
+        // `setValueAsCompleteGesture` opens a gesture of its own, so any gesture
+        // this pad still holds has to be closed first: nesting them asserts in
+        // JUCE and sends the host two un-paired gesture starts.
+        endGestureIfActive();
+
         if (xParameter != nullptr && xAttachment != nullptr)
             xAttachment->setValueAsCompleteGesture(xParameter->convertFrom0to1(xParameter->getDefaultValue()));
 
@@ -1222,6 +1234,36 @@ public:
     }
 
 private:
+    /** Both axes move together, so they open and close one gesture together —
+        and never more than one, whatever order the mouse events arrive in. */
+    void beginGestureIfNeeded()
+    {
+        if (gestureActive)
+            return;
+
+        gestureActive = true;
+
+        if (xAttachment != nullptr)
+            xAttachment->beginGesture();
+
+        if (yAttachment != nullptr)
+            yAttachment->beginGesture();
+    }
+
+    void endGestureIfActive()
+    {
+        if (!gestureActive)
+            return;
+
+        gestureActive = false;
+
+        if (xAttachment != nullptr)
+            xAttachment->endGesture();
+
+        if (yAttachment != nullptr)
+            yAttachment->endGesture();
+    }
+
     juce::Point<float> puckCentre(juce::Rectangle<float> plot) const
     {
         return {plot.getX() + plot.getWidth() * xValue, plot.getBottom() - plot.getHeight() * yValue};
@@ -1251,6 +1293,7 @@ private:
     float xValue{0.5f}, yValue{0.5f};
     float dragStartX{0.5f}, dragStartY{0.5f};
     juce::Point<float> dragStartPosition;
+    bool gestureActive{false};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(XyPad)
 };
@@ -1539,7 +1582,7 @@ public:
         repaint();
     }
 
-    /** Fades the message out; returns true when something needs repainting. */
+    /** Fades the message out; returns true while a message is still up. */
     bool tick()
     {
         if (messageTicks <= 0)
@@ -1550,7 +1593,12 @@ public:
         if (messageTicks == 0)
             message.clear();
 
-        repaint();
+        // Only the last twelve ticks change what is drawn — the alpha is
+        // clamped to 1 before that — so the other four seconds of the message
+        // cost no repaints at all.
+        if (messageTicks <= kMessageFadeTicks)
+            repaint();
+
         return true;
     }
 
@@ -1640,7 +1688,8 @@ public:
 
         if (message.isNotEmpty() && content.getWidth() > 40)
         {
-            const float alpha = juce::jlimit(0.0f, 1.0f, static_cast<float>(messageTicks) / 12.0f);
+            const float alpha =
+                juce::jlimit(0.0f, 1.0f, static_cast<float>(messageTicks) / static_cast<float>(kMessageFadeTicks));
             g.setFont(EmberFonts::forHeight(height, 0.42f, false));
             g.setColour((messageIsWarning ? EmberColours::warning : EmberColours::accent).withAlpha(alpha));
             g.drawFittedText(message, content, juce::Justification::centredRight, 1, 0.8f);
@@ -2168,6 +2217,18 @@ public:
 
     void tick()
     {
+        // The column header is painted by THIS component, outside the viewport,
+        // so scrolling the rows sideways never invalidates it: without this the
+        // titles stay put while the columns they label slide away underneath.
+        // Only the header strip is invalidated, not the whole view.
+        const int scrollX = rowViewport.getViewPositionX();
+
+        if (scrollX != lastHeaderScrollX)
+        {
+            lastHeaderScrollX = scrollX;
+            repaint(headerArea);
+        }
+
         for (auto& row : rows)
             row->tickFlash();
     }
@@ -2208,13 +2269,17 @@ public:
 
     void paint(juce::Graphics& g) override
     {
-        // The column header lines up with the rows even when they are scrolled
-        // sideways, so the titles never lie about what they label.
-        auto strip = headerArea.withX(headerArea.getX() - rowViewport.getViewPositionX()).withWidth(contentWidth);
-
-        const auto columns = matrixColumns(strip.reduced(4, 0), owner.uiScale());
-
+        // A row repainting itself drags every ancestor's paint() along with it,
+        // so the header work — a font, the column geometry and six drawText
+        // calls — is skipped outright unless the header strip is actually in
+        // the region being redrawn.
+        if (g.clipRegionIntersects(headerArea))
         {
+            // The column header lines up with the rows even when they are
+            // scrolled sideways, so the titles never lie about what they label.
+            const auto strip = headerArea.withX(headerArea.getX() - rowViewport.getViewPositionX()).withWidth(contentWidth);
+            const auto columns = matrixColumns(strip.reduced(4, 0), owner.uiScale());
+
             const juce::Graphics::ScopedSaveState state(g);
             g.reduceClipRegion(headerArea);
             g.setFont(EmberFonts::forHeight(static_cast<float>(headerArea.getHeight()), 0.62f, true));
@@ -2259,8 +2324,19 @@ private:
 
             destination.onClick = [this]
             {
+                // The menu is asynchronous, and the panel rebuilds its rows
+                // whenever the graph changes underneath it — a preset load, an
+                // undo or an A/B recall arriving while the menu is open deletes
+                // this row before the user picks anything. A SafePointer is what
+                // keeps that from landing on freed memory; reading `slot`
+                // through it also picks up a renumbering rather than acting on
+                // the slot this row had when the menu opened.
                 owner.showDestinationMenu(destination, currentSource(), slot,
-                                          [this](int target) { owner.changeConnectionRouting(slot, -1, target); });
+                                          [safeThis = juce::Component::SafePointer<Row>(this)](int target)
+                                          {
+                                              if (safeThis != nullptr)
+                                                  safeThis->owner.changeConnectionRouting(safeThis->slot, -1, target);
+                                          });
             };
             addAndMakeVisible(destination);
 
@@ -2408,7 +2484,12 @@ private:
             mutate(connection);
             processor.getModulationEngine().setConnection(slot, connection);
             setAlpha(connection.enabled ? 1.0f : 0.62f);
-            owner.connectionsChanged();
+
+            // Only a value moved — no row was added, removed or renumbered — so
+            // this deliberately does NOT go through `connectionsChanged`. That
+            // rebuilds and repaints every row, and these callbacks fire once per
+            // mouse move while an amount or smoothing bar is being dragged.
+            owner.connectionValueChanged();
         }
 
         ModPanel& owner;
@@ -2449,6 +2530,7 @@ private:
 
     juce::Rectangle<int> headerArea;
     int contentWidth{0};
+    int lastHeaderScrollX{0};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MatrixView)
 };
@@ -2745,6 +2827,17 @@ void ModPanel::refreshFromEngine()
 void ModPanel::connectionsChanged()
 {
     refreshFromEngine();
+
+    if (onConnectionsChanged != nullptr)
+        onConnectionsChanged();
+}
+
+void ModPanel::connectionValueChanged()
+{
+    // Re-arming the signature is the whole point: without it the next timer
+    // tick would see the graph as changed underneath the panel and rebuild the
+    // matrix anyway, which is exactly the work this path exists to avoid.
+    lastGraphSignature = graphSignature();
 
     if (onConnectionsChanged != nullptr)
         onConnectionsChanged();

@@ -128,7 +128,13 @@ public:
           valueLabel(processorToUse.getAPVTS(), pid::dynamics(bandIndex)),
           reduction(LevelMeter::Mode::gainReduction, LevelMeter::Orientation::vertical)
     {
-        knob.onEditValueRequested = [this] { valueLabel.beginEditing(); };
+        // The readout gives up its row when the control gets short (see
+        // resized), and there is nothing to type into once it has.
+        knob.onEditValueRequested = [this]
+        {
+            if (valueLabel.isVisible())
+                valueLabel.beginEditing();
+        };
 
         // Only the expand/compress scale reads the value, so repaint that strip
         // rather than dragging the knob, the readout and the meter through
@@ -218,8 +224,8 @@ public:
         // Fonts for paint(), built here rather than once per frame.
         scaleFont =
             EmberFonts::forHeight(juce::jmax(1.0f, static_cast<float>(scaleArea.getHeight()) - 3.0f), 0.92f, false);
-        captionFont = EmberFonts::forHeight(juce::jmax(1.0f, static_cast<float>(meterCaptionArea.getHeight())), 0.86f,
-                                            false);
+        captionFont =
+            EmberFonts::forHeight(juce::jmax(1.0f, static_cast<float>(meterCaptionArea.getHeight())), 0.86f, false);
     }
 
     void paint(juce::Graphics& g) override

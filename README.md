@@ -114,11 +114,16 @@ section below.
 ### Prerequisites
 
 - **CMake 3.22 or newer**
-- A **C++20 compiler** — Xcode 14+/AppleClang on macOS, Visual Studio 2022 on Windows,
-  GCC 11+ or Clang 14+ on Linux
+- A **C++20 compiler** — Xcode 14+/AppleClang on macOS, Visual Studio 2022 or newer on
+  Windows (the Build Tools with "Desktop development with C++" are enough), GCC 11+ or
+  Clang 14+ on Linux
 - **Git** (CMake uses it to fetch dependencies)
-- **Ninja** for the macOS and Linux presets (the Windows presets use the Visual Studio
-  generator)
+- **Ninja** on every platform. The Windows presets use Ninja with the MSVC toolchain rather
+  than a pinned Visual Studio generator, because CMake has no way to say "whatever Visual
+  Studio is installed" and a pinned year breaks as soon as a machine has a newer one.
+  `scripts/build.ps1` locates and imports the developer environment itself, so it works from
+  an ordinary PowerShell window; if you drive CMake by hand, run it from a
+  "Developer PowerShell for VS" prompt.
 - On **Linux**, the JUCE development packages:
 
   ```sh

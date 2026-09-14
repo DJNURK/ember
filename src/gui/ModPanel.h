@@ -153,6 +153,12 @@ private:
 
     void buildTargetGroups();
     void connectionsChanged();
+
+    /** A routing's amount, curve, smoothing or enable changed, but the SHAPE of
+        the table did not. Re-arms the external-change detector and tells
+        listeners, without rebuilding every matrix row — which a slider drag
+        would otherwise do once per mouse move. */
+    void connectionValueChanged();
     juce::uint64 graphSignature() const;
     float uiScale() const;
 
