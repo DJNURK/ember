@@ -10,6 +10,7 @@ if [ ! -f build/compile_commands.json ]; then
   exit 2
 fi
 FLAGS=(
+  '-DEMBER_VERSION_STRING="1.0.0"'
   -DJUCE_DISPLAY_SPLASH_SCREEN=0
   -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1
   -DJUCE_MODAL_LOOPS_PERMITTED=0
@@ -25,12 +26,14 @@ FLAGS=(
   -DJUCE_MODULE_AVAILABLE_juce_gui_basics=1
   -DJUCE_MODULE_AVAILABLE_juce_gui_extra=1
   -DJUCE_STRICT_REFCOUNTEDPOINTER=1
+  -DJUCE_TARGET_HAS_BINARY_DATA=1
   -DJUCE_USE_CURL=0
   -DJUCE_VST3_CAN_REPLACE_VST2=0
   -DJUCE_WEB_BROWSER=0
   -DNDEBUG=1
   -D_NDEBUG=1
   -I/Users/nurk/Desktop/SATURATE/src
+  -I/Users/nurk/Desktop/SATURATE/build/juce_binarydata_ember_resources/JuceLibraryCode
   -I/Users/nurk/Desktop/SATURATE/build/_deps/juce-src/modules
   -I/Users/nurk/Desktop/SATURATE/build/_deps/juce-src/modules/juce_audio_processors_headless/format_types/VST3_SDK
   -I/Users/nurk/Desktop/SATURATE/build/_deps/juce-src/modules/juce_audio_processors_headless/format_types/LV2_SDK

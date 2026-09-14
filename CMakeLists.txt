@@ -66,6 +66,12 @@ juce_add_plugin(Ember
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE
     COPY_PLUGIN_AFTER_BUILD     FALSE)
 
+# Factory presets are compiled in, so a fresh install has a full library with
+# nothing to copy alongside the plug-in.
+file(GLOB EMBER_PRESET_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/presets/*.xml")
+juce_add_binary_data(ember_resources SOURCES ${EMBER_PRESET_FILES})
+set_target_properties(ember_resources PROPERTIES POSITION_INDEPENDENT_CODE ON FOLDER "Ember")
+
 add_subdirectory(src)
 
 if(EMBER_BUILD_TESTS)

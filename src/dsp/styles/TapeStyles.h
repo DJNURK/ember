@@ -106,9 +106,10 @@ private:
         i.e. the closed loop can only attenuate — it cannot peak or ring.
 
     The lag between input and the magnetisation term opens a loop in the
-    transfer curve (the hysteresis gesture), and a program-dependent gain term
-    driven by a bounded envelope gives noticeably stronger compression than
-    Clean Tape.
+    transfer curve (the hysteresis gesture). A program-dependent gain term
+    driven by a bounded envelope then rides the *output* of the curve, so it
+    adds to the saturation rather than backing the signal out of it: Warm Tape
+    is measurably more compressed than Clean Tape at every drive setting.
 */
 class WarmTapeStyle final : public SaturationStyle
 {

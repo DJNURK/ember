@@ -186,7 +186,13 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
     {
         auto up = oversampler->processSamplesUp(block);
         const int n = static_cast<int>(up.getNumSamples());
-        auto** ptrs = up.getChannelPointers();
+
+        // AudioBlock exposes channels one at a time; the style interface wants
+        // an array of pointers, so gather them into a fixed-size local.
+        float* osPtrs[2] = { nullptr, nullptr };
+        for (int ch = 0; ch < numCh && ch < 2; ++ch)
+            osPtrs[ch] = up.getChannelPointer(static_cast<size_t>(ch));
+        float* const* ptrs = osPtrs;
 
         if (fadingStyle != nullptr && styleFade < 1.0f)
         {
@@ -196,7 +202,7 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
                 juce::FloatVectorOperations::copy(fadeBuffer.getWritePointer(ch), ptrs[ch], n);
 
             currentStyle->process(ptrs, numCh, n, sp);
-            auto* fadePtrs = fadeBuffer.getArrayOfWritePointers();
+            float* const* fadePtrs = fadeBuffer.getArrayOfWritePointers();
             fadingStyle->process(fadePtrs, numCh, n, sp);
 
             float fade = styleFade;
@@ -237,7 +243,7 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
     }
     else
     {
-        auto** ptrs = buffer.getArrayOfWritePointers();
+        float* const* ptrs = buffer.getArrayOfWritePointers();
         currentStyle->process(ptrs, numCh, numSamples, sp);
         feedback.process(ptrs, numCh, numSamples);
         const float compStart = smoothedCompGain.getCurrentValue();
@@ -259,7 +265,7 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
     }
 
     // ---- base-rate post section ----
-    auto** post = buffer.getArrayOfWritePointers();
+    float* const* post = buffer.getArrayOfWritePointers();
     dcBlocker.process(post, numCh, numSamples);
     dynamics.process(post, numCh, numSamples);
     tone.process(post, numCh, numSamples);

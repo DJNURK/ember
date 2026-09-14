@@ -15,7 +15,7 @@ constexpr float kCleanShelfDepth = 0.72f;    ///< HF retained at full drive = 1 
 // ---------------------------------------------------------------- Warm Tape
 constexpr float kWarmLevelSeconds = 0.012f;   ///< envelope memory (program dependent)
 constexpr float kWarmMagSeconds   = 0.0007f;  ///< magnetisation memory (~230 Hz)
-constexpr float kWarmSquashMin    = 0.35f;    ///< level-dependent gain reduction at 0 drive
+constexpr float kWarmSquashMin    = 0.60f;    ///< level-dependent gain reduction at 0 drive
 constexpr float kWarmSquashRange  = 2.40f;
 constexpr float kWarmMagMin       = 0.15f;    ///< feedback depth; max 0.35 keeps loop gain < 1
 constexpr float kWarmMagRange     = 0.20f;
@@ -33,10 +33,11 @@ constexpr float kXfmrSplitHz   = 200.0f;
 constexpr float kXfmrSplitQ    = 0.5f;
 constexpr float kXfmrBloomHz   = 95.0f;
 constexpr float kXfmrBloomQ    = 0.9f;
-constexpr float kXfmrPushRange = 1.8f;        ///< extra low-band drive at full amount
-constexpr float kXfmrHighKnee  = 0.5f;        ///< highs saturate at 2 / drive, lows far sooner
-constexpr float kXfmrBloomMin  = 0.10f;
-constexpr float kXfmrBloomRange = 0.40f;
+constexpr float kXfmrPushMin   = 1.15f;       ///< lows always run a little hotter: +1.2 dB
+constexpr float kXfmrPushRange = 1.65f;       ///< ... up to +9 dB at full drive
+constexpr float kXfmrHighKnee  = 0.7f;        ///< highs saturate ~12 dB later than the lows
+constexpr float kXfmrBloomMin  = 0.18f;
+constexpr float kXfmrBloomRange = 0.42f;
 
 /** Common entry guard: returns the number of channels to touch, or 0 if there
     is nothing to do. Keeps every `process` honest about empty and oversized
@@ -178,20 +179,21 @@ void WarmTapeStyle::process (float* const* channelData, int numChannels, int num
         for (int i = 0; i < numSamples; ++i)
         {
             const float x = dsputil::sanitise (data[i]);
-            const float u = x * drive;
-
-            // Envelope of a *bounded* image of the drive signal, so the detector
-            // is in [0, 1] for any input and the gain term below cannot blow up.
-            const float env  = s.level.process (std::abs (dsputil::fastTanh (u)));
-            const float gain = 1.0f / (1.0f + squash * env);
 
             // One-sample-delayed magnetisation memory breaks the algebraic loop;
             // it is itself bounded by +/-1 because it smooths a tanh output.
-            const float shaped = dsputil::fastTanh (u * gain - magAmt * s.mag.getState());
+            const float shaped = dsputil::fastTanh (x * drive - magAmt * s.mag.getState());
             s.mag.process (shaped);
 
-            const float low = s.tone.process (shaped);
-            data[i] = tapedetail::finish (low + retain * (shaped - low));
+            // Gain rides the curve's own output, so the squash adds to the
+            // saturation instead of backing the signal out of it: Warm Tape is
+            // more compressed than Clean Tape at every drive setting. The
+            // detector sees a bounded signal, so the divisor is always >= 1.
+            const float env      = s.level.process (std::abs (shaped));
+            const float squashed = shaped / (1.0f + squash * env);
+
+            const float low = s.tone.process (squashed);
+            data[i] = tapedetail::finish (low + retain * (squashed - low));
         }
     }
 }
@@ -305,7 +307,7 @@ void TransformerStyle::process (float* const* channelData, int numChannels, int 
     const float amount = tapedetail::clampAmount (params.amount01);
     const float drive  = tapedetail::clampDrive (params.driveLin);
 
-    const float lowDrive = drive * (1.0f + kXfmrPushRange * amount);   // lows pushed hardest
+    const float lowDrive = drive * (kXfmrPushMin + kXfmrPushRange * amount);   // lows pushed hardest
     const float hiDrive  = drive * kXfmrHighKnee;
     const float hiScale  = 1.0f / kXfmrHighKnee;
     const float bloomAmt = kXfmrBloomMin + kXfmrBloomRange * amount;
@@ -330,7 +332,8 @@ void TransformerStyle::process (float* const* channelData, int numChannels, int 
             const float highs = x - lows;
 
             // Symmetric shapers: odd harmonics, no bias, no DC. The lows hit the
-            // knee at 1 / lowDrive, the highs not until 2 / drive.
+            // knee at 1 / lowDrive, the highs not until 1.43 / drive — 4 dB
+            // apart at zero drive, 12 dB apart wide open.
             const float lowSat = dsputil::fastTanh (lows * lowDrive);
             const float hiSat  = hiScale * dsputil::fastTanh (highs * hiDrive);
 

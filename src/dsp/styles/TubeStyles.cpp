@@ -84,7 +84,11 @@ constexpr float kWarmSqueeze     = 0.8f;    ///< second, gentler stage: rounds t
 constexpr float kWarmInvSqueeze  = 1.0f / kWarmSqueeze;
 
 // Subtle Tube
-constexpr float kSubtleDriveScale = 0.28f;  ///< fraction of the drive knob that is actually used
+/** Drive is scaled in dB, not linearly: `driveLin^0.35` is the same as using
+    only 35 % of the knob's decibels, so the top of the range lands around 14 dB
+    and the curve never leaves its gentle region. A linear fraction would still
+    be 20x at the top and clip like everything else. */
+constexpr float kSubtleDriveExp   = 0.35f;
 constexpr float kSubtleBias       = 0.10f;
 constexpr float kSubtleInner      = 0.5f;
 constexpr float kSubtleInvInner   = 1.0f / kSubtleInner;
@@ -239,8 +243,8 @@ void SubtleTubeStyle::process(float* const* channelData, int numChannels, int nu
         return;
 
     // Only a slice of the drive knob reaches the shaper, so 40 dB here lands
-    // roughly where 12 dB lands on Clean Tube.
-    const float drive = 1.0f + (clampedDrive(params) - 1.0f) * kSubtleDriveScale;
+    // around 14 dB. One `pow` per block, none per sample.
+    const float drive = std::pow(clampedDrive(params), kSubtleDriveExp);
     const int channels = usableChannels(numChannels);
 
     for (int ch = 0; ch < channels; ++ch)

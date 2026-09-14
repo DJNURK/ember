@@ -19,11 +19,13 @@ target_sources(ember_dsp PRIVATE
     dsp/modulation/ModTypes.cpp
     dsp/modulation/ModSources.cpp
     dsp/modulation/ModulationEngine.cpp
-    plugin/Parameters.cpp)
+    plugin/Parameters.cpp
+    plugin/PresetManager.cpp)
 
 target_include_directories(ember_dsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_compile_definitions(ember_dsp PUBLIC
+    EMBER_VERSION_STRING="${PROJECT_VERSION}"
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
@@ -33,6 +35,7 @@ target_compile_definitions(ember_dsp PUBLIC
 
 target_link_libraries(ember_dsp
     PUBLIC
+        ember_resources
         juce::juce_dsp
         juce::juce_audio_basics
         juce::juce_audio_processors
