@@ -130,6 +130,17 @@ private:
     void updateSmoothingCoefficients();
     float currentUiScale() const;
 
+    /** Rebuilds the cached fonts, but only when the UI scale has actually
+        moved: constructing a `juce::Font` allocates, and paint runs 50 times a
+        second at a scale that changes only on a resize. */
+    void updateCachedFonts(float scale);
+
+    /** Repaints the plot only. Everything that moves on the timer or under the
+        mouse — curves, band washes, dividers, the drag readout — lives inside
+        `plotArea`, so the frequency scale and the well border do not need to be
+        redrawn with it. */
+    void repaintPlot();
+
     /** Peak of the bins covering a screen column, interpolating instead where a
         column is narrower than one bin (which it is at the low end of the axis). */
     static float aggregateBins(const std::array<float, static_cast<size_t>(kSpectrumBins)>& bins, float firstBin,
@@ -140,7 +151,7 @@ private:
 
     void paintBandRegions(juce::Graphics&, float scale) const;
     void paintGrid(juce::Graphics&, float scale) const;
-    void paintSpectra(juce::Graphics&, float scale) const;
+    void paintSpectra(juce::Graphics&, float scale); // not const: reuses the cached paths
     void paintCrossovers(juce::Graphics&, float scale) const;
     void paintDragReadout(juce::Graphics&, float scale) const;
 
@@ -185,6 +196,14 @@ private:
     // Geometry, recomputed in resized().
     juce::Rectangle<float> plotArea;
     juce::Rectangle<float> axisArea;
+
+    // Paint-path scratch. Held between frames so a 50 Hz repaint reuses the
+    // storage it allocated once rather than building a Path and two Fonts every
+    // time round: juce::Path::clear() keeps its capacity.
+    juce::Path curvePath, fillPath, clipPath;
+    juce::Font microFont{EmberFonts::get(EmberFonts::Role::micro)};
+    juce::Font valueFont{EmberFonts::get(EmberFonts::Role::value)};
+    float cachedFontScale{1.0f};
 
     // Live state, refreshed on the timer.
     std::array<float, static_cast<size_t>(kMaxCrossovers)> crossoverHz{};

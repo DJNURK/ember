@@ -120,6 +120,12 @@ private:
     void applyCount(int newCount, bool asGesture);
     void valueFromParameter(float denormalisedValue);
 
+    /** Closes the gesture a drag opened, if one is open. Anything that writes a
+        complete gesture of its own has to call this first — a nested
+        begin/endChangeGesture pair is an assertion in debug and a malformed
+        automation write in release. */
+    void finishDragGesture();
+
     EmberAudioProcessor& processor;
     juce::String parameterID;
     juce::RangedAudioParameter* parameter{nullptr};
@@ -329,7 +335,7 @@ private:
     struct Caption
     {
         juce::Rectangle<int> bounds;
-        juce::String text;
+        juce::String text;   ///< stored ready to draw (already upper-cased)
         bool centred{false}; ///< knob captions centre over the knob; the rest run left
     };
 

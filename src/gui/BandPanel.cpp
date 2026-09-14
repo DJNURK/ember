@@ -21,6 +21,18 @@ constexpr size_t idx(int index) noexcept
     widest because the drive knob is the panel's dominant control. */
 constexpr float kGroupWeights[5] = {3.8f, 2.0f, 2.0f, 1.7f, 3.0f};
 
+/** Below this `layoutGroups` cannot place a group at all, so `resized` reserves
+    it for the knobs before the header and the style row take their share. */
+constexpr int kMinimumGroupsHeight = 40;
+
+/** The shortest header that still draws its two lines of text: `layoutHeader`
+    insets 5 px top and bottom and `paint` wants more than 12 px left over. */
+constexpr int kMinimumHeaderHeight = 26;
+
+/** The smallest dynamics knob worth drawing. Below this the scale and the typed
+    readout give up their rows rather than squeezing the knob out of existence. */
+constexpr int kMinimumKnobSide = 20;
+
 /** "120 Hz", "1.20 kHz", "12.0 kHz" — three significant figures, always. */
 juce::String formatFrequency(float hz)
 {
@@ -117,14 +129,23 @@ public:
           reduction(LevelMeter::Mode::gainReduction, LevelMeter::Orientation::vertical)
     {
         knob.onEditValueRequested = [this] { valueLabel.beginEditing(); };
-        knob.onValueChange = [this] { repaint(); };
+
+        // Only the expand/compress scale reads the value, so repaint that strip
+        // rather than dragging the knob, the readout and the meter through
+        // paint on every step of a drag.
+        knob.onValueChange = [this] { repaint(scaleArea.isEmpty() ? getLocalBounds() : scaleArea); };
 
         owner.wireKnob(knob, "Below centre expands and gates, above centre compresses. Centre is off.");
 
         // The engine reports reduction as a negative gain in dB; the meter wants
         // positive decibels of reduction.
-        reduction.setSource([&processorToUse, bandIndex]
-                            { return juce::jmax(0.0f, -processorToUse.getBandGainReductionDb(bandIndex)); });
+        //
+        // `processorToUse` is a reference PARAMETER: capturing it by reference
+        // would leave this lambda holding a reference whose lifetime ends when
+        // the constructor returns, and the meter's timer calls it long after
+        // that. Capture the processor's address instead.
+        reduction.setSource([processorPtr = &processorToUse, bandIndex]
+                            { return juce::jmax(0.0f, -processorPtr->getBandGainReductionDb(bandIndex)); });
         reduction.setMaxGainReductionDb(18.0f);
 
         addAndMakeVisible(knob);
@@ -165,16 +186,40 @@ public:
         area.removeFromRight(juce::jmax(2, meterWidth / 3));
 
         // "expand / compress" scale under the knob, then the typed readout.
-        const int scaleHeight = juce::jlimit(9, 17, juce::roundToInt(height * 0.15f));
-        scaleArea = area.removeFromBottom(scaleHeight);
+        //
+        // Both have floor heights that do NOT shrink with the control, so below
+        // about 45 px they took the whole column and the knob — the actual
+        // control — was left on a zero-size rectangle. Give up the readout and
+        // then the scale instead, the way LabelledKnob gives up its caption and
+        // its readout to keep its knob.
+        int scaleHeight = juce::jlimit(9, 17, juce::roundToInt(height * 0.15f));
+        int valueHeight = juce::jlimit(12, 22, juce::roundToInt(height * 0.19f));
 
-        const int valueHeight = juce::jlimit(12, 22, juce::roundToInt(height * 0.19f));
-        auto valueBounds = area.removeFromBottom(valueHeight);
-        valueLabel.setFont(EmberFonts::forHeight(static_cast<float>(valueHeight), 0.82f, false));
-        valueLabel.setBounds(valueBounds);
+        if (area.getHeight() - scaleHeight - valueHeight < kMinimumKnobSide)
+            valueHeight = 0;
+
+        if (area.getHeight() - scaleHeight - valueHeight < kMinimumKnobSide)
+            scaleHeight = 0;
+
+        scaleArea = scaleHeight > 0 ? area.removeFromBottom(scaleHeight) : juce::Rectangle<int>();
+
+        valueLabel.setVisible(valueHeight > 0);
+
+        if (valueHeight > 0)
+        {
+            auto valueBounds = area.removeFromBottom(valueHeight);
+            valueLabel.setFont(EmberFonts::forHeight(static_cast<float>(valueHeight), 0.82f, false));
+            valueLabel.setBounds(valueBounds);
+        }
 
         const int side = juce::jmax(0, juce::jmin(area.getWidth(), area.getHeight()));
         knob.setBounds(juce::Rectangle<int>(side, side).withCentre(area.getCentre()));
+
+        // Fonts for paint(), built here rather than once per frame.
+        scaleFont =
+            EmberFonts::forHeight(juce::jmax(1.0f, static_cast<float>(scaleArea.getHeight()) - 3.0f), 0.92f, false);
+        captionFont = EmberFonts::forHeight(juce::jmax(1.0f, static_cast<float>(meterCaptionArea.getHeight())), 0.86f,
+                                            false);
     }
 
     void paint(juce::Graphics& g) override
@@ -196,7 +241,7 @@ public:
             g.drawLine(strip.getCentreX(), lineY - 2.5f, strip.getCentreX(), lineY + 2.5f, 1.2f);
 
             const auto textArea = strip.withTrimmedTop(3.0f);
-            g.setFont(EmberFonts::forHeight(textArea.getHeight(), 0.92f, false));
+            g.setFont(scaleFont);
 
             g.setColour(expanding ? accent : EmberColours::textDisabled);
             g.drawText("EXPAND", textArea, juce::Justification::centredLeft, false);
@@ -208,7 +253,7 @@ public:
         if (meterCaptionArea.getHeight() > 6)
         {
             g.setColour(EmberColours::textDisabled);
-            g.setFont(EmberFonts::forHeight(static_cast<float>(meterCaptionArea.getHeight()), 0.86f, false));
+            g.setFont(captionFont);
             g.drawText("GR", meterCaptionArea, juce::Justification::centredTop, false);
         }
     }
@@ -219,6 +264,10 @@ private:
     LevelMeter reduction;
 
     juce::Rectangle<int> scaleArea, meterCaptionArea;
+
+    // Built by resized() from the areas above, never inside paint().
+    juce::Font scaleFont{juce::FontOptions{}};
+    juce::Font captionFont{juce::FontOptions{}};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DynamicsControl)
 };
@@ -570,22 +619,47 @@ void BandPanel::resized()
     const int gap = juce::jmax(6, juce::roundToInt(10.0f * scale));
     const int spacing = juce::jmax(2, juce::roundToInt(4.0f * scale));
 
-    // ---- header ----------------------------------------------------------
-    const int headerHeight = juce::jlimit(30, 68, juce::roundToInt(40.0f * scale));
-    headerArea = area.removeFromTop(juce::jmin(headerHeight, area.getHeight() / 3));
-    layoutHeader(headerArea, controls);
-    area.removeFromTop(gap);
-
-    // ---- style -----------------------------------------------------------
     const int sectionHeight = SectionHeader::preferredHeight(scale);
     const int comboHeight = juce::jlimit(22, 44, juce::roundToInt(29.0f * scale));
 
-    auto styleRow = area.removeFromTop(juce::jmin(sectionHeight + spacing + comboHeight, area.getHeight() / 2));
+    // ---- height budget ----------------------------------------------------
+    // The knob groups are budgeted FIRST, because they are what the panel is
+    // for and `layoutGroups` places nothing at all below kMinimumGroupsHeight.
+    // Capping the header at a third of the area and the style row at a half
+    // compounded instead of cooperating: at the 800x480 minimum window the two
+    // strips took 96 of 135 px, the groups were left 33 and every knob in the
+    // band was dropped on the floor. Neither cap binds at a normal size, so
+    // this only changes what a short panel does.
+    int headerHeight = juce::jlimit(30, 68, juce::roundToInt(40.0f * scale));
+    int styleRowHeight = sectionHeight + spacing + comboHeight;
+
+    int deficit = kMinimumGroupsHeight + 2 * gap + headerHeight + styleRowHeight - area.getHeight();
+
+    if (deficit > 0)
+    {
+        // The header is a readout and the style row a control, so the header
+        // gives first — down to the shortest that still draws its two lines —
+        // and only then does the style row give up its own title strip.
+        const int fromHeader = juce::jlimit(0, deficit, headerHeight - kMinimumHeaderHeight);
+        headerHeight -= fromHeader;
+        deficit -= fromHeader;
+
+        const int fromStyleRow = juce::jlimit(0, deficit, styleRowHeight - comboHeight);
+        styleRowHeight -= fromStyleRow;
+    }
+
+    // ---- header ----------------------------------------------------------
+    headerArea = area.removeFromTop(juce::jmin(headerHeight, area.getHeight()));
+    layoutHeader(headerArea, controls);
+    area.removeFromTop(juce::jmin(gap, area.getHeight()));
+
+    // ---- style -----------------------------------------------------------
+    auto styleRow = area.removeFromTop(juce::jmin(styleRowHeight, area.getHeight()));
     styleHeader.setBounds(styleRow.removeFromTop(juce::jmin(sectionHeight, styleRow.getHeight())));
     styleRow.removeFromTop(juce::jmin(spacing, styleRow.getHeight()));
     controls.styleBox.setBounds(styleRow);
 
-    area.removeFromTop(gap);
+    area.removeFromTop(juce::jmin(gap, area.getHeight()));
 
     // ---- the knob groups --------------------------------------------------
     layoutGroups(area, controls);
@@ -604,6 +678,7 @@ void BandPanel::layoutHeader(juce::Rectangle<int> area, BandControls& controls)
         chipArea = {};
         titleArea = {};
         meterLabelArea = {};
+        cacheHeaderFonts();
         return;
     }
 
@@ -646,6 +721,25 @@ void BandPanel::layoutHeader(juce::Rectangle<int> area, BandControls& controls)
     }
 
     titleArea = row;
+    cacheHeaderFonts();
+}
+
+void BandPanel::cacheHeaderFonts()
+{
+    // Each juce::Font allocates, and the output and gain-reduction meters push
+    // this panel through paint() up to 30 times a second, so the fonts are
+    // built from the areas once per layout instead.
+    const float chipHeight = static_cast<float>(chipArea.getHeight()) - 2.0f; // paint() insets the chip by 1 px
+    chipFont = EmberFonts::forHeight(juce::jmax(1.0f, chipHeight), 0.56f, true);
+
+    // paint() splits the title area 0.56 / 0.44 between the name and the range.
+    const float titleHeight = static_cast<float>(titleArea.getHeight());
+    const float nameHeight = titleHeight * 0.56f;
+
+    bandNameFont = EmberFonts::forHeight(juce::jmax(1.0f, nameHeight), 0.86f, true);
+    rangeFont = EmberFonts::forHeight(juce::jmax(1.0f, titleHeight - nameHeight), 0.84f, false);
+
+    meterLabelFont = EmberFonts::get(EmberFonts::Role::micro, uiScale());
 }
 
 //==============================================================================
@@ -657,7 +751,7 @@ void BandPanel::layoutGroups(juce::Rectangle<int> area, BandControls& controls)
     feedbackLinkA = {};
     feedbackLinkB = {};
 
-    if (area.getWidth() < 40 || area.getHeight() < 40)
+    if (area.getWidth() < 40 || area.getHeight() < kMinimumGroupsHeight)
         return;
 
     const float scale = uiScale();
@@ -685,15 +779,23 @@ void BandPanel::layoutGroups(juce::Rectangle<int> area, BandControls& controls)
     const float minimumSlot = 62.0f * scale;
     const float availableWidth = static_cast<float>(area.getWidth());
 
-    if (availableWidth >= minimumSlot * rowWeight(rowOfFive, 5))
+    // Folding costs height: two rows need twice the height of one and three
+    // need three times. Choosing on width alone therefore had it backwards — a
+    // panel too NARROW for one row fell through to an arrangement that needed
+    // more height than it had, every row failed `layoutRow`'s own minimum and
+    // nothing was laid out at all (the 800x480 case). Height vetoes the taller
+    // arrangements, so a short panel keeps the single row and squeezes its
+    // slots rather than losing the controls.
+    const int twoRowMinimumHeight = juce::roundToInt(180.0f * scale);
+    const int threeRowMinimumHeight = juce::roundToInt(270.0f * scale);
+
+    if (availableWidth >= minimumSlot * rowWeight(rowOfFive, 5) || area.getHeight() < twoRowMinimumHeight)
     {
         layoutRow(area, rowOfFive, 5, controls);
         return;
     }
 
-    const int twoRowMinimumHeight = juce::roundToInt(180.0f * scale);
-
-    if (availableWidth >= minimumSlot * rowWeight(twoRowBottom, 3) && area.getHeight() >= twoRowMinimumHeight)
+    if (availableWidth >= minimumSlot * rowWeight(twoRowBottom, 3) || area.getHeight() < threeRowMinimumHeight)
     {
         const int rowHeight = juce::jmax(0, (area.getHeight() - gap) / 2);
         auto top = area.removeFromTop(rowHeight);
@@ -869,7 +971,7 @@ void BandPanel::paint(juce::Graphics& g)
         g.drawRoundedRectangle(chip.reduced(0.5f), chipCorner, 1.0f);
 
         g.setColour(bandActive ? colour : colour.withAlpha(0.45f));
-        g.setFont(EmberFonts::forHeight(chip.getHeight(), 0.56f, true));
+        g.setFont(chipFont);
         g.drawText(juce::String(currentBand + 1), chip, juce::Justification::centred, false);
     }
 
@@ -879,18 +981,18 @@ void BandPanel::paint(juce::Graphics& g)
         auto nameArea = title.removeFromTop(title.getHeight() * 0.56f);
 
         g.setColour(EmberColours::textPrimary);
-        g.setFont(EmberFonts::forHeight(nameArea.getHeight(), 0.86f, true));
+        g.setFont(bandNameFont);
         g.drawText("BAND " + juce::String(currentBand + 1), nameArea, juce::Justification::centredLeft, true);
 
         g.setColour(bandActive ? EmberColours::textSecondary : EmberColours::warning.withAlpha(0.8f));
-        g.setFont(EmberFonts::forHeight(title.getHeight(), 0.84f, false));
+        g.setFont(rangeFont);
         g.drawText(rangeText, title, juce::Justification::centredLeft, true);
     }
 
     if (outputMeter.isVisible() && meterLabelArea.getWidth() > 10)
     {
         g.setColour(EmberColours::textDisabled);
-        g.setFont(EmberFonts::get(EmberFonts::Role::micro, scale));
+        g.setFont(meterLabelFont);
         g.drawText("OUT", meterLabelArea, juce::Justification::centredRight, false);
     }
 

@@ -113,6 +113,15 @@ SpectrumDisplay::SpectrumDisplay(EmberAudioProcessor& processorToUse) : processo
 SpectrumDisplay::~SpectrumDisplay()
 {
     stopTimer();
+
+    // A window closed with the mouse still down on a divider never delivers the
+    // mouseUp that would have closed the gesture. Left open, the host keeps that
+    // crossover flagged as being written by the user: in several DAWs that
+    // latches the automation lane in touch/write mode for good. Close it here so
+    // destruction can never leak a gesture.
+    if (draggedDivider >= 0 && draggedDivider < kMaxCrossovers)
+        if (auto* parameter = crossoverParams[static_cast<size_t>(draggedDivider)])
+            parameter->endChangeGesture();
 }
 
 //==============================================================================
@@ -180,7 +189,11 @@ void SpectrumDisplay::resized()
 
     if (area.getWidth() < 4.0f || area.getHeight() < 4.0f)
     {
-        plotArea = area;
+        // `reduced` on a component smaller than the inset produces a rectangle
+        // with negative extents, whose getRight() is left of its getX(). Nothing
+        // downstream is prepared for that, so collapse it to an empty rectangle
+        // at the same origin instead of propagating an inside-out one.
+        plotArea = area.withSize(juce::jmax(0.0f, area.getWidth()), juce::jmax(0.0f, area.getHeight()));
         axisArea = {};
         rebuildColumns();
         return;
@@ -220,6 +233,27 @@ void SpectrumDisplay::updateSmoothingCoefficients()
     releaseCoefficient = 1.0f - std::exp(-1.0f / (rate * 0.320f));
 }
 
+void SpectrumDisplay::updateCachedFonts(float scale)
+{
+    if (std::abs(scale - cachedFontScale) <= 1.0e-4f)
+        return;
+
+    cachedFontScale = scale;
+    microFont = EmberFonts::get(EmberFonts::Role::micro, scale);
+    valueFont = EmberFonts::get(EmberFonts::Role::value, scale);
+}
+
+void SpectrumDisplay::repaintPlot()
+{
+    if (plotArea.getWidth() < 1.0f || plotArea.getHeight() < 1.0f)
+    {
+        repaint();
+        return;
+    }
+
+    repaint(plotArea.getSmallestIntegerContainer().expanded(1));
+}
+
 float SpectrumDisplay::currentUiScale() const
 {
     if (const auto* lf = dynamic_cast<const EmberLookAndFeel*>(&getLookAndFeel()))
@@ -237,8 +271,10 @@ void SpectrumDisplay::timerCallback()
     const bool heatMoved = refreshHeat();
     const bool curveMoved = refreshSpectrum();
 
+    // Everything these three can move is inside the plot; the frequency scale
+    // and the well only change on a resize.
     if (parametersMoved || heatMoved || curveMoved)
-        repaint();
+        repaintPlot();
 }
 
 bool SpectrumDisplay::refreshParameters()
@@ -347,6 +383,12 @@ bool SpectrumDisplay::refreshSpectrum()
     if (!processor.getSpectrumFifo().readLatest(frame))
         return false;
 
+    // The first frame makes the curves drawable at all, so it always needs a
+    // repaint even if it moves nothing: a silent input leaves every column
+    // already at the floor, and without this the flat curve would not appear
+    // until something else happened to dirty the component.
+    const bool firstFrame = !hasFrame;
+
     hasFrame = true;
 
     const double hostRate = processor.getSampleRate();
@@ -379,7 +421,7 @@ bool SpectrumDisplay::refreshSpectrum()
         largestMove = juce::jmax(largestMove, advance(outputCurve[index], outputTarget));
     }
 
-    return largestMove > 0.02f;
+    return firstFrame || largestMove > 0.02f;
 }
 
 float SpectrumDisplay::aggregateBins(const std::array<float, static_cast<size_t>(kSpectrumBins)>& bins, float firstBin,
@@ -421,6 +463,8 @@ void SpectrumDisplay::paint(juce::Graphics& g)
     const float scale = currentUiScale();
     const float corner = juce::jmax(2.0f, 4.0f * scale);
 
+    updateCachedFonts(scale);
+
     EmberLookAndFeel::drawWell(g, bounds, corner);
 
     if (plotArea.getWidth() < 8.0f || plotArea.getHeight() < 8.0f)
@@ -428,9 +472,9 @@ void SpectrumDisplay::paint(juce::Graphics& g)
 
     juce::Graphics::ScopedSaveState saved(g);
 
-    juce::Path clip;
-    clip.addRoundedRectangle(bounds.reduced(1.0f), corner);
-    g.reduceClipRegion(clip);
+    clipPath.clear();
+    clipPath.addRoundedRectangle(bounds.reduced(1.0f), corner);
+    g.reduceClipRegion(clipPath);
 
     paintBandRegions(g, scale);
     paintGrid(g, scale);
@@ -442,7 +486,7 @@ void SpectrumDisplay::paint(juce::Graphics& g)
 void SpectrumDisplay::paintBandRegions(juce::Graphics& g, float scale) const
 {
     const float tabHeight = juce::jmax(2.0f, 2.5f * scale);
-    const auto font = EmberFonts::get(EmberFonts::Role::micro, scale);
+    const auto& font = microFont;
     const float labelHeight = font.getHeight();
 
     for (int band = 0; band < numBands; ++band)
@@ -495,7 +539,7 @@ void SpectrumDisplay::paintBandRegions(juce::Graphics& g, float scale) const
 
 void SpectrumDisplay::paintGrid(juce::Graphics& g, float scale) const
 {
-    const auto font = EmberFonts::get(EmberFonts::Role::micro, scale);
+    const auto& font = microFont;
     const float labelHeight = font.getHeight();
 
     g.setFont(font);
@@ -557,50 +601,57 @@ void SpectrumDisplay::paintGrid(juce::Graphics& g, float scale) const
     }
 }
 
-void SpectrumDisplay::paintSpectra(juce::Graphics& g, float scale) const
+void SpectrumDisplay::paintSpectra(juce::Graphics& g, float scale)
 {
     if (!hasFrame || inputCurve.size() < 2 || outputCurve.size() < 2)
         return;
 
-    juce::Path inputLine;
-    buildCurvePath(inputLine, inputCurve);
+    // `curvePath` and `fillPath` are members so the several thousand coordinates
+    // a curve costs are written into storage that was allocated once, not into a
+    // Path built and thrown away 50 times a second.
+    buildCurvePath(curvePath, inputCurve);
 
-    if (!inputLine.isEmpty())
+    if (!curvePath.isEmpty())
     {
         // The input is a body, not a line: a filled shape the output curve can
-        // be read against without the two ever being confused.
-        juce::Path inputFill(inputLine);
-        inputFill.lineTo(plotArea.getRight(), plotArea.getBottom() + 2.0f);
-        inputFill.lineTo(plotArea.getX(), plotArea.getBottom() + 2.0f);
-        inputFill.closeSubPath();
+        // be read against without the two ever being confused. Built by walking
+        // the curve a second time rather than copying the stroke path, because
+        // copying a Path allocates and walking it does not.
+        buildCurvePath(fillPath, inputCurve);
+        fillPath.lineTo(plotArea.getRight(), plotArea.getBottom() + 2.0f);
+        fillPath.lineTo(plotArea.getX(), plotArea.getBottom() + 2.0f);
+        fillPath.closeSubPath();
 
         g.setGradientFill(juce::ColourGradient(EmberColours::textSecondary.withAlpha(0.20f), plotArea.getCentreX(),
                                                plotArea.getY(), EmberColours::textSecondary.withAlpha(0.05f),
                                                plotArea.getCentreX(), plotArea.getBottom(), false));
-        g.fillPath(inputFill);
+        g.fillPath(fillPath);
 
         g.setColour(EmberColours::textSecondary.withAlpha(0.34f));
-        g.strokePath(inputLine, juce::PathStrokeType(juce::jmax(1.0f, 0.9f * scale), juce::PathStrokeType::curved,
+        g.strokePath(curvePath, juce::PathStrokeType(juce::jmax(1.0f, 0.9f * scale), juce::PathStrokeType::curved,
                                                      juce::PathStrokeType::rounded));
     }
 
-    juce::Path outputLine;
-    buildCurvePath(outputLine, outputCurve);
+    buildCurvePath(curvePath, outputCurve);
 
-    if (!outputLine.isEmpty())
+    if (!curvePath.isEmpty())
     {
         g.setColour(EmberColours::accentGlow.withAlpha(0.16f));
-        g.strokePath(outputLine, juce::PathStrokeType(juce::jmax(2.5f, 3.4f * scale), juce::PathStrokeType::curved,
-                                                      juce::PathStrokeType::rounded));
+        g.strokePath(curvePath, juce::PathStrokeType(juce::jmax(2.5f, 3.4f * scale), juce::PathStrokeType::curved,
+                                                     juce::PathStrokeType::rounded));
 
         g.setColour(EmberColours::accent.withAlpha(0.94f));
-        g.strokePath(outputLine, juce::PathStrokeType(juce::jmax(1.0f, 1.5f * scale), juce::PathStrokeType::curved,
-                                                      juce::PathStrokeType::rounded));
+        g.strokePath(curvePath, juce::PathStrokeType(juce::jmax(1.0f, 1.5f * scale), juce::PathStrokeType::curved,
+                                                     juce::PathStrokeType::rounded));
     }
 }
 
 void SpectrumDisplay::buildCurvePath(juce::Path& path, const std::vector<float>& curve) const
 {
+    // Cleared first and unconditionally: these paths are reused between frames,
+    // so an early return must leave an empty path, never last frame's curve.
+    path.clear();
+
     const int columns = static_cast<int>(curve.size());
 
     if (columns < 2 || plotArea.getWidth() < 2.0f)
@@ -681,7 +732,7 @@ void SpectrumDisplay::paintDragReadout(juce::Graphics& g, float scale) const
     if (draggedDivider < 0 || draggedDivider >= kMaxCrossovers)
         return;
 
-    const auto font = EmberFonts::get(EmberFonts::Role::value, scale);
+    const auto& font = valueFont;
     const juce::String text = formatFrequency(crossoverHz[static_cast<size_t>(draggedDivider)]);
     const float boxWidth = juce::GlyphArrangement::getStringWidth(font, text) + 16.0f * scale;
     const float boxHeight = font.getHeight() + 8.0f * scale;
@@ -816,10 +867,19 @@ void SpectrumDisplay::setCrossover(int index, float hz)
         return;
 
     const float target = clampCrossover(index, hz);
+    const float normalised = juce::jlimit(0.0f, 1.0f, parameter->convertTo0to1(target));
 
     // Through the parameter, not the value tree: this is what puts the move in
     // front of the host's automation and the undo manager.
-    parameter->setValueNotifyingHost(parameter->convertTo0to1(target));
+    //
+    // Only when it actually differs, though. A drag delivers a mouseDrag for
+    // every mouse event, most of which land on the pixel the last one did, and
+    // an unchanged setValueNotifyingHost still round-trips through the host and
+    // still runs the processor's parameterChanged — which marks the preset
+    // dirty. Clamping against a neighbour makes this common: pushing an edge
+    // into its neighbour produces the same clamped value on every event.
+    if (std::abs(normalised - parameter->getValue()) > 1.0e-6f)
+        parameter->setValueNotifyingHost(normalised);
 
     // Move the displayed state with it rather than waiting for the next timer
     // tick, or a drag repaints its edge in the new place and its ghost in the
@@ -842,7 +902,7 @@ void SpectrumDisplay::updateHover(juce::Point<float> position)
     setMouseCursor(divider >= 0
                        ? juce::MouseCursor::LeftRightResizeCursor
                        : (band >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor));
-    repaint();
+    repaintPlot();
 }
 
 void SpectrumDisplay::selectBandAt(juce::Point<float> position)
@@ -853,7 +913,7 @@ void SpectrumDisplay::selectBandAt(juce::Point<float> position)
         return;
 
     setSelectedBandAndNotify(band);
-    repaint();
+    repaintPlot();
 }
 
 void SpectrumDisplay::setSelectedBandAndNotify(int band)
@@ -884,7 +944,7 @@ void SpectrumDisplay::mouseExit(const juce::MouseEvent&)
     hoveredDivider = -1;
     hoveredBand = -1;
     setMouseCursor(juce::MouseCursor::NormalCursor);
-    repaint();
+    repaintPlot();
 }
 
 void SpectrumDisplay::mouseDown(const juce::MouseEvent& e)
@@ -901,7 +961,7 @@ void SpectrumDisplay::mouseDown(const juce::MouseEvent& e)
         if (auto* parameter = crossoverParams[static_cast<size_t>(divider)])
             parameter->beginChangeGesture();
 
-        repaint();
+        repaintPlot();
         return;
     }
 
@@ -930,7 +990,7 @@ void SpectrumDisplay::mouseDrag(const juce::MouseEvent& e)
     const float hz = dragStartHz * std::exp(logFrequencyRatio * delta / plotArea.getWidth());
 
     setCrossover(draggedDivider, juce::jlimit(minFrequency, maxFrequency, hz));
-    repaint();
+    repaintPlot();
 }
 
 void SpectrumDisplay::mouseUp(const juce::MouseEvent& e)
@@ -944,7 +1004,7 @@ void SpectrumDisplay::mouseUp(const juce::MouseEvent& e)
     }
 
     updateHover(e.position);
-    repaint();
+    repaintPlot();
 }
 
 void SpectrumDisplay::mouseDoubleClick(const juce::MouseEvent& e)
@@ -974,7 +1034,7 @@ void SpectrumDisplay::mouseDoubleClick(const juce::MouseEvent& e)
     // A drag continuing out of the double-click starts from the reset value.
     dragStartX = e.position.x;
     dragStartHz = crossoverHz[static_cast<size_t>(divider)];
-    repaint();
+    repaintPlot();
 }
 
 //==============================================================================

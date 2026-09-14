@@ -344,6 +344,26 @@ void PresetBrowser::rebuildCategories()
     categoryNames.add("All");
     categoryNames.addArray(manager.getCategories());
 
+    // Per-category totals, counted once here rather than re-scanning the whole
+    // library inside every row's paint. Row 0 ("All") holds the grand total.
+    const auto& allPresets = manager.getAllPresets();
+
+    categoryCounts.clearQuick();
+    categoryCounts.ensureStorageAllocated(categoryNames.size());
+    categoryCounts.add(allPresets.size());
+
+    for (int i = 1; i < categoryNames.size(); ++i)
+    {
+        const auto& categoryName = categoryNames.getReference(i);
+        int count = 0;
+
+        for (const auto& info : allPresets)
+            if (info.category == categoryName)
+                ++count;
+
+        categoryCounts.add(count);
+    }
+
     hoveredCategoryRow = -1;
     categoryList.updateContent();
 
@@ -375,10 +395,19 @@ void PresetBrowser::applyFilter()
         selectPreset(keepName, keepCategory);
 
     const int count = shownPresets.size();
-    title.setTrailingText(juce::String(count) + (count == 1 ? " preset" : " presets"));
+    const auto countText = juce::String(count) + (count == 1 ? " preset" : " presets");
 
+    if (countText != shownCountText)
+    {
+        shownCountText = countText;
+        title.setTrailingText(countText);
+    }
+
+    // No repaint() here: filtering changes nothing this component draws. The
+    // panel and the wells only move in resized(), the title repaints itself
+    // above, and updateContent() repaints the list. Repainting the whole
+    // overlay per keystroke would redraw the backdrop and the panel shadow.
     updateActionButtons();
-    repaint();
 }
 
 void PresetBrowser::selectPreset(const juce::String& presetName, const juce::String& presetCategory)
@@ -650,14 +679,20 @@ void PresetBrowser::revealUserFolder()
 
 void PresetBrowser::dismiss()
 {
-    if (onDismiss)
-        onDismiss();
+    // The handler is PresetBar::hideBrowser, which clears this very member (and
+    // then hands the browser to the message queue to be deleted). Calling
+    // `onDismiss()` directly would therefore destroy the closure while it is
+    // still running, so it is copied onto the stack and invoked from there.
+    if (auto callback = onDismiss)
+        callback();
 }
 
 void PresetBrowser::notifyPresetChanged()
 {
-    if (onPresetChanged)
-        onPresetChanged();
+    // Same reasoning as dismiss(): the owner is allowed to clear or replace
+    // this callback from inside it.
+    if (auto callback = onPresetChanged)
+        callback();
 }
 
 //==============================================================================
@@ -676,9 +711,17 @@ void PresetBrowser::paint(juce::Graphics& g)
     const float uiScale = scale();
     const float corner = juce::jlimit(4.0f, 14.0f, 9.0f * uiScale);
 
-    juce::DropShadow(juce::Colours::black.withAlpha(0.55f), juce::roundToInt(20.0f * uiScale),
-                     {0, juce::roundToInt(6.0f * uiScale)})
-        .drawForRectangle(g, panelArea.toNearestInt());
+    // drawForRectangle builds and blurs an image every call, so it is skipped
+    // when the damaged region lies inside the opaque part of the panel, where
+    // the shadow could not show through anyway. That is the common case: the
+    // lists have a transparent background, so every hovered row repaint brings
+    // this paint routine with it.
+    const auto clipped = g.getClipBounds().toFloat();
+
+    if (!panelArea.reduced(corner + 1.0f).contains(clipped))
+        juce::DropShadow(juce::Colours::black.withAlpha(0.55f), juce::roundToInt(20.0f * uiScale),
+                         {0, juce::roundToInt(6.0f * uiScale)})
+            .drawForRectangle(g, panelArea.toNearestInt());
 
     EmberLookAndFeel::drawPanel(g, panelArea, corner, false);
 
@@ -715,7 +758,13 @@ void PresetBrowser::resized()
     const float pad = juce::jlimit(8.0f, 22.0f, 14.0f * uiScale);
     const float gap = juce::jlimit(4.0f, 12.0f, 7.0f * uiScale);
     const float rowHeight = juce::jlimit(20.0f, 38.0f, 26.0f * uiScale);
-    const float buttonWidth = juce::jlimit(52.0f, 104.0f, panelWidth * 0.155f);
+
+    // The action row is five buttons and three gaps wide. Above the minimum
+    // window the proportional width wins; below it, the buttons shrink instead
+    // of overlapping each other.
+    const float contentWidth = juce::jmax(1.0f, panelWidth - pad * 2.0f);
+    const float widestThatFits = juce::jmax(24.0f, (contentWidth - gap * 2.8f) / 5.0f);
+    const float buttonWidth = juce::jmin(juce::jlimit(52.0f, 104.0f, panelWidth * 0.155f), widestThatFits);
 
     auto inner = panelArea.reduced(pad);
 
@@ -788,9 +837,18 @@ void PresetBrowser::resized()
     body.removeFromLeft(gap);
     presetWell = body;
 
+    // reduced() on a well narrower than twice the inset would hand setBounds a
+    // negative size, so the inset never eats more than half of either axis.
     const float inset = juce::jmax(2.0f, 3.0f * uiScale);
-    categoryList.setBounds(categoryWell.reduced(inset).toNearestInt());
-    presetList.setBounds(presetWell.reduced(inset).toNearestInt());
+
+    const auto insetWell = [inset](juce::Rectangle<float> area)
+    {
+        return area.reduced(juce::jmin(inset, area.getWidth() * 0.5f),
+                            juce::jmin(inset, area.getHeight() * 0.5f));
+    };
+
+    categoryList.setBounds(insetWell(categoryWell).toNearestInt());
+    presetList.setBounds(insetWell(presetWell).toNearestInt());
 
     const int rowPixels = listRowHeight(uiScale);
     categoryList.setRowHeight(rowPixels);
@@ -997,12 +1055,11 @@ void PresetBrowser::paintCategoryRow(int rowNumber, juce::Graphics& g, int width
     }
 
     // How many presets this category holds, so the column carries information
-    // rather than just being a filter.
-    int count = 0;
-
-    for (const auto& info : manager.getAllPresets())
-        if (rowNumber == 0 || info.category == name)
-            ++count;
+    // rather than just being a filter. Cached by rebuildCategories(): counting
+    // here would rescan the whole library once per row, per repaint.
+    const int count = juce::isPositiveAndBelow(rowNumber, categoryCounts.size())
+                          ? categoryCounts.getUnchecked(rowNumber)
+                          : 0;
 
     const float pad = textPaddingFor(row.getHeight());
     auto text = row.reduced(pad, 0.0f);
@@ -1265,10 +1322,16 @@ PresetBar::~PresetBar()
 
 void PresetBar::installManagerCallbacks()
 {
+    // See PresetBrowser::installManagerCallbacks: chaining onto our own lambda
+    // would recurse for ever.
+    if (callbacksInstalled)
+        return;
+
     const juce::Component::SafePointer<PresetBar> safeThis(this);
 
     previousListChanged = manager.onPresetListChanged;
     previousPresetLoaded = manager.onPresetLoaded;
+    callbacksInstalled = true;
 
     auto chainedListChanged = previousListChanged;
     manager.onPresetListChanged = [safeThis, chainedListChanged]
@@ -1293,8 +1356,16 @@ void PresetBar::installManagerCallbacks()
 
 void PresetBar::restoreManagerCallbacks()
 {
+    if (!callbacksInstalled)
+        return;
+
+    callbacksInstalled = false;
+
     manager.onPresetListChanged = previousListChanged;
     manager.onPresetLoaded = previousPresetLoaded;
+
+    previousListChanged = nullptr;
+    previousPresetLoaded = nullptr;
 }
 
 void PresetBar::timerCallback()
@@ -1369,6 +1440,13 @@ void PresetBar::hideBrowser()
     // Unchain from the preset manager now, while the order is still known,
     // rather than whenever the deferred delete happens to run.
     browser->detachFromManager();
+
+    // Take it out of the editor before the delete is deferred, so the object
+    // waiting on the message queue is fully detached: it receives no further
+    // events, and it no longer matters whether the editor (and the shared
+    // look-and-feel it points at) outlives the queued deletion.
+    if (auto* host = browser->getParentComponent())
+        host->removeChildComponent(browser.get());
 
     // This is normally called from inside one of the browser's own mouse or key
     // handlers, so the object is handed to the message queue instead of being

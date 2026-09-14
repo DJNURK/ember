@@ -191,3 +191,61 @@ TEST_CASE("state restore is stable across many randomisations", "[processor][sta
         }
     }
 }
+
+TEST_CASE("every factory preset loads and actually changes the plugin", "[processor][presets]")
+{
+    // test_presets.cpp checks the XML is structurally valid against the
+    // parameter layout. That is not the same as the preset working: a preset
+    // whose parameter block never reaches the APVTS would still pass it and
+    // silently do nothing when a user clicks it. This loads each one through
+    // the real PresetManager and checks the plugin's state actually moved.
+    EmberAudioProcessor proc;
+    auto& presets = proc.getPresetManager();
+
+    const auto all = presets.getAllPresets();
+    INFO("factory presets visible to the manager: " << all.size());
+    REQUIRE(all.size() >= 30);
+
+    auto snapshot = [&proc]
+    {
+        juce::Array<float> values;
+        for (auto* p : proc.getParameters())
+            values.add(p->getValue());
+        return values;
+    };
+
+    // "Init" is every parameter at its default, so loading it from the default
+    // state legitimately changes nothing; it is the reference, not a failure.
+    const auto initState = snapshot();
+
+    int changed = 0;
+    for (const auto& info : all)
+    {
+        INFO("loading preset '" << info.name << "' (" << info.category << ")");
+        REQUIRE(presets.loadPreset(info));
+        REQUIRE(presets.getCurrentPresetName() == info.name);
+
+        const auto loaded = snapshot();
+        REQUIRE(loaded.size() == initState.size());
+
+        bool differs = false;
+        for (int i = 0; i < loaded.size() && !differs; ++i)
+            differs = std::abs(loaded[i] - initState[i]) > 1.0e-4f;
+        if (differs)
+            ++changed;
+
+        // Whatever it loaded must be finite and in range, and must not have
+        // left the processor unable to run.
+        proc.prepareToPlay(48000.0, 256);
+        juce::AudioBuffer<float> buf(2, 256);
+        juce::MidiBuffer midi;
+        fillWhiteNoise(buf, 0x31337u, 0.3f);
+        proc.processBlock(buf, midi);
+        REQUIRE(allFinite(buf));
+        REQUIRE(peak(buf) < 32.0f);
+    }
+
+    // All but Init must move something.
+    INFO(changed << " of " << all.size() << " presets changed the state");
+    REQUIRE(changed >= all.size() - 1);
+}

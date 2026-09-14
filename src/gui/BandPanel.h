@@ -126,6 +126,11 @@ private:
     juce::String frequencyRangeText() const;
     float uiScale() const;
 
+    /** Rebuilds the fonts `paint` uses. Called from the layout, because a
+        `juce::Font` allocates and the meters push this panel through `paint`
+        up to 30 times a second. */
+    void cacheHeaderFonts();
+
     void layoutHeader(juce::Rectangle<int> area, BandControls& controls);
     void layoutGroups(juce::Rectangle<int> area, BandControls& controls);
     void layoutRow(juce::Rectangle<int> row, const int* groupIndices, int numGroups, BandControls& controls);
@@ -151,6 +156,12 @@ private:
     juce::String rangeText;
     bool bandActive{true};
     int lastStyleIndex{-1};
+
+    // Built by cacheHeaderFonts() from the areas above, never inside paint().
+    juce::Font chipFont{juce::FontOptions{}};
+    juce::Font bandNameFont{juce::FontOptions{}};
+    juce::Font rangeFont{juce::FontOptions{}};
+    juce::Font meterLabelFont{juce::FontOptions{}};
 
     // Cached raw parameter pointers for the header readout: atomics, read on
     // the message thread from timerCallback.

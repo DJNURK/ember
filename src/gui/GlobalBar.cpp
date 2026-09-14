@@ -198,7 +198,13 @@ BandCountSelector::BandCountSelector(EmberAudioProcessor& processorToUse, const 
     }
 }
 
-BandCountSelector::~BandCountSelector() = default;
+BandCountSelector::~BandCountSelector()
+{
+    // Closing the editor mid-drag never delivers a mouseUp, and an unbalanced
+    // beginChangeGesture leaves the host writing automation until the processor
+    // itself is destroyed (where JUCE asserts on it).
+    finishDragGesture();
+}
 
 juce::String BandCountSelector::getTooltip()
 {
@@ -249,10 +255,18 @@ void BandCountSelector::applyCount(int newCount, bool asCompleteGesture)
 
     if (attachment != nullptr)
     {
+        // A parameter notifies its listeners synchronously when the write comes
+        // from the message thread, so this call lands straight back in
+        // valueFromParameter(), which stores the count, repaints and announces
+        // it. Falling through to do that again here would relay every single
+        // band-count change to the editor twice — once per drag step.
         if (asCompleteGesture)
             attachment->setValueAsCompleteGesture(static_cast<float>(clamped));
         else
             attachment->setValueAsPartOfGesture(static_cast<float>(clamped));
+
+        if (currentCount == clamped)
+            return;
     }
 
     currentCount = clamped;
@@ -260,6 +274,17 @@ void BandCountSelector::applyCount(int newCount, bool asCompleteGesture)
 
     if (onCountChanged != nullptr)
         onCountChanged(currentCount);
+}
+
+void BandCountSelector::finishDragGesture()
+{
+    if (!dragging)
+        return;
+
+    dragging = false;
+
+    if (attachment != nullptr)
+        attachment->endGesture();
 }
 
 void BandCountSelector::valueFromParameter(float denormalisedValue)
@@ -297,13 +322,7 @@ void BandCountSelector::mouseDrag(const juce::MouseEvent& e)
 
 void BandCountSelector::mouseUp(const juce::MouseEvent&)
 {
-    if (!dragging)
-        return;
-
-    dragging = false;
-
-    if (attachment != nullptr)
-        attachment->endGesture();
+    finishDragGesture();
 }
 
 void BandCountSelector::mouseMove(const juce::MouseEvent& e)
@@ -328,6 +347,10 @@ void BandCountSelector::mouseExit(const juce::MouseEvent&)
 
 void BandCountSelector::mouseDoubleClick(const juce::MouseEvent&)
 {
+    // The double-click follows the second mouse-down, whose gesture is still
+    // open; the reset below writes a complete gesture of its own.
+    finishDragGesture();
+
     if (parameter == nullptr)
         return;
 
@@ -337,6 +360,8 @@ void BandCountSelector::mouseDoubleClick(const juce::MouseEvent&)
 
 void BandCountSelector::mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
 {
+    finishDragGesture();
+
     wheelAccumulator += wheel.isReversed ? -wheel.deltaY : wheel.deltaY;
 
     if (std::abs(wheelAccumulator) < 0.2f)
@@ -356,6 +381,12 @@ void BandCountSelector::paint(juce::Graphics& g)
         return;
 
     EmberLookAndFeel::drawWell(g, bounds, juce::jlimit(2.0f, 7.0f, bounds.getHeight() * 0.22f));
+
+    // Every chip is the same height, so the two faces are built once rather
+    // than once per chip.
+    const float chipHeight = segmentBounds(0).getHeight();
+    const auto litFont = EmberFonts::forHeight(chipHeight, 0.58f, true);
+    const auto unlitFont = EmberFonts::forHeight(chipHeight, 0.58f, false);
 
     for (int i = 0; i < maximumCount; ++i)
     {
@@ -388,7 +419,7 @@ void BandCountSelector::paint(juce::Graphics& g)
         }
 
         g.setColour(lit ? EmberColours::textPrimary : EmberColours::textDisabled);
-        g.setFont(EmberFonts::forHeight(chip.getHeight(), 0.58f, lit));
+        g.setFont(lit ? litFont : unlitFont);
         g.drawText(juce::String(i + 1), chip, juce::Justification::centred, false);
     }
 }
@@ -758,38 +789,35 @@ void GlobalBar::updateHistoryButtons()
     const bool canUndo = undoManager.canUndo();
     const bool canRedo = undoManager.canRedo();
 
-    if (canUndo != lastCanUndo)
+    // Fetching the names is cheap — a reference-counted string copy — but
+    // building a tooltip out of one allocates, so that only happens when the
+    // history has actually moved. This runs 30 times a second.
+    const auto undoName = canUndo ? undoManager.getUndoDescription() : juce::String();
+    const auto redoName = canRedo ? undoManager.getRedoDescription() : juce::String();
+
+    if (canUndo != lastCanUndo || undoName != lastUndoDescription)
     {
         lastCanUndo = canUndo;
+        lastUndoDescription = undoName;
+
         undoButton.setEnabled(canUndo);
+
+        // JUCE only has a description when a transaction was given a name, so
+        // fall back to something honest rather than an empty tooltip.
+        undoButton.setTooltip(canUndo ? (undoName.isNotEmpty() ? "Undo " + undoName
+                                                              : juce::String("Undo the last change"))
+                                      : juce::String("Nothing to undo"));
     }
 
-    if (canRedo != lastCanRedo)
+    if (canRedo != lastCanRedo || redoName != lastRedoDescription)
     {
         lastCanRedo = canRedo;
+        lastRedoDescription = redoName;
+
         redoButton.setEnabled(canRedo);
-    }
-
-    // JUCE only has a description when a transaction was given a name, so fall
-    // back to something honest rather than showing an empty tooltip.
-    const auto undoName = undoManager.getUndoDescription();
-    const auto redoName = undoManager.getRedoDescription();
-
-    const juce::String undoTip = canUndo ? (undoName.isNotEmpty() ? "Undo " + undoName : "Undo the last change")
-                                         : juce::String("Nothing to undo");
-    const juce::String redoTip = canRedo ? (redoName.isNotEmpty() ? "Redo " + redoName : "Redo the last undone change")
-                                         : juce::String("Nothing to redo");
-
-    if (undoTip != lastUndoDescription)
-    {
-        lastUndoDescription = undoTip;
-        undoButton.setTooltip(undoTip);
-    }
-
-    if (redoTip != lastRedoDescription)
-    {
-        lastRedoDescription = redoTip;
-        redoButton.setTooltip(redoTip);
+        redoButton.setTooltip(canRedo ? (redoName.isNotEmpty() ? "Redo " + redoName
+                                                               : juce::String("Redo the last undone change"))
+                                      : juce::String("Nothing to redo"));
     }
 }
 
@@ -1022,7 +1050,7 @@ void GlobalBar::paint(juce::Graphics& g)
     g.setColour(EmberColours::textDisabled);
 
     for (const auto& caption : captions)
-        g.drawFittedText(caption.text.toUpperCase(), caption.bounds,
+        g.drawFittedText(caption.text, caption.bounds,
                          caption.centred ? juce::Justification::centred : juce::Justification::centredLeft, 1, 0.65f);
 }
 
@@ -1178,8 +1206,10 @@ void GlobalBar::resized()
         {
             auto captionArea = block.removeFromTop(captionH);
 
+            // Upper-cased here rather than in paint(): the banner is not opaque,
+            // so a MIDI-learn pulse repaints the strip underneath it at 30 Hz.
             if (caption.isNotEmpty())
-                captions.push_back({captionArea, caption});
+                captions.push_back({captionArea, caption.toUpperCase(), false});
 
             block.removeFromTop(captionGap);
         }
@@ -1218,7 +1248,7 @@ void GlobalBar::resized()
             auto column = cell.removeFromLeft(juce::jmin(knobW, cell.getWidth()));
 
             if (knobsNeedCaption && column.getHeight() > captionH + 16)
-                captions.push_back({column.removeFromTop(captionH), caption, true});
+                captions.push_back({column.removeFromTop(captionH), caption.toUpperCase(), true});
 
             knob.setBounds(column);
         };
