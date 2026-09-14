@@ -92,6 +92,14 @@ private:
     int activeNumBands { 3 };
     int previousNumBands { 3 };
 
+    /** Last crossover edges actually pushed into the filters. Frequencies are
+        only re-sent when one genuinely moves: in linear-phase mode a re-send
+        costs a FIR redesign plus an FFT per edge on the calling thread, which
+        is the audio thread here, and at 192 kHz that is more than a whole
+        32-sample control block's budget. A static crossover must cost nothing. */
+    float appliedCrossoverHz[kMaxCrossovers] { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+    int appliedNumBands { -1 };
+
     std::array<juce::SmoothedValue<float>, kMaxBands> bandGateGain;   // solo / bypass-to-silence
     std::array<std::atomic<float>, kMaxBands> bandLevels {};
 

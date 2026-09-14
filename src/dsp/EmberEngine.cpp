@@ -90,6 +90,7 @@ void EmberEngine::reset()
     dryRms = wetRms = 0.0f;
     bandFade = 1.0f;
     previousCrossover = nullptr;
+    appliedNumBands = -1;      // force the next setParameters to re-send
 
     for (auto& l : bandLevels)
         l.store(0.0f, std::memory_order_relaxed);
@@ -153,6 +154,15 @@ void EmberEngine::setParameters(const GlobalParams& global, const BandParams* ba
 {
     const int requested = juce::jlimit(kMinBands, kMaxBands, global.numBands);
 
+    // Only touch the crossover when something actually changed. Re-sending the
+    // same frequencies is not free: in linear-phase mode each edge costs a FIR
+    // design and a forward FFT, and this runs once per 32-sample control block
+    // on the audio thread.
+    const int numEdges = juce::jmax(0, requested - 1);
+    bool edgesMoved = (requested != appliedNumBands);
+    for (int i = 0; i < numEdges && ! edgesMoved; ++i)
+        edgesMoved = std::abs(global.crossoverHz[i] - appliedCrossoverHz[i]) > 1.0e-3f;
+
     if (requested != activeNumBands)
     {
         // Start a band-count crossfade: the current crossover becomes the
@@ -161,14 +171,22 @@ void EmberEngine::setParameters(const GlobalParams& global, const BandParams* ba
         previousNumBands = activeNumBands;
         activeCrossover = (activeCrossover == &crossoverA) ? &crossoverB : &crossoverA;
         activeCrossover->setNumBands(requested);
-        activeCrossover->setCrossoverFrequencies(global.crossoverHz, requested - 1);
+        activeCrossover->setCrossoverFrequencies(global.crossoverHz, numEdges);
         activeNumBands = requested;
         bandFade = 0.0f;
+        edgesMoved = true;
     }
-    else
+    else if (edgesMoved)
     {
         activeCrossover->setNumBands(requested);
-        activeCrossover->setCrossoverFrequencies(global.crossoverHz, juce::jmax(0, requested - 1));
+        activeCrossover->setCrossoverFrequencies(global.crossoverHz, numEdges);
+    }
+
+    if (edgesMoved)
+    {
+        appliedNumBands = requested;
+        for (int i = 0; i < kMaxCrossovers; ++i)
+            appliedCrossoverHz[i] = global.crossoverHz[i];
     }
 
     globalParams = global;
