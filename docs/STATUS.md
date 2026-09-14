@@ -10,9 +10,9 @@ Last updated: 2026-09-14. Everything below is measured on the host machine
 | M1 Skeleton | **done** | VST3 + AU + Standalone build; `pluginval --strictness-level 10` SUCCESS on VST3 and AU; `auval` clean |
 | M2 Core DSP | **done** | crossovers, oversampling, per-band drive/mix/level; null and flatness tests green |
 | M3 Full DSP | **done** | 19 styles, feedback, dynamics, tone, auto-gain, linear phase, M/S; all gates green |
-| M4 GUI | in progress | processor contract fixed; panels being built |
-| M5 Modulation | **done** (DSP side) | 23 sources, 64 routings, cycle rejection, state round-trip tested |
-| M6 Presets & docs | in progress | 35-preset library designed and being generated; README/MANUAL/TESTING/CHANGELOG written |
+| M4 GUI | **done** | 11,600 lines of vector GUI; pluginval exercises the editor at strictness 10 |
+| M5 Modulation | **done** | 23 sources, 64 routings, cycle rejection, state round-trip tested, sources wired to their parameters and covered by a regression test |
+| M6 Presets & docs | **done** | 36 presets generated from the live layout and validated; README/MANUAL/TESTING/CHANGELOG written |
 | M7 Release | packaging written, not yet tagged | CI + release workflows, Inno Setup, pkgbuild, Linux install — not yet exercised on real CI |
 
 ## Quality gates
@@ -29,7 +29,8 @@ Last updated: 2026-09-14. Everything below is measured on the host machine
 | No compiler warnings at `-Wall -Wextra` | **pass** for the DSP and plugin sources |
 | Realtime CPU ≤ 3 % of one core (stereo 48 kHz, 6 bands, 4×) | **NOT met — 7.6 %.** See below |
 | ASan/UBSan clean | **pass** — all 28 tests / 36,771 assertions clean under `-fsanitize=address,undefined` locally on macOS; the Linux sanitiser job runs the same suite in CI |
-| Manual checklist in `docs/TESTING.md` | renders produced in `test-renders/`; checklist not yet walked in a DAW |
+| Manual checklist in `docs/TESTING.md` | 34 renders produced in `test-renders/`; checklist not yet walked in a DAW |
+| GUI | built and automatically exercised — pluginval L10 constructs and destroys the editor, opens it while audio is processing, drives editor automation and runs parameter thread-safety checks, all passing. NOT visually inspected: this host grants the session neither screen-recording nor accessibility permission |
 
 ## CPU
 
