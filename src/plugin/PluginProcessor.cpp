@@ -509,7 +509,9 @@ int EmberAudioProcessor::getMidiCCForParameter(const juce::String& parameterID) 
     {
         if (auto* withID = dynamic_cast<juce::AudioProcessorParameterWithID*>(p))
             if (withID->paramID == parameterID)
-                return midiCCForParam[static_cast<size_t>(index)].load(std::memory_order_relaxed);
+                return index < static_cast<int>(midiCCForParam.size())
+                           ? midiCCForParam[static_cast<size_t>(index)].load(std::memory_order_relaxed)
+                           : -1;
         ++index;
     }
     return -1;
@@ -523,7 +525,8 @@ void EmberAudioProcessor::clearMidiMapping(const juce::String& parameterID)
         if (auto* withID = dynamic_cast<juce::AudioProcessorParameterWithID*>(p))
             if (withID->paramID == parameterID)
             {
-                midiCCForParam[static_cast<size_t>(index)].store(-1, std::memory_order_relaxed);
+                if (index < static_cast<int>(midiCCForParam.size()))
+                    midiCCForParam[static_cast<size_t>(index)].store(-1, std::memory_order_relaxed);
                 return;
             }
         ++index;
@@ -566,7 +569,8 @@ void EmberAudioProcessor::applyMidiMappings(const juce::MidiBuffer& midi)
                 for (int i = 0; i < params.size(); ++i)
                     if (auto* withID = dynamic_cast<juce::AudioProcessorParameterWithID*>(params[i]))
                         if (withID->paramID == target)
-                            midiCCForParam[static_cast<size_t>(i)].store(cc, std::memory_order_relaxed);
+                            if (i < static_cast<int>(midiCCForParam.size()))
+                                midiCCForParam[static_cast<size_t>(i)].store(cc, std::memory_order_relaxed);
                 midiLearnActive.store(false, std::memory_order_release);
             }
         }
@@ -682,7 +686,9 @@ juce::ValueTree EmberAudioProcessor::captureFullState() const
     {
         if (auto* withID = dynamic_cast<juce::AudioProcessorParameterWithID*>(p))
         {
-            const int cc = midiCCForParam[static_cast<size_t>(index)].load(std::memory_order_relaxed);
+            const int cc = index < static_cast<int>(midiCCForParam.size())
+                               ? midiCCForParam[static_cast<size_t>(index)].load(std::memory_order_relaxed)
+                               : -1;
             if (cc >= 0)
             {
                 juce::ValueTree entry("MAP");
@@ -722,7 +728,8 @@ void EmberAudioProcessor::restoreFullState(const juce::ValueTree& tree)
                 {
                     if (auto* withID = dynamic_cast<juce::AudioProcessorParameterWithID*>(p))
                         if (withID->paramID == paramID)
-                            midiCCForParam[static_cast<size_t>(index)].store(cc, std::memory_order_relaxed);
+                            if (index < static_cast<int>(midiCCForParam.size()))
+                                midiCCForParam[static_cast<size_t>(index)].store(cc, std::memory_order_relaxed);
                     ++index;
                 }
             }
