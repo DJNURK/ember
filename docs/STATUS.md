@@ -66,8 +66,15 @@ usefulness:
    looking them up by id meant a string copy and a hash per parameter per block.
    That alone was 1.8 points of a core — the full plugin went 9.3 % → 6.6 %.
 
-With oversampling off the engine floor is 2.9 %, so 3 % at six oversampled bands
-is not reachable by tuning. It would need the band chain roughly halved, most
+These numbers are hardware-specific and should be read that way. The same
+benchmark on the Linux CI runner reports 11.9 % for the full plugin at 6 bands /
+4× and 6.1 % at 3 bands — roughly 1.8× the M2 figures, on a shared cloud vCPU.
+A CPU gate in CI would therefore be measuring the runner, not the plugin, which
+is why the benchmark reports its numbers into the job log and only fails if the
+plugin cannot sustain realtime at all.
+
+With oversampling off the engine floor is 2.9 % on the M2, so 3 % at six
+oversampled bands is not reachable by tuning. It would need the band chain roughly halved, most
 plausibly by hand-vectorising the style shapers and the half-band filters. That
 has not been attempted. The benchmark prints these numbers in CI so the figure
 cannot quietly drift.
