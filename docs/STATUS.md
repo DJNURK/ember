@@ -28,7 +28,7 @@ Last updated: 2026-09-14. Everything below is measured on the host machine
 | `pluginval --strictness-level 10` | **pass** on macOS VST3 and AU |
 | No compiler warnings at `-Wall -Wextra` | **pass** for the DSP and plugin sources |
 | Realtime CPU ≤ 3 % of one core (stereo 48 kHz, 6 bands, 4×) | **NOT met — 7.6 %.** See below |
-| ASan/UBSan clean | not yet run — the sanitiser job is Linux-only and this host is macOS |
+| ASan/UBSan clean | **pass** — all 28 tests / 36,771 assertions clean under `-fsanitize=address,undefined` locally on macOS; the Linux sanitiser job runs the same suite in CI |
 | Manual checklist in `docs/TESTING.md` | renders produced in `test-renders/`; checklist not yet walked in a DAW |
 
 ## CPU

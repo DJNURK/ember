@@ -754,7 +754,7 @@ void SectionHeader::paint(juce::Graphics& g)
     const auto rule = remaining.withTrimmedLeft(gap).withTrimmedRight(gap);
 
     if (rule.getWidth() > 4.0f)
-        EmberLookAndFeel::drawHairline(g, rule, EmberColours::outline);
+        EmberLookAndFeel::drawHairline(g, rule, EmberColours::outlineStrong);
 }
 
 //==============================================================================
@@ -944,14 +944,14 @@ void LabelledKnob::resized()
     if (showCaption)
     {
         const int captionHeight = juce::jlimit(11, 20, juce::roundToInt(height * 0.19f));
-        captionLabel.setFont(EmberFonts::forHeight(static_cast<float>(captionHeight), 0.8f, false));
+        captionLabel.setFont(EmberFonts::forHeight(static_cast<float>(captionHeight), 0.68f, false));
         captionLabel.setBounds(area.removeFromTop(captionHeight));
     }
 
     if (showValue)
     {
         const int valueHeight = juce::jlimit(12, 22, juce::roundToInt(height * 0.2f));
-        valueLabel.setFont(EmberFonts::forHeight(static_cast<float>(valueHeight), 0.74f, false));
+        valueLabel.setFont(EmberFonts::forHeight(static_cast<float>(valueHeight), 0.82f, false));
         valueLabel.setBounds(area.removeFromBottom(valueHeight));
     }
 

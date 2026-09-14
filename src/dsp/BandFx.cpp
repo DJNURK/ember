@@ -225,10 +225,11 @@ void FeedbackLoop::setParameters(float amount01, float frequency) noexcept
     // so the line never holds anything.
     //
     // Flushing here is one-shot, allocation-free and bounded: the line is one
-    // period of the lowest tuning (20 Hz), so 0.40 us at 48 kHz x2 and 8.74 us
-    // at the worst supported internal rate (192 kHz x16 = 3.072 MHz, 1.2 MB for
-    // both channels) — 5.2 % of a single 32-sample control block, once per
-    // knob-to-zero rather than once per block.
+    // period of the lowest tuning (20 Hz), so the whole call measures ~1 us at
+    // ordinary internal rates and 17 us at the worst supported one (192 kHz
+    // host x16 oversampling = 3.072 MHz, 1.2 MB for both channels) — 10 % of a
+    // single 32-sample control block, paid once per knob-to-zero rather than on
+    // every block.
     if (amount > 0.0f && newAmount <= 0.0f)
     {
         for (auto& line : delayLine)

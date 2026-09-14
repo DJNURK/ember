@@ -17,7 +17,7 @@ const juce::Colour EmberColours::panelRaised{0xff1f1f24};
 
 const juce::Colour EmberColours::outline{0xff2b2b32};
 const juce::Colour EmberColours::outlineStrong{0xff3c3c46};
-const juce::Colour EmberColours::track{0xff33333c};
+const juce::Colour EmberColours::track{0xff3a3a45};
 
 const juce::Colour EmberColours::textPrimary{0xffe9e7e3};
 const juce::Colour EmberColours::textSecondary{0xff9a9aa5};
@@ -362,7 +362,7 @@ RotaryGeometry EmberLookAndFeel::rotaryGeometry(juce::Rectangle<float> sliderAre
     // range that still reads at 28 px and does not turn clumsy at 96 px.
     geo.modRingThickness = juce::jlimit(1.5f, 3.5f, size * 0.042f);
     geo.valueThickness = juce::jlimit(2.5f, 7.0f, size * 0.085f);
-    geo.trackThickness = juce::jmax(1.25f, geo.valueThickness * 0.5f);
+    geo.trackThickness = juce::jmax(1.5f, geo.valueThickness * 0.58f);
 
     const float ringGap = juce::jmax(1.5f, size * 0.035f);
     const float bodyGap = juce::jmax(2.0f, size * 0.05f);
@@ -612,9 +612,13 @@ void EmberLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& but
     g.setGradientFill(surfaceGradient(area, fill, 0.06f));
     g.fillRoundedRectangle(area, corner);
 
-    g.setColour(on && button.isEnabled()
-                    ? accent.withAlpha(0.85f)
-                    : (shouldDrawButtonAsHighlighted ? EmberColours::outlineStrong : EmberColours::outline));
+    // A fully transparent fill is a "ghost" button: the edge is all it has, so
+    // it gets the stronger one.
+    const auto restingOutline = backgroundColour.isTransparent() || shouldDrawButtonAsHighlighted
+                                    ? EmberColours::outlineStrong
+                                    : EmberColours::outline;
+
+    g.setColour(on && button.isEnabled() ? accent.withAlpha(0.85f) : restingOutline);
     g.drawRoundedRectangle(area, corner, 1.0f);
 }
 

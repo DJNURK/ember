@@ -301,9 +301,15 @@ float StyleCalibrator::compensationDb(StyleID id, float driveDb) const noexcept
     // beyond an integer index.
     const int styleIndex = juce::jlimit(0, kNumStyles - 1, static_cast<int>(id));
 
-    // jlimit propagates NaN, so screen it out before clamping rather than after.
+    // jlimit propagates NaN, so screen NaN out before clamping rather than
+    // after. Only NaN: jlimit handles the infinities correctly on its own
+    // (+Inf -> 40 dB, -Inf -> 0 dB), and folding them in with NaN would send
+    // +Inf to the 0 dB entry instead — which is not the neutral answer it looks
+    // like, because at high oversampled rates the 0 dB entry is a large BOOST
+    // for the amp styles (+22 dB for Clean Amp at 3.072 MHz) where the 40 dB
+    // entry is close to unity.
     const float safeDrive = juce::jlimit(0.0f, kMaxDriveDb,
-                                         std::isfinite(driveDb) ? driveDb : 0.0f);
+                                         std::isnan(driveDb) ? 0.0f : driveDb);
 
     const float pos = safeDrive * (1.0f / kDriveStepDb);
     const int lower = juce::jlimit(0, kNumDrivePoints - 1, static_cast<int>(pos));
