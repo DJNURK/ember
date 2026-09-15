@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include "TestHelpers.h"
+#include <thread>
+#include <atomic>
 #include "plugin/PluginProcessor.h"
 #include "plugin/ParameterIDs.h"
 #include "dsp/modulation/ModTypes.h"
@@ -278,4 +280,58 @@ TEST_CASE("processBlock survives a buffer narrower than the bus layout", "[proce
             REQUIRE(allFinite(buf));
         }
     }
+}
+
+TEST_CASE("parameters can be automated from another thread while processing", "[processor][threading]")
+{
+    // What pluginval's Automation test does, and what every host does: the
+    // message thread writes parameters while the audio thread is inside
+    // processBlock, with the buffer split into sub-blocks. Nothing else in this
+    // suite exercises the two threads at once — every other test calls
+    // processBlock from the same thread that sets the parameters — so a data
+    // race here is invisible to all of them, and to a sanitiser run over them.
+    EmberAudioProcessor proc;
+    proc.prepareToPlay(48000.0, 512);
+
+    auto& params = proc.getParameters();
+    REQUIRE(params.size() > 100);
+
+    std::atomic<bool> stop{false};
+    std::atomic<int> writes{0};
+
+    std::thread automator(
+        [&]
+        {
+            juce::Random rng(20260915);
+            while (!stop.load(std::memory_order_relaxed))
+            {
+                auto* p = params[rng.nextInt(params.size())];
+                p->setValueNotifyingHost(rng.nextFloat());
+                writes.fetch_add(1, std::memory_order_relaxed);
+            }
+        });
+
+    juce::AudioBuffer<float> buf(2, 512);
+    juce::MidiBuffer midi;
+
+    for (int block = 0; block < 400; ++block)
+    {
+        fillWhiteNoise(buf, 0x5150u + static_cast<uint32_t>(block), 0.3f);
+
+        // Sub-block the buffer the way pluginval does.
+        const int sub = 32;
+        for (int offset = 0; offset < buf.getNumSamples(); offset += sub)
+        {
+            const int n = juce::jmin(sub, buf.getNumSamples() - offset);
+            juce::AudioBuffer<float> view(buf.getArrayOfWritePointers(), 2, offset, n);
+            proc.processBlock(view, midi);
+        }
+        REQUIRE(allFinite(buf));
+    }
+
+    stop.store(true);
+    automator.join();
+
+    INFO("parameter writes from the other thread: " << writes.load());
+    REQUIRE(writes.load() > 0);
 }

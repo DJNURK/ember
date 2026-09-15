@@ -295,7 +295,20 @@ void EmberAudioProcessor::setSelectedBand(int band) noexcept
 void EmberAudioProcessor::prepareToPlay(double sampleRate, int maximumExpectedSamplesPerBlock)
 {
     lastSampleRate = sampleRate;
-    lastBlockSize = juce::jmax(1, maximumExpectedSamplesPerBlock);
+
+    // Two independent hazards, both fixed by sizing the engine generously.
+    //
+    // 1. processBlock splits the host's buffer into control blocks of
+    //    kControlBlockSize (32) samples. If the host prepares a SMALLER maximum
+    //    than that - 16 is legal and real - every engine buffer is sized 16 and
+    //    the first 32-sample chunk runs off the end of all of them.
+    // 2. maximumExpectedSamplesPerBlock is a hint, not a contract. Hosts do hand
+    //    over more than they promised, and validators deliberately do.
+    //
+    // So prepare for at least a full control block, and never let a chunk exceed
+    // what was prepared.
+    lastBlockSize = juce::jmax(kControlBlockSize, juce::jmax(1, maximumExpectedSamplesPerBlock));
+    preparedBlockSize = lastBlockSize;
 
     juce::dsp::ProcessSpec spec{};
     spec.sampleRate = sampleRate;
@@ -426,6 +439,23 @@ void EmberAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     if (numSamples <= 0)
         return;
 
+    // Scrub the INPUT, not just the output. Several stages downstream hold
+    // recursive state that a single non-finite sample latches permanently - the
+    // oversampler's half-band filters and the tone stack's IIRs have no way back
+    // once their history is NaN - so one bad buffer from a host would silence
+    // the plug-in for the rest of the session rather than for one block.
+    // Measured before this guard: a single NaN at block 50 dropped the output to
+    // -169 dB and it never recovered.
+    //
+    // Two comparisons per sample against the cost of a dead instance is not a
+    // close call, and the specification asks for NaN/Inf guards explicitly.
+    for (int ch = 0; ch < numCh; ++ch)
+    {
+        auto* d = buffer.getWritePointer(ch);
+        for (int i = 0; i < numSamples; ++i)
+            d[i] = dsputil::sanitise(d[i]);
+    }
+
     // Transport, for tempo-synced modulation.
     if (auto* ph = getPlayHead())
     {
@@ -445,7 +475,7 @@ void EmberAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     int offset = 0;
     while (offset < numSamples)
     {
-        const int chunk = juce::jmin(kControlBlockSize, numSamples - offset);
+        const int chunk = juce::jmin(juce::jmin(kControlBlockSize, preparedBlockSize), numSamples - offset);
 
         pushSourceParameters();
         modulation.updateControlBlock(bandRms.data(), globalParams.numBands, chunk);

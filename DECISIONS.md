@@ -200,3 +200,38 @@ Every audio-thread entry point now clamps with
 already did this correctly — `BandChain` and `EmberEngine` both clamp against
 their buffer — so the plugin wrapper was the only offender, but the rule is
 worth stating so it stays that way.
+
+**D22 — The control block must fit inside what `prepareToPlay` prepared.**
+`processBlock` splits the host's buffer into `kControlBlockSize` (32) samples so
+modulation moves within a block. That silently assumed the prepared maximum was
+at least 32. A host is entitled to prepare a *smaller* maximum — 16 is legal and
+real — and then the first chunk overruns every buffer the engine sized, which is
+a hard segfault rather than a glitch. `maximumExpectedSamplesPerBlock` is also a
+hint rather than a contract: hosts hand over more than they promised, and
+validators deliberately do.
+
+The engine is therefore prepared for at least one full control block, and a
+chunk is never allowed to exceed what was prepared. `tests/test_robustness.cpp`
+covers prepared sizes of 1/8/16/31/32/64 against actual blocks of
+1/32/64/512/2048.
+
+**D23 — Non-finite values are stopped at every entry point, and recovered from
+inside.** Almost everything below the input holds recursive state — the
+oversampler's half-band filters, the tone stack's IIRs, the feedback delay line
+— and none of it can recover on its own once its history is NaN. A single bad
+sample therefore did not cost one block, it killed the instance: measured at
+−169 dB with no recovery for the remaining 1950 blocks of the test.
+
+Three layers now, because one is not enough:
+- the plugin wrapper scrubs the input buffer;
+- `EmberEngine::process` scrubs too, since it is a public entry point that the
+  tests, the benchmark and the offline render tool drive directly;
+- `BandChain::process` scans its own output and, on finding a non-finite value,
+  clears the block and resets its recursive state — because a style or the
+  feedback path can generate one internally, where no input guard would help.
+
+The scan costs a comparison per sample with no write, which is the right trade
+against an instance that is dead until the session is reloaded. This also
+restores protection that the CPU optimisation work had removed: the per-sample
+`sanitise` calls dropped from the band mix and the band sum were load-bearing,
+and taking them out widened the blast radius of an internally generated NaN.

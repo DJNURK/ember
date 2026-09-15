@@ -223,6 +223,17 @@ void EmberEngine::process(juce::AudioBuffer<float>& buffer) noexcept
 
     const int numCh = juce::jmin(numChannels, buffer.getNumChannels());
 
+    // Scrub the input here as well as in the plug-in wrapper: this is a public
+    // entry point that the tests, the benchmark and the offline render tool all
+    // drive directly, and everything downstream holds recursive state that a
+    // single non-finite sample latches for good.
+    for (int ch = 0; ch < numCh; ++ch)
+    {
+        auto* d = buffer.getWritePointer(ch);
+        for (int i = 0; i < numSamples; ++i)
+            d[i] = dsputil::sanitise(d[i]);
+    }
+
     // ---- input gain ----
     {
         float* p[2] = {nullptr, nullptr};
@@ -384,6 +395,12 @@ void EmberEngine::process(juce::AudioBuffer<float>& buffer) noexcept
             dryRms = dAcc + autoGainCoeff * (dryRms - dAcc);
             wetRms = wAcc + autoGainCoeff * (wetRms - wAcc);
         }
+        // These followers are recursive, so a single non-finite sample would
+        // otherwise latch them at NaN for the rest of the session and silence
+        // the plug-in permanently - measured at -169 dB and never recovering.
+        if (!(std::isfinite(dryRms) && std::isfinite(wetRms)))
+            dryRms = wetRms = 0.0f;
+
         // Only trust the ratio once there is something to measure, and clamp it
         // so a near-silent wet path cannot ask for enormous make-up gain.
         const float target =

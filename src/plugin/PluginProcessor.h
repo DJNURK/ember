@@ -202,6 +202,11 @@ private:
     double lastSampleRate{44100.0};
     int lastBlockSize{512};
 
+    /** The block size the engine's buffers were actually sized for. A control
+        block is never allowed to exceed it, however large a buffer the host
+        hands over, and it is never smaller than kControlBlockSize. */
+    int preparedBlockSize{kControlBlockSize};
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EmberAudioProcessor)
 };
 } // namespace ember

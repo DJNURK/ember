@@ -18,6 +18,7 @@ option(EMBER_BUILD_BENCHMARK "Build the offline CPU benchmark"    ON)
 option(EMBER_BUILD_AUV3      "Build the AUv3 app-extension"       OFF)
 option(EMBER_UNIVERSAL       "macOS: build arm64 + x86_64"        OFF)
 option(EMBER_ENABLE_ASAN     "Build with Address/UB sanitizers"   OFF)
+option(EMBER_ENABLE_TSAN     "Build with ThreadSanitizer"         OFF)
 
 if(APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS version")
@@ -36,6 +37,18 @@ endif()
 if(EMBER_ENABLE_ASAN AND NOT MSVC)
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all)
     add_link_options(-fsanitize=address,undefined)
+endif()
+
+# ThreadSanitizer finds what ASan cannot: the suite's single-threaded tests can
+# exercise every line of the audio path and still miss a race between the
+# message thread writing parameters and the audio thread reading them, which is
+# the one thing a host does constantly.
+if(EMBER_ENABLE_TSAN AND NOT MSVC)
+    if(EMBER_ENABLE_ASAN)
+        message(FATAL_ERROR "EMBER_ENABLE_TSAN and EMBER_ENABLE_ASAN cannot be combined")
+    endif()
+    add_compile_options(-fsanitize=thread -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=thread)
 endif()
 
 include(Dependencies)

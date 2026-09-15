@@ -271,6 +271,32 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
         }
     }
 
+    // A style or the feedback path can generate a non-finite value internally,
+    // and the oversampler's half-band filters and the tone stack's IIRs have no
+    // way back once their history is poisoned. Scanning the block costs a
+    // comparison per sample - no write, no branch misprediction in the common
+    // case - and turns a permanently dead band into one lost block.
+    {
+        bool finite = true;
+        for (int ch = 0; ch < numCh && finite; ++ch)
+        {
+            const auto* d = buffer.getReadPointer(ch);
+            for (int i = 0; i < numSamples; ++i)
+                if (!std::isfinite(d[i]))
+                {
+                    finite = false;
+                    break;
+                }
+        }
+
+        if (!finite)
+        {
+            buffer.clear();
+            reset();
+            return;
+        }
+    }
+
     // ---- base-rate post section ----
     float* const* post = buffer.getArrayOfWritePointers();
     dcBlocker.process(post, numCh, numSamples);
