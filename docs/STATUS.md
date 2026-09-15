@@ -1,6 +1,6 @@
 # Ember — Status
 
-Last updated: 2026-09-14. Everything below is measured on the host machine
+Last updated: 2026-09-15. Everything below is measured on the host machine
 (Apple M2, macOS 26.5, Apple clang 21, JUCE 8.0.15) unless marked otherwise.
 
 ## Milestones
@@ -27,7 +27,7 @@ Last updated: 2026-09-14. Everything below is measured on the host machine
 | Parameter smoothing, no click above −60 dBFS | **pass** — worst artefact while slamming every parameter over silence stays under the gate; style changes and band-count changes are click-free |
 | `pluginval --strictness-level 10` | **pass** on macOS VST3 and AU |
 | No compiler warnings at `-Wall -Wextra` | **pass** for the DSP and plugin sources |
-| Realtime CPU ≤ 3 % of one core (stereo 48 kHz, 6 bands, 4×) | **NOT met — 7.6 %.** See below |
+| Realtime CPU ≤ 3 % of one core (stereo 48 kHz, 6 bands, 4×) | **NOT met — 6.6 %.** See below |
 | ASan/UBSan clean | **pass** — the full suite clean under `-fsanitize=address,undefined`; the Linux sanitiser job runs the same suite in CI |
 | ThreadSanitizer clean | **pass** — 43 tests / 1,523,562 assertions, **0 data races**, via the `EMBER_ENABLE_TSAN` build. Added because every other test in the suite calls `processBlock` from the thread that sets the parameters, so no amount of ASan over them could ever have found a race — and the one place a host is guaranteed to create one is exactly where a validator crashed |
 | Manual checklist in `docs/TESTING.md` | 34 renders produced in `test-renders/`; checklist not yet walked in a DAW |
@@ -83,12 +83,15 @@ cannot quietly drift.
 ## Known gaps
 
 - CPU target missed at the maximum configuration, as above.
-- The release pipeline has not yet produced installers: no tag has been pushed.
-  The **macOS** path is verified by hand — `packaging/macos/build-pkg.sh` builds
-  a real 5.8 MB `.pkg`, and expanding it confirms `Ember.vst3` →
+- No tag has been pushed, so no public release exists yet. A
+  `workflow_dispatch` dry run of `release.yml` has exercised the pipeline:
+  the **macOS** `.pkg` was produced and expanded to confirm `Ember.vst3` →
   `/Library/Audio/Plug-Ins/VST3`, `Ember.component` →
-  `/Library/Audio/Plug-Ins/Components` and `Ember.app` → `/Applications`.
-  The **Windows** (Inno Setup) and **Linux** (tar.gz + install.sh) paths are
-  syntax-checked only and have never been executed.
+  `/Library/Audio/Plug-Ins/Components` and `Ember.app` → `/Applications`,
+  with `lipo` confirming `x86_64 arm64`; the **Linux** `.tar.gz` was produced
+  and confirmed to carry a correct VST3 bundle plus an `install.sh` that
+  targets `~/.vst3`. The **Windows** installer step failed on that run (Git
+  Bash mangling ISCC's switches) and the fix has not yet been re-run, so the
+  `.exe` is the one asset never yet built successfully.
 - Windows and Linux plugin builds are exercised by CI, not on this host.
 - The AUv3 target is wired behind `EMBER_BUILD_AUV3` but not built or validated.
