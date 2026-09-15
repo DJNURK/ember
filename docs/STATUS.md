@@ -28,7 +28,8 @@ Last updated: 2026-09-14. Everything below is measured on the host machine
 | `pluginval --strictness-level 10` | **pass** on macOS VST3 and AU |
 | No compiler warnings at `-Wall -Wextra` | **pass** for the DSP and plugin sources |
 | Realtime CPU ≤ 3 % of one core (stereo 48 kHz, 6 bands, 4×) | **NOT met — 7.6 %.** See below |
-| ASan/UBSan clean | **pass** — all 28 tests / 36,771 assertions clean under `-fsanitize=address,undefined` locally on macOS; the Linux sanitiser job runs the same suite in CI |
+| ASan/UBSan clean | **pass** — the full suite clean under `-fsanitize=address,undefined`; the Linux sanitiser job runs the same suite in CI |
+| ThreadSanitizer clean | **pass** — 43 tests / 1,523,562 assertions, **0 data races**, via the `EMBER_ENABLE_TSAN` build. Added because every other test in the suite calls `processBlock` from the thread that sets the parameters, so no amount of ASan over them could ever have found a race — and the one place a host is guaranteed to create one is exactly where a validator crashed |
 | Manual checklist in `docs/TESTING.md` | 34 renders produced in `test-renders/`; checklist not yet walked in a DAW |
 | GUI | **pass** — pluginval L10 constructs and destroys the editor, opens it while audio is processing, drives editor automation and runs parameter thread-safety checks. Visually inspected by rendering the real editor offscreen with `ember_rendereditor` at 800×480, 1100×640 and 1100×1000; this found a clipped band panel at the default size that no test caught |
 
