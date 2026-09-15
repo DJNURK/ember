@@ -192,8 +192,10 @@ This is undefined behaviour of the worst kind for a cross-platform plugin — it
 survives wherever the stale pointer happens to still be mapped and faults
 wherever it is not. `EmberAudioProcessor::processBlock` had it, and it passed 36
 unit tests, ASan, UBSan, and `pluginval --strictness-level 10` on both macOS and
-Linux before a Windows CI run crashed on it. Nothing local was ever going to
-find it.
+Linux. It was found by a local probe written to imitate what a validator does to
+the bus layout, while chasing a Windows CI failure that turned out to be
+unrelated (see D24) — so it is a real bug that the normal suite could not see,
+but Windows never actually crashed on it.
 
 Every audio-thread entry point now clamps with
 `jmin(getTotalNumOutputChannels(), buffer.getNumChannels())`. The DSP layer
@@ -235,3 +237,26 @@ against an instance that is dead until the session is reloaded. This also
 restores protection that the CPU optimisation work had removed: the per-sample
 `sanitise` calls dropped from the band mix and the band sum were load-bearing,
 and taking them out widened the blast radius of an internally generated NaN.
+
+**D24 — A CI step that does not wait for the process it launches reports
+nothing about the plugin.** The Windows `pluginval` step failed twice with
+`exit code ` — an empty string — and the crash diagnostic printed `0x`
+accordingly. Both were read as evidence of an access violation. Neither was.
+
+`pluginval.exe` is a GUI-subsystem binary. PowerShell's call operator launches
+one and returns immediately without waiting, leaving `$LASTEXITCODE` unset;
+`$null -ne 0` is true, so the step declared failure 0.03 s after starting
+validation. pluginval itself carried on in the background, writing into the
+same log — which is why the log shows every test group from *Scan* through
+*Automation* passing, after the failure message, until the step ended and the
+runner killed it as an orphan.
+
+The step now uses `Start-Process -NoNewWindow -Wait -PassThru` and reads
+`ExitCode` from the returned process, with an explicit branch for a null code
+so this failure mode can never again be mistaken for a crash.
+
+The lesson worth keeping: an exit code that is *empty* is not a small variation
+on an exit code that is negative, it means the harness never observed the
+process at all, and every conclusion drawn from the run is void. The fixes made
+while chasing this — D21, D22, D23 — were found by local probes and stand on
+their own merits; none of them were what Windows was reporting.

@@ -225,8 +225,20 @@ jobs:
           $failed = 0
           foreach ($t in $targets) {
             Write-Host "==> pluginval (strictness 10): $($t.FullName)"
-            & $exe --strictness-level 10 --repeat 1 --timeout-ms 600000 --validate $t.FullName
-            $code = $LASTEXITCODE
+            # pluginval.exe is a GUI-subsystem binary, so `& $exe` returns the
+            # moment it is launched and leaves $LASTEXITCODE unset. That made
+            # the step report a failure with an empty exit code while
+            # validation was still running in the background, and the runner
+            # then killed it as an orphan. Start-Process -Wait actually waits.
+            $pvArgs = @("--strictness-level", "10", "--repeat", "1",
+                        "--timeout-ms", "600000", "--validate", $t.FullName)
+            $proc = Start-Process -FilePath $exe -ArgumentList $pvArgs -NoNewWindow -Wait -PassThru
+            $code = $proc.ExitCode
+            if ($null -eq $code) {
+              Write-Host "!! pluginval produced no exit code for $($t.FullName)"
+              $failed = 1
+              continue
+            }
             if ($code -ne 0) {
               # Distinguish a reported test failure from a crash: pluginval exits
               # 1 when a test fails and prints why, but an access violation comes
