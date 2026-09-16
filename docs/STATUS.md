@@ -74,11 +74,44 @@ A CPU gate in CI would therefore be measuring the runner, not the plugin, which
 is why the benchmark reports its numbers into the job log and only fails if the
 plugin cannot sustain realtime at all.
 
-With oversampling off the engine floor is 2.9 % on the M2, so 3 % at six
-oversampled bands is not reachable by tuning. It would need the band chain roughly halved, most
-plausibly by hand-vectorising the style shapers and the half-band filters. That
-has not been attempted. The benchmark prints these numbers in CI so the figure
-cannot quietly drift.
+### Where the time goes
+
+Sampled with `sample(1)` over the 6-band / 4× / 48 kHz configuration, 4,937
+samples inside `EmberEngine::process`:
+
+| Component | Share of engine time |
+|---|---|
+| Oversampling (up 16 %, down 19 %) | **35 %** |
+| Saturation styles | 25 % |
+| Feedback loop | 19 % |
+| Tone stack | 6 % |
+| Dynamics | 5 % |
+| Crossover, band sum, misc | ~10 % |
+
+This is what makes the target unreachable by tuning: closing 6.4 % → 3 % needs a
+**2.1× whole-engine speedup**, which is more than deleting the oversampler
+entirely would buy. With oversampling off the engine floor is already 2.9 %.
+
+Two cheaper levers were measured and rejected:
+
+- **Lower-order half-band filters** (`maximum quality = false` on
+  `juce::dsp::Oversampling`) moved the full plugin 6.38 % → 6.29 %, about 1 %,
+  and would spend part of the 11 dB of margin the −80 dBFS aliasing gate is
+  currently passing with. Not worth it.
+- **Oversampling once globally** instead of once per band would cut the 35 %
+  by roughly 6×, but it moves the crossovers to the oversampled rate, which
+  multiplies their cost by four and changes the sound. Net gain is close to
+  zero and the risk is not.
+
+What would actually work is hand-vectorising the two dominant blocks — the
+half-band filters and the style shapers — across the 12 independent streams
+(6 bands × 2 channels). The polyphase IIR is serial per sample but the streams
+are independent, so 4-wide NEON is available on the 35 %. The shapers are
+harder: ADAA carries state across samples, and the bands run different styles,
+so only the 2 channels vectorise cleanly. This has not been attempted; it is a
+substantial rewrite of code that currently passes 1,523,562 assertions, and it
+was not worth risking against a release. The benchmark prints these numbers in
+CI so the figure cannot quietly drift.
 
 ## Known gaps
 
