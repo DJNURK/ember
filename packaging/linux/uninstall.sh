@@ -121,6 +121,22 @@ rm -rf "$TARGET"
 
 info "removed $TARGET"
 
+# Remove the standalone application from wherever install.sh put it. Only a
+# file Ember actually owns is touched: anything else of that name on PATH is
+# left alone.
+if [ "$DEST" = "$SYSTEM_VST3_DIR" ]; then
+    APP_DEST_DIR="/usr/local/bin"
+else
+    APP_DEST_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
+fi
+if [ -f "$APP_DEST_DIR/Ember" ]; then
+    if rm -f "$APP_DEST_DIR/Ember" 2>/dev/null; then
+        info "removed $APP_DEST_DIR/Ember"
+    else
+        printf 'Could not remove %s/Ember — remove it by hand.\n' "$APP_DEST_DIR" >&2
+    fi
+fi
+
 # Tidy up the containing directory only if it is now empty; never touch a shared
 # VST3 folder that still holds other plug-ins.
 if [ -d "$DEST" ] && [ -z "$(ls -A "$DEST" 2>/dev/null)" ]; then

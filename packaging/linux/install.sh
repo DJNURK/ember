@@ -169,6 +169,33 @@ cp -a "$SRC" "$TARGET"
 
 info "installed $TARGET"
 
+# The standalone application ships beside the plug-in. It is a single ELF
+# binary, so "installing" it means putting it somewhere on PATH; that is the
+# user's $HOME/.local/bin for a user install and /usr/local/bin for --system.
+# It is skipped silently when absent so an older tarball still installs.
+APP_SRC="$SCRIPT_DIR/Ember"
+if [ -f "$APP_SRC" ]; then
+    if [ "$DEST" = "$SYSTEM_VST3_DIR" ]; then
+        APP_DEST_DIR="/usr/local/bin"
+    else
+        APP_DEST_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
+    fi
+
+    if mkdir -p "$APP_DEST_DIR" 2>/dev/null && [ -w "$APP_DEST_DIR" ]; then
+        cp -a "$APP_SRC" "$APP_DEST_DIR/Ember"
+        chmod 755 "$APP_DEST_DIR/Ember"
+        info "installed $APP_DEST_DIR/Ember"
+        case ":$PATH:" in
+            *":$APP_DEST_DIR:"*) ;;
+            *) printf '\nNote: %s is not on your PATH. Add it, or run the\n' "$APP_DEST_DIR"
+               printf 'standalone directly as %s/Ember\n' "$APP_DEST_DIR" ;;
+        esac
+    else
+        printf '\nNote: could not write %s, so the standalone application was not\n' "$APP_DEST_DIR"
+        printf 'installed. Run it from this directory instead: %s\n' "$APP_SRC"
+    fi
+fi
+
 if [ "$DEST" != "$USER_VST3_DIR" ] && [ "$DEST" != "$SYSTEM_VST3_DIR" ]; then
     printf '\nNote: %s is not a standard VST3 directory. Add it to your host'\''s\n' "$DEST"
     printf 'plug-in search paths, or export VST3_PATH=%s\n' "$DEST"

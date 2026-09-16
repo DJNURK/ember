@@ -4,11 +4,12 @@ name: Release
 # them to a GitHub Release. The five assets produced are:
 #
 #   Ember-<VERSION>-Windows.exe    Inno Setup installer (packaging/windows/ember.iss)
-#   Ember-<VERSION>-Windows.zip    raw Ember.vst3 bundle
+#   Ember-<VERSION>-Windows.zip    raw Ember.vst3 bundle + Ember.exe standalone
 #   Ember-<VERSION>-macOS.pkg      installer (packaging/macos/build-pkg.sh): VST3 + AU + app
-#   Ember-<VERSION>-macOS.zip      raw Ember.vst3 + Ember.component bundles
-#   Ember-<VERSION>-Linux.tar.gz   Ember-<VERSION>-Linux/ with Ember.vst3,
-#                                  install.sh, uninstall.sh and LICENSE
+#   Ember-<VERSION>-macOS.zip      raw Ember.vst3 + Ember.component + Ember.app
+#   Ember-<VERSION>-Linux.tar.gz   Ember-<VERSION>-Linux/ with Ember.vst3, the
+#                                  Ember standalone binary, install.sh,
+#                                  uninstall.sh and LICENSE
 #
 # macOS binaries are universal (arm64 + x86_64) and are verified with `lipo -archs`.
 # Signing and notarisation happen only when the Apple secrets are configured; without
@@ -152,15 +153,30 @@ jobs:
           echo "VST3 bundle: $VST3"
           echo "artefacts dir: $ARTEFACTS"
 
-      - name: Zip the raw VST3 bundle
+      - name: Zip the raw VST3 bundle and standalone
         shell: bash
         env:
           VST3: ${{ steps.art.outputs.vst3 }}
+          ARTEFACTS: ${{ steps.art.outputs.artefacts }}
         run: |
           set -euo pipefail
+          shopt -s nullglob
           mkdir -p dist
           DIST_W="$(cygpath -w "$(cd dist && pwd)")"
+
+          # The zip is the no-installer route, so it carries the same payload
+          # the installer does: the plug-in and the standalone application.
+          APP=""
+          for f in "$ARTEFACTS"/Standalone/Ember.exe; do APP="$f"; done
+          if [ -z "$APP" ]; then
+            echo "::error::no standalone Ember.exe under $ARTEFACTS/Standalone/"
+            find "$ARTEFACTS" -maxdepth 2 -print || true
+            exit 1
+          fi
+
           ( cd "$(dirname "$VST3")" && 7z a -tzip -mx=9 "$DIST_W\\Ember-$VERSION-Windows.zip" "Ember.vst3" >/dev/null )
+          ( cd "$(dirname "$APP")"  && 7z a -tzip -mx=9 "$DIST_W\\Ember-$VERSION-Windows.zip" "Ember.exe" >/dev/null )
+          7z l "$DIST_W\\Ember-$VERSION-Windows.zip"
           ls -l "dist/Ember-$VERSION-Windows.zip"
 
       - name: Ensure Inno Setup is available
@@ -503,6 +519,9 @@ jobs:
           rm -rf "$PACK"; mkdir -p "$PACK"
           ditto "$EMBER_STAGE/VST3/Ember.vst3" "$PACK/Ember.vst3"
           ditto "$EMBER_STAGE/AU/Ember.component" "$PACK/Ember.component"
+          # The zip is the no-installer route and must carry everything the
+          # .pkg installs, the standalone application included.
+          ditto "$EMBER_STAGE/Standalone/Ember.app" "$PACK/Ember.app"
           ditto -c -k --sequesterRsrc "$PACK" "dist/Ember-$VERSION-macOS.zip"
           ls -l "dist/Ember-$VERSION-macOS.zip"
 
@@ -582,7 +601,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cmake --build --preset linux-release --target Ember_VST3
+          cmake --build --preset linux-release --target Ember_VST3 Ember_Standalone
 
       - name: Pack the tarball
         shell: bash
@@ -611,6 +630,21 @@ jobs:
           PAYLOAD="$STAGE/Ember-$VERSION-Linux"
           rm -rf "$STAGE"; mkdir -p "$PAYLOAD"
           cp -a "$VST3" "$PAYLOAD/Ember.vst3"
+
+          # The specification asks for a standalone application on all three
+          # platforms. On Linux that is a plain ELF executable rather than a
+          # bundle, so it ships next to the plugin and install.sh offers to
+          # put it on PATH.
+          APP=""
+          for f in build/linux-release/Ember_artefacts/*/Standalone/Ember; do APP="$f"; done
+          if [ -z "$APP" ]; then
+            echo "::error::no standalone Ember under build/linux-release/Ember_artefacts/*/Standalone/"
+            find build/linux-release/Ember_artefacts -maxdepth 3 -print || true
+            exit 1
+          fi
+          cp -a "$APP" "$PAYLOAD/Ember"
+          chmod 755 "$PAYLOAD/Ember"
+
           cp -a packaging/linux/install.sh packaging/linux/uninstall.sh "$PAYLOAD/"
           cp -a LICENSE "$PAYLOAD/LICENSE"
           chmod +x "$PAYLOAD/install.sh" "$PAYLOAD/uninstall.sh"
@@ -685,10 +719,10 @@ jobs:
             echo "| File | Platform | Contents |"
             echo "| --- | --- | --- |"
             echo "| \`Ember-$VERSION-Windows.exe\` | Windows 10/11, 64-bit | Installer: VST3 + Standalone |"
-            echo "| \`Ember-$VERSION-Windows.zip\` | Windows 10/11, 64-bit | Raw \`Ember.vst3\` bundle |"
+            echo "| \`Ember-$VERSION-Windows.zip\` | Windows 10/11, 64-bit | Raw \`Ember.vst3\` + \`Ember.exe\` standalone |"
             echo "| \`Ember-$VERSION-macOS.pkg\` | macOS 10.15+, Apple silicon & Intel | Installer: VST3 + Audio Unit + Standalone |"
-            echo "| \`Ember-$VERSION-macOS.zip\` | macOS 10.15+, Apple silicon & Intel | Raw \`Ember.vst3\` + \`Ember.component\` |"
-            echo "| \`Ember-$VERSION-Linux.tar.gz\` | Ubuntu 24.04+ / glibc 2.39+, x86_64 | \`Ember.vst3\` + \`install.sh\` + \`uninstall.sh\` |"
+            echo "| \`Ember-$VERSION-macOS.zip\` | macOS 10.15+, Apple silicon & Intel | Raw \`Ember.vst3\` + \`Ember.component\` + \`Ember.app\` |"
+            echo "| \`Ember-$VERSION-Linux.tar.gz\` | Ubuntu 24.04+ / glibc 2.39+, x86_64 | \`Ember.vst3\` + \`Ember\` standalone + \`install.sh\` + \`uninstall.sh\` |"
             echo
             echo "## Requirements"
             echo
