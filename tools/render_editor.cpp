@@ -5,7 +5,10 @@
 // session. This walks the real editor - the same one createEditor() returns,
 // with a real processor behind it - and writes what it paints.
 //
-//   ember_rendereditor <output.png> [width] [height] [scale]
+//   ember_rendereditor <output.png> [width] [height] [scale] [preset]
+//
+// `preset` is a factory program index; without it the editor is photographed
+// in its default state, which shows no preset name and few active controls.
 //
 // Defaults to the plugin's own default size at 2x. It is worth rendering at the
 // minimum supported size too (800x480): that is where a layout gives out, and a
@@ -23,9 +26,16 @@ int main(int argc, char** argv)
     const int width = argc > 2 ? juce::String(argv[2]).getIntValue() : 1100;
     const int height = argc > 3 ? juce::String(argv[3]).getIntValue() : 640;
     const float scale = argc > 4 ? juce::String(argv[4]).getFloatValue() : 2.0f;
+    const int preset = argc > 5 ? juce::String(argv[5]).getIntValue() : -1;
 
     ember::EmberAudioProcessor proc;
     proc.prepareToPlay(48000.0, 512);
+
+    if (preset >= 0 && preset < proc.getNumPrograms())
+    {
+        proc.setCurrentProgram(preset);
+        std::printf("preset %d: %s\n", preset, proc.getProgramName(preset).toRawUTF8());
+    }
 
     // Push audio through first so the spectrum display and the meters have real
     // data to draw, rather than photographing an idle plugin.
