@@ -127,4 +127,16 @@ CI so the figure cannot quietly drift.
   Bash mangling ISCC's switches) and the fix has not yet been re-run, so the
   `.exe` is the one asset never yet built successfully.
 - Windows and Linux plugin builds are exercised by CI, not on this host.
-- The AUv3 target is wired behind `EMBER_BUILD_AUV3` but not built or validated.
+- The AUv3 target is wired behind `EMBER_BUILD_AUV3` but cannot be built on
+  this machine, and the reason is worth recording. JUCE only emits an AUv3
+  app-extension target under the **Xcode generator**; with Ninja the format is
+  silently dropped, and `-DEMBER_BUILD_AUV3=ON` produces `Ember_AU`,
+  `Ember_VST3` and `Ember_Standalone` with no `Ember_AUv3` and no warning.
+  Switching to `-G Xcode` then fails at configure — `Xcode 1.5 not supported`
+  — because only the Command Line Tools are installed, not Xcode.app.
+
+  So AUv3 needs two things this host does not have: a full Xcode install, and
+  a CMake preset using the Xcode generator rather than Ninja. Until both
+  exist, the flag does nothing. The specification listed AUv3 as an
+  off-by-default stretch goal, so this does not block the release, but the
+  flag should not be mistaken for a working build path.
