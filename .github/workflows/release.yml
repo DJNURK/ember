@@ -68,6 +68,14 @@ jobs:
             echo "::error::could not derive a version (ref '$REF_NAME')"
             exit 1
           fi
+          # Inno Setup's VersionInfoVersion only accepts a numeric x.y[.z[.b]],
+          # and it does not find that out until the installer compiles twenty
+          # minutes into the run. Reject it here instead.
+          if ! printf '%s' "$VERSION" | grep -qE '^[0-9]+(\.[0-9]+){1,3}$'; then
+            echo "::error::version '$VERSION' must be numeric (x.y, x.y.z or x.y.z.b) — Inno Setup rejects anything else in VersionInfoVersion"
+            exit 1
+          fi
+
           case "$VERSION" in
             *[!0-9A-Za-z.+-]*)
               echo "::error::version '$VERSION' contains characters that are not safe in a filename"
