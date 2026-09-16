@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [1.0.1] — 2026-09-16
+
+### Fixed
+
+- The standalone application now ships on all three platforms. The Linux
+  package never contained one — the release job built only the VST3 target —
+  and both zip archives, which are the no-installer route, carried plug-in
+  bundles only. Only the Windows and macOS installers had it. The Linux
+  tarball now includes the `Ember` binary and `install.sh` places it on PATH
+  (`~/.local/bin`, or `/usr/local/bin` with `--system`), with `uninstall.sh`
+  removing it again; the Windows zip includes `Ember.exe` and the macOS zip
+  includes `Ember.app`. The staging steps now fail the build if a standalone
+  is missing, so this cannot silently regress.
+
+### Changed
+
+- `release.yml` rejects a non-numeric version up front. Inno Setup accepts
+  only a numeric `VersionInfoVersion` and does not report otherwise until the
+  installer compiles, three platform builds into the run.
+
+No audio-processing code changed in this release; the DSP, GUI and presets are
+identical to 1.0.0.
+
 ## [1.0.0] — 2026-09-14
 
 First public release of Ember, a multiband analog saturation and distortion plugin.
