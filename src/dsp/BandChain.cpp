@@ -167,7 +167,7 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
         for (int ch = 0; ch < numCh; ++ch)
             buffer.copyFrom(ch, 0, dryBuffer, ch, 0, numSamples);
         applyLevelPanWidth(buffer, numSamples);
-        heatRatio.store(1.0f, std::memory_order_relaxed); // adds nothing, so it is cold
+        heatRatio.store(0.0f, std::memory_order_relaxed); // adds nothing, so it is cold
         return;
     }
 
@@ -324,11 +324,18 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
         const float dm = (m1 - m0) / static_cast<float>(juce::jmax(1, numSamples));
 
         // Heat is measured here because this loop already holds the band's
-        // input and its final output in registers: the measurement costs two
-        // multiply-adds per sample on one channel and no extra loads. It is
-        // published for the GUI and changes no sample.
-        float inAcc = 0.0f;
-        float outAcc = 0.0f;
+        // input and its final output in registers: three multiply-adds per
+        // sample on one channel, no extra loads, no sample altered.
+        //
+        // It measures the DISTORTION RESIDUAL, not a level ratio. Ember
+        // gain-matches every style - the calibrator holds output level to
+        // within 0.1 dB of input across the whole drive range - so output-over-
+        // input RMS sits at 1.0 however hard a band is driven, and would report
+        // a screaming band as stone cold. What actually changes is how much of
+        // the output is no longer a scaled copy of the input.
+        float inIn = 0.0f;
+        float inOut = 0.0f;
+        float outOut = 0.0f;
 
         float mix = m0;
         for (int i = 0; i < numSamples; ++i)
@@ -338,33 +345,45 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
 
             const float in = dry[0][i];
             const float out = wet[0][i];
-            inAcc += in * in;
-            outAcc += out * out;
+            inIn += in * in;
+            inOut += in * out;
+            outOut += out * out;
 
             mix += dm;
         }
 
-        publishHeat(inAcc, outAcc, numSamples);
+        publishHeat(inIn, inOut, outOut);
     }
 }
 
-void BandChain::publishHeat(float inSumSquares, float outSumSquares, int numSamples) noexcept
+void BandChain::publishHeat(float inIn, float inOut, float outOut) noexcept
 {
-    const auto n = static_cast<float>(juce::jmax(1, numSamples));
-    const float inRms = std::sqrt(inSumSquares / n);
-    const float outRms = std::sqrt(outSumSquares / n);
+    // Least-squares fit the output as a scaled copy of the input, then ask how
+    // much energy is left over. alpha = <in,out>/<in,in> is the best linear
+    // explanation of the output; everything the fit cannot account for is
+    // harmonic content the band added.
+    //
+    //   residual = <out,out> - <in,out>^2 / <in,in>
+    //   heat     = sqrt(residual / <out,out>)
+    //
+    // That is a normalised distortion figure: 0 when the band is a clean gain
+    // stage at any gain, rising towards 1 as the output stops resembling the
+    // input. It is immune to the gain matching, to auto-gain, and to the band's
+    // own level and pan.
+    float ratio = 0.0f;
 
-    // Below the noise floor the ratio is meaningless - dividing two tiny
-    // numbers produces violent swings that would make a silent band flicker.
-    float ratio = 1.0f;
-
-    if (inRms > 1.0e-6f && outRms > 1.0e-9f)
-        ratio = outRms / inRms;
+    // Below the noise floor the fit is meaningless - dividing near-zero
+    // energies swings violently and a silent plugin would flicker.
+    if (inIn > 1.0e-9f && outOut > 1.0e-9f)
+    {
+        const float residual = outOut - (inOut * inOut) / inIn;
+        ratio = std::sqrt(juce::jmax(0.0f, residual) / outOut);
+    }
 
     if (! std::isfinite(ratio))
-        ratio = 1.0f;
+        ratio = 0.0f;
 
-    heatRatio.store(juce::jlimit(0.0f, 8.0f, ratio), std::memory_order_relaxed);
+    heatRatio.store(juce::jlimit(0.0f, 1.0f, ratio), std::memory_order_relaxed);
 }
 
 void BandChain::applyLevelPanWidth(juce::AudioBuffer<float>& buffer, int numSamples) noexcept

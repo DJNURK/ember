@@ -5,7 +5,7 @@
 // session. This walks the real editor - the same one createEditor() returns,
 // with a real processor behind it - and writes what it paints.
 //
-//   ember_rendereditor <output.png> [width] [height] [scale] [preset]
+//   ember_rendereditor <output.png> [width] [height] [scale] [preset] [driveDb]
 //
 // `preset` is a factory program index; without it the editor is photographed
 // in its default state, which shows no preset name and few active controls.
@@ -17,6 +17,7 @@
 #include <cstdio>
 #include "plugin/PluginProcessor.h"
 #include "plugin/PluginEditor.h"
+#include "plugin/ParameterIDs.h"
 
 int main(int argc, char** argv)
 {
@@ -27,6 +28,9 @@ int main(int argc, char** argv)
     const int height = argc > 3 ? juce::String(argv[3]).getIntValue() : 640;
     const float scale = argc > 4 ? juce::String(argv[4]).getFloatValue() : 2.0f;
     const int preset = argc > 5 ? juce::String(argv[5]).getIntValue() : -1;
+    // Applied to every band, for the heat renders: the display should look
+    // visibly different at 0, 15 and 35 dB or the heat metaphor is not working.
+    const float driveDb = argc > 6 ? juce::String(argv[6]).getFloatValue() : -1000.0f;
 
     ember::EmberAudioProcessor proc;
     proc.prepareToPlay(48000.0, 512);
@@ -35,6 +39,15 @@ int main(int argc, char** argv)
     {
         proc.setCurrentProgram(preset);
         std::printf("preset %d: %s\n", preset, proc.getProgramName(preset).toRawUTF8());
+    }
+
+    if (driveDb > -999.0f)
+    {
+        for (int b = 0; b < ember::kMaxBands; ++b)
+            if (auto* p = proc.getAPVTS().getParameter(ember::pid::drive(b)))
+                p->setValueNotifyingHost(p->convertTo0to1(driveDb));
+
+        std::printf("drive %.1f dB on every band\n", static_cast<double>(driveDb));
     }
 
     // Push audio through first so the spectrum display and the meters have real
@@ -51,6 +64,9 @@ int main(int argc, char** argv)
             proc.processBlock(buf, midi);
         }
     }
+
+    for (int b = 0; b < 3; ++b)
+        std::printf("band %d heat %.3f\n", b, static_cast<double>(proc.getBandHeat(b)));
 
     std::unique_ptr<juce::AudioProcessorEditor> editor(proc.createEditor());
     if (editor == nullptr)

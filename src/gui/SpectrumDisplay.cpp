@@ -340,29 +340,27 @@ bool SpectrumDisplay::refreshHeat()
 {
     bool changed = false;
 
+    // The design asks for 30 ms attack and 400 ms release. Deriving the
+    // coefficients from the live refresh rate keeps that true when the rate is
+    // lowered - otherwise a 15 Hz refresh would make heat four times slower
+    // than specified, which reads as sluggish rather than as smooth.
+    const auto rate = static_cast<float>(juce::jmax(1, refreshRateHz));
+    const float attack = 1.0f - std::exp(-1.0f / (0.030f * rate));
+    const float release = 1.0f - std::exp(-1.0f / (0.400f * rate));
+
     for (int band = 0; band < kMaxBands; ++band)
     {
         const auto index = static_cast<size_t>(band);
-        float target = 0.0f;
 
-        if (band < numBands && driveParams[index] != nullptr)
-        {
-            // Drive is what the band is ASKED to do; its level is what it is
-            // actually doing. A hard-driven band with nothing going through it
-            // glows faintly, one with signal in it glows properly.
-            const float drive = juce::jlimit(
-                0.0f, 1.0f, driveParams[index]->getValue() + processor.getModulationDepth(driveIds[index]));
-            const float levelDb =
-                juce::Decibels::gainToDecibels(juce::jmax(0.0f, processor.getBandLevel(band)), -60.0f);
-            const float level = juce::jlimit(0.0f, 1.0f, (levelDb + 60.0f) / 60.0f);
-
-            target = juce::jlimit(0.0f, 1.0f, drive * (0.45f + 0.55f * level));
-        }
+        // Measured harmonic energy, not a proxy. The old estimate multiplied
+        // the drive parameter by the band's output level, which lit a band that
+        // was merely loud and missed one saturating quietly.
+        const float target = band < numBands ? processor.getBandHeat(band) : 0.0f;
 
         float& heat = bandHeat[index];
         const float previous = heat;
 
-        heat += (target - heat) * (target > heat ? 0.45f : 0.12f);
+        heat += (target - heat) * (target > heat ? attack : release);
 
         if (std::abs(heat - previous) > 0.002f)
             changed = true;

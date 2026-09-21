@@ -791,20 +791,25 @@ float EmberAudioProcessor::getBandHeat(int band) const noexcept
     if (band < 0 || band >= kMaxBands)
         return 0.0f;
 
-    // The ratio is a level multiplier, so map it in decibels: 0 dB of added
-    // energy is cold, +12 dB is fully lit. Saturation that adds harmonics
-    // while auto-gain holds the level still shows, because the band's own
-    // output is measured before the global stage.
-    const float ratio = engine.getBandHeatRatio(band);
-    const float addedDb = juce::Decibels::gainToDecibels(juce::jmax(ratio, 1.0e-4f));
-    const float fromEnergy = juce::jlimit(0.0f, 1.0f, addedDb / 12.0f);
+    // The engine hands back a normalised distortion residual, already 0..1 and
+    // already immune to level, gain matching and auto-gain. It only needs a
+    // curve: distortion figures crowd into the bottom of the range, so a square
+    // root spreads the useful part of the scale where the eye can see it.
+    const float residual = engine.getBandHeatRatio(band);
 
-    // Weighted by drive, so a band sitting at unity with no drive cannot glow
-    // because of a level change somewhere else in the chain.
+    // Distortion figures crowd into the bottom of the range, so a square root
+    // spreads the useful part of the scale where the eye can actually see it.
+    const float shaped = std::sqrt(juce::jlimit(0.0f, 1.0f, residual));
+
+    // Weighted by drive. The residual measures everything that makes the band's
+    // output differ from its input - tone EQ, dynamics, feedback and pan all
+    // contribute - but heat is meant to read as saturation. Without this, a
+    // band at zero drive with an EQ curve on it glows as brightly as one being
+    // hammered, which is exactly the wrong story.
     const auto& p = bandParams[static_cast<size_t>(band)];
     const float driveWeight = juce::jlimit(0.0f, 1.0f, p.driveDb / 24.0f);
 
-    return juce::jlimit(0.0f, 1.0f, fromEnergy * (0.35f + 0.65f * driveWeight));
+    return juce::jlimit(0.0f, 1.0f, shaped * driveWeight);
 }
 
 juce::AudioProcessorEditor* EmberAudioProcessor::createEditor()

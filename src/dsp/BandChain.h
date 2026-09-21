@@ -61,20 +61,22 @@ public:
 
     float getGainReductionDb() const noexcept { return dynamics.getGainReductionDb(); }
 
-    /** How much energy this band is adding: output RMS over input RMS for the
-        last block, clamped to 0..8, 1 meaning "unchanged".
+    /** How much of this band's output is no longer a scaled copy of its input:
+        0 for a clean gain stage at any gain, rising towards 1 as the band
+        distorts. A normalised distortion residual, not a level ratio - Ember
+        gain-matches its styles, so levels cannot reveal saturation.
 
-        This is a measurement for the visualiser and nothing else - it is taken
-        from values the dry/wet loop already has in registers, alters no sample
-        and adds no branch to the processing path. The visual smoothing happens
-        GUI-side, so the audio thread stores a raw ratio and stops there. */
+        A measurement for the visualiser and nothing else: taken from values the
+        dry/wet loop already holds in registers, altering no sample and adding
+        no branch to the processing path. Visual smoothing happens GUI-side, so
+        the audio thread stores a raw figure and stops there. */
     float getHeatRatio() const noexcept { return heatRatio.load(std::memory_order_relaxed); }
 
 private:
     void applyLevelPanWidth(juce::AudioBuffer<float>& buffer, int numSamples) noexcept;
-    void publishHeat(float inSumSquares, float outSumSquares, int numSamples) noexcept;
+    void publishHeat(float inIn, float inOut, float outOut) noexcept;
 
-    std::atomic<float> heatRatio{1.0f};
+    std::atomic<float> heatRatio{0.0f};
 
     std::array<std::unique_ptr<SaturationStyle>, static_cast<size_t>(kNumStyles)> styles;
     SaturationStyle* currentStyle{nullptr};
