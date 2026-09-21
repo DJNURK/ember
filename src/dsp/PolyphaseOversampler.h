@@ -39,10 +39,9 @@ namespace ember
     zero (out = in, and the state stays exactly zero), so the padding changes no
     bit of the result.
 
-    Mono runs the same four lanes with the upper pair fed zeros. That costs a
-    mono instance nothing over a stereo one — the register is the same width
-    either way — and it means one state layout serves both, so a block that
-    arrives with fewer channels than the last one cannot scramble the state.
+    Mono runs the lower pair of the same lanes scalar. It shares the layout, so
+    a block that arrives with fewer channels than the last one cannot scramble
+    the filter state, and lanes 2 and 3 are simply never touched.
 
     How much of this is the SIMD, honestly
     --------------------------------------
@@ -96,8 +95,12 @@ public:
 private:
     struct Stage
     {
-        /** Four lanes per section, in the order described above. */
+        /** Four lanes per section, in the order described above, and their
+            negatives: the state update is `in - a * out`, and feeding `-a` to a
+            fused multiply-add is what keeps that one rounding rather than two.
+            See `cascade`. */
         alignas(16) std::array<float, 4 * kMaxSections> coeffsUp{}, coeffsDown{};
+        alignas(16) std::array<float, 4 * kMaxSections> negCoeffsUp{}, negCoeffsDown{};
         alignas(16) std::array<float, 4 * kMaxSections> stateUp{}, stateDown{};
         int sectionsUp{0}, sectionsDown{0};
 

@@ -106,7 +106,8 @@ const HalfBandDesign& getDesign(int numStages)
     section shorter; the gap is filled with alpha = 1, which is an exact
     identity for a section whose state is zero — out = 1 * in + 0 = in, and the
     new state is in - 1 * in = 0, so it stays zero forever. */
-void buildLanes(const std::vector<float>& coeffs, int numDirect, float* lanes, int& numSections) noexcept
+void buildLanes(const std::vector<float>& coeffs, int numDirect, float* lanes, float* negLanes,
+                int& numSections) noexcept
 {
     const int numDelayed = static_cast<int>(coeffs.size()) - numDirect;
     numSections = juce::jmin(PolyphaseOversampler::kMaxSections, juce::jmax(numDirect, numDelayed));
@@ -121,14 +122,26 @@ void buildLanes(const std::vector<float>& coeffs, int numDirect, float* lanes, i
         lanes[4 * s + 1] = delayed;
         lanes[4 * s + 2] = direct;
         lanes[4 * s + 3] = delayed;
+
+        for (int l = 0; l < 4; ++l)
+            negLanes[4 * s + l] = -lanes[4 * s + l];
     }
 }
 
 /** Push four lanes through the cascade, in place.
 
-    `v`, `alpha` and `state` are all 16-byte aligned, and `alpha + 4 * s` and
-    `state + 4 * s` stay aligned because the stride is a whole register. */
-inline void cascade(float* v, const float* alpha, float* state, int numSections) noexcept
+    `v`, `alpha`, `negAlpha` and `state` are all 16-byte aligned, and the
+    per-section offsets stay aligned because the stride is a whole register.
+
+    `multiplyAdd` rather than `a * x + st`, and `-a` rather than a subtraction,
+    because the two are not the same number. JUCE's scalar filter writes
+    `alpha * input + v` and `input - alpha * output` as single expressions, which
+    the compiler contracts into fused multiply-adds — one rounding each.
+    SIMDRegister's `operator*` and `operator+` are separate inlined calls, so
+    writing the same algebra with them rounds twice and drifts from JUCE by
+    about 3.6e-7 on a full-scale signal. Harmless, but the equivalence test in
+    tests/test_aliasing.cpp is a much better guard when it can demand zero. */
+inline void cascade(float* v, const float* alpha, const float* negAlpha, float* state, int numSections) noexcept
 {
 #if JUCE_USE_SIMD
     using Vec = juce::dsp::SIMDRegister<float>;
@@ -138,15 +151,18 @@ inline void cascade(float* v, const float* alpha, float* state, int numSections)
     for (int s = 0; s < numSections; ++s)
     {
         const auto a = Vec::fromRawArray(alpha + 4 * s);
-        auto st = Vec::fromRawArray(state + 4 * s);
-        const auto o = a * x + st;
-        st = x - a * o;
-        st.copyToRawArray(state + 4 * s);
+        const auto negA = Vec::fromRawArray(negAlpha + 4 * s);
+        const auto st = Vec::fromRawArray(state + 4 * s);
+
+        const auto o = Vec::multiplyAdd(st, a, x);      // st + a * x
+        Vec::multiplyAdd(x, negA, o).copyToRawArray(state + 4 * s); // x - a * o
         x = o;
     }
 
     x.copyToRawArray(v);
 #else
+    juce::ignoreUnused(negAlpha);
+
     // Four independent chains, scalar. Slower than the register form, but the
     // same arithmetic and the same dependency structure, so still a long way
     // ahead of running one channel at a time.
@@ -187,8 +203,8 @@ inline void cascadeMono(float* v, const float* alpha, float* state, int numSecti
 
 /** One 2x upsampling stage: `n` samples in, `2 * n` out. */
 template <bool Stereo>
-void stageUp(const float* const* in, float* const* out, int n, const float* alpha, int numSections,
-             float* state) noexcept
+void stageUp(const float* const* in, float* const* out, int n, const float* alpha, const float* negAlpha,
+             int numSections, float* state) noexcept
 {
     for (int i = 0; i < n; ++i)
     {
@@ -198,7 +214,7 @@ void stageUp(const float* const* in, float* const* out, int n, const float* alph
         alignas(16) float v[4] = {x0, x0, x1, x1};
 
         if constexpr (Stereo)
-            cascade(v, alpha, state, numSections);
+            cascade(v, alpha, negAlpha, state, numSections);
         else
             cascadeMono(v, alpha, state, numSections);
 
@@ -215,8 +231,8 @@ void stageUp(const float* const* in, float* const* out, int n, const float* alph
 
 /** One 2x downsampling stage: `2 * n` samples in, `n` out. */
 template <bool Stereo>
-void stageDown(const float* const* in, float* const* out, int n, const float* alpha, int numSections, float* state,
-               float* delayState) noexcept
+void stageDown(const float* const* in, float* const* out, int n, const float* alpha, const float* negAlpha,
+               int numSections, float* state, float* delayState) noexcept
 {
     float held0 = delayState[0];
     float held1 = delayState[1];
@@ -227,7 +243,7 @@ void stageDown(const float* const* in, float* const* out, int n, const float* al
                                   Stereo ? in[1][2 * i + 1] : 0.0f};
 
         if constexpr (Stereo)
-            cascade(v, alpha, state, numSections);
+            cascade(v, alpha, negAlpha, state, numSections);
         else
             cascadeMono(v, alpha, state, numSections);
 
@@ -283,8 +299,8 @@ void PolyphaseOversampler::prepare(int numChannels, int numStages, int maxBlockS
         auto& stage = stages[static_cast<size_t>(n)];
         const auto& d = design.stages[static_cast<size_t>(n)];
 
-        buildLanes(d.up, d.directUp, stage.coeffsUp.data(), stage.sectionsUp);
-        buildLanes(d.down, d.directDown, stage.coeffsDown.data(), stage.sectionsDown);
+        buildLanes(d.up, d.directUp, stage.coeffsUp.data(), stage.negCoeffsUp.data(), stage.sectionsUp);
+        buildLanes(d.down, d.directDown, stage.coeffsDown.data(), stage.negCoeffsDown.data(), stage.sectionsDown);
 
         rateMultiplier *= 2;
         stage.buffer.setSize(channels, maxBlock * rateMultiplier, false, false, true);
@@ -340,9 +356,11 @@ juce::dsp::AudioBlock<float> PolyphaseOversampler::processSamplesUp(
             outPtrs[ch] = stage.buffer.getWritePointer(ch);
 
         if (numCh == 2)
-            stageUp<true>(inPtrs, outPtrs, n, stage.coeffsUp.data(), stage.sectionsUp, stage.stateUp.data());
+            stageUp<true>(inPtrs, outPtrs, n, stage.coeffsUp.data(), stage.negCoeffsUp.data(), stage.sectionsUp,
+                          stage.stateUp.data());
         else
-            stageUp<false>(inPtrs, outPtrs, n, stage.coeffsUp.data(), stage.sectionsUp, stage.stateUp.data());
+            stageUp<false>(inPtrs, outPtrs, n, stage.coeffsUp.data(), stage.negCoeffsUp.data(), stage.sectionsUp,
+                           stage.stateUp.data());
 
         snapStateToZero(stage.stateUp.data(), stage.sectionsUp);
 
@@ -389,11 +407,11 @@ void PolyphaseOversampler::processSamplesDown(juce::dsp::AudioBlock<float>& outp
         }
 
         if (numCh == 2)
-            stageDown<true>(inPtrs, outPtrs, n, stage.coeffsDown.data(), stage.sectionsDown, stage.stateDown.data(),
-                            stage.delayDown.data());
+            stageDown<true>(inPtrs, outPtrs, n, stage.coeffsDown.data(), stage.negCoeffsDown.data(),
+                            stage.sectionsDown, stage.stateDown.data(), stage.delayDown.data());
         else
-            stageDown<false>(inPtrs, outPtrs, n, stage.coeffsDown.data(), stage.sectionsDown, stage.stateDown.data(),
-                             stage.delayDown.data());
+            stageDown<false>(inPtrs, outPtrs, n, stage.coeffsDown.data(), stage.negCoeffsDown.data(),
+                             stage.sectionsDown, stage.stateDown.data(), stage.delayDown.data());
 
         snapStateToZero(stage.stateDown.data(), stage.sectionsDown);
 
