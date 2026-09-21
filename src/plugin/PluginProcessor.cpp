@@ -100,6 +100,12 @@ void EmberAudioProcessor::buildParameterCache()
         c.toneLow = cache(pid::toneLow(b));
         c.toneMid = cache(pid::toneMid(b));
         c.toneHigh = cache(pid::toneHigh(b));
+        c.toneLowHz = cache(pid::toneLowHz(b));
+        c.toneMidHz = cache(pid::toneMidHz(b));
+        c.toneMidQ = cache(pid::toneMidQ(b));
+        c.toneHighHz = cache(pid::toneHighHz(b));
+        c.tonePre = cache(pid::tonePre(b));
+        c.toneBypass = cache(pid::toneBypass(b));
         c.bypass = cache(pid::bypass(b));
         c.solo = cache(pid::solo(b));
     }
@@ -413,6 +419,12 @@ void EmberAudioProcessor::resolveParameters(int numSamples) noexcept
         p.toneLowDb = value(c.toneLow);
         p.toneMidDb = value(c.toneMid);
         p.toneHighDb = value(c.toneHigh);
+        p.toneLowHz = value(c.toneLowHz);
+        p.toneMidHz = value(c.toneMidHz);
+        p.toneMidQ = value(c.toneMidQ);
+        p.toneHighHz = value(c.toneHighHz);
+        p.tonePreSaturation = c.tonePre.isOn();
+        p.toneBypass = c.toneBypass.isOn();
         p.bypass = c.bypass.isOn();
         p.solo = c.solo.isOn();
     }

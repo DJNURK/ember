@@ -131,8 +131,16 @@ void BandChain::setParameters(const BandParams& p) noexcept
 
     feedback.setParameters(juce::jlimit(0.0f, 1.0f, p.feedback01), juce::jlimit(20.0f, 2000.0f, p.feedbackFreq));
     dynamics.setAmount(juce::jlimit(-1.0f, 1.0f, p.dynamics));
-    tone.setGainsDb(juce::jlimit(-12.0f, 12.0f, p.toneLowDb), juce::jlimit(-12.0f, 12.0f, p.toneMidDb),
-                    juce::jlimit(-12.0f, 12.0f, p.toneHighDb));
+    tone.setShape({p.toneLowHz, p.toneMidHz, p.toneMidQ, p.toneHighHz});
+
+    // A bypassed tone stage is flat rather than skipped, so switching it off
+    // does not change the band's latency or leave its IIR state stale for when
+    // it comes back.
+    if (p.toneBypass)
+        tone.setGainsDb(0.0f, 0.0f, 0.0f);
+    else
+        tone.setGainsDb(juce::jlimit(-12.0f, 12.0f, p.toneLowDb), juce::jlimit(-12.0f, 12.0f, p.toneMidDb),
+                        juce::jlimit(-12.0f, 12.0f, p.toneHighDb));
 }
 
 void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexcept
@@ -170,6 +178,14 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
         heatRatio.store(0.0f, std::memory_order_relaxed); // adds nothing, so it is cold
         return;
     }
+
+    // ---- tone, when it runs before the saturator ---------------------------
+    // Pre-EQ changes what the style is fed and so which harmonics it makes;
+    // post-EQ shapes what came out. It runs at base rate either way - putting
+    // it inside the oversampled section would make its own frequencies move
+    // with the oversampling factor.
+    if (params.tonePreSaturation)
+        tone.process(buffer.getArrayOfWritePointers(), numCh, numSamples);
 
     StyleParams sp;
     sp.sampleRate = osRate;
@@ -302,7 +318,9 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
     float* const* post = buffer.getArrayOfWritePointers();
     dcBlocker.process(post, numCh, numSamples);
     dynamics.process(post, numCh, numSamples);
-    tone.process(post, numCh, numSamples);
+
+    if (! params.tonePreSaturation)
+        tone.process(post, numCh, numSamples);
 
     applyLevelPanWidth(buffer, numSamples);
 

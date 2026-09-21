@@ -160,6 +160,7 @@ private:
     {
         CachedParam drive, mix, level, pan, width, style, feedback, feedbackFreq, dynamics;
         CachedParam toneLow, toneMid, toneHigh, bypass, solo;
+        CachedParam toneLowHz, toneMidHz, toneMidQ, toneHighHz, tonePre, toneBypass;
     };
     struct LfoCache
     {

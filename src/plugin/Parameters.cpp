@@ -305,6 +305,42 @@ juce::String toneHigh(int band)
     static const IdTable<kMaxBands> t("band", "ToneHigh");
     return t[band];
 }
+
+juce::String toneLowHz(int band)
+{
+    static const IdTable<kMaxBands> t("band", "ToneLowHz");
+    return t[band];
+}
+
+juce::String toneMidHz(int band)
+{
+    static const IdTable<kMaxBands> t("band", "ToneMidHz");
+    return t[band];
+}
+
+juce::String toneMidQ(int band)
+{
+    static const IdTable<kMaxBands> t("band", "ToneMidQ");
+    return t[band];
+}
+
+juce::String toneHighHz(int band)
+{
+    static const IdTable<kMaxBands> t("band", "ToneHighHz");
+    return t[band];
+}
+
+juce::String tonePre(int band)
+{
+    static const IdTable<kMaxBands> t("band", "TonePre");
+    return t[band];
+}
+
+juce::String toneBypass(int band)
+{
+    static const IdTable<kMaxBands> t("band", "ToneBypass");
+    return t[band];
+}
 juce::String bypass(int band)
 {
     static const IdTable<kMaxBands> t("band", "Bypass");
@@ -538,6 +574,23 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         addFloat(toneLow(band), makeName("Band", band, "Tone Low"), toneRange, 0.0f, "dB");
         addFloat(toneMid(band), makeName("Band", band, "Tone Mid"), toneRange, 0.0f, "dB");
         addFloat(toneHigh(band), makeName("Band", band, "Tone High"), toneRange, 0.0f, "dB");
+
+        // Node positions. The defaults are the values these were as fixed
+        // constants, so a session saved before they existed restores the
+        // identical response rather than snapping to a range midpoint.
+        addFloat(toneLowHz(band), makeName("Band", band, "Tone Low Freq"), logRange(20.0f, 1000.0f, 150.0f), 150.0f,
+                 "Hz");
+        addFloat(toneMidHz(band), makeName("Band", band, "Tone Mid Freq"), logRange(100.0f, 8000.0f, 1000.0f), 1000.0f,
+                 "Hz");
+        addFloat(toneMidQ(band), makeName("Band", band, "Tone Mid Q"), logRange(0.2f, 6.0f, 1.0f), 0.7f, "");
+        addFloat(toneHighHz(band), makeName("Band", band, "Tone High Freq"), logRange(1000.0f, 18000.0f, 4000.0f),
+                 4000.0f, "Hz");
+
+        addBool(tonePre(band), makeName("Band", band, "Tone Pre"), false,
+                juce::AudioParameterBoolAttributes().withStringFromValueFunction(
+                    [](bool value, int) { return juce::String(value ? "Pre" : "Post"); }));
+
+        addBool(toneBypass(band), makeName("Band", band, "Tone Bypass"), false);
 
         addBool(bypass(band), makeName("Band", band, "Bypass"), false);
         addBool(solo(band), makeName("Band", band, "Solo"), false);

@@ -20,6 +20,24 @@ struct BandParams
     float toneLowDb{0.0f};
     float toneMidDb{0.0f};
     float toneHighDb{0.0f};
+
+    // Where the tone stage's three nodes sit. Defaults are the values these
+    // were as fixed constants, so a preset written before they were parameters
+    // loads with an identical response.
+    float toneLowHz{150.0f};
+    float toneMidHz{1000.0f};
+    float toneMidQ{0.7f};
+    float toneHighHz{4000.0f};
+
+    /** Tone before the saturator instead of after it.
+
+        Pre-EQ changes what the style is fed and therefore which harmonics it
+        generates; post-EQ shapes what came out. They are different instruments,
+        and the difference is most of the point of having the switch. */
+    bool tonePreSaturation{false};
+
+    /** Tone stage off entirely, without losing the node positions. */
+    bool toneBypass{false};
     bool bypass{false};
     bool solo{false};
 };
