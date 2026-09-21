@@ -61,8 +61,20 @@ public:
 
     float getGainReductionDb() const noexcept { return dynamics.getGainReductionDb(); }
 
+    /** How much energy this band is adding: output RMS over input RMS for the
+        last block, clamped to 0..8, 1 meaning "unchanged".
+
+        This is a measurement for the visualiser and nothing else - it is taken
+        from values the dry/wet loop already has in registers, alters no sample
+        and adds no branch to the processing path. The visual smoothing happens
+        GUI-side, so the audio thread stores a raw ratio and stops there. */
+    float getHeatRatio() const noexcept { return heatRatio.load(std::memory_order_relaxed); }
+
 private:
     void applyLevelPanWidth(juce::AudioBuffer<float>& buffer, int numSamples) noexcept;
+    void publishHeat(float inSumSquares, float outSumSquares, int numSamples) noexcept;
+
+    std::atomic<float> heatRatio{1.0f};
 
     std::array<std::unique_ptr<SaturationStyle>, static_cast<size_t>(kNumStyles)> styles;
     SaturationStyle* currentStyle{nullptr};

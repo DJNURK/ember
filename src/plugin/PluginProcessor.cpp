@@ -786,6 +786,27 @@ void EmberAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
         restoreFullState(juce::ValueTree::fromXml(*xml));
 }
 
+float EmberAudioProcessor::getBandHeat(int band) const noexcept
+{
+    if (band < 0 || band >= kMaxBands)
+        return 0.0f;
+
+    // The ratio is a level multiplier, so map it in decibels: 0 dB of added
+    // energy is cold, +12 dB is fully lit. Saturation that adds harmonics
+    // while auto-gain holds the level still shows, because the band's own
+    // output is measured before the global stage.
+    const float ratio = engine.getBandHeatRatio(band);
+    const float addedDb = juce::Decibels::gainToDecibels(juce::jmax(ratio, 1.0e-4f));
+    const float fromEnergy = juce::jlimit(0.0f, 1.0f, addedDb / 12.0f);
+
+    // Weighted by drive, so a band sitting at unity with no drive cannot glow
+    // because of a level change somewhere else in the chain.
+    const auto& p = bandParams[static_cast<size_t>(band)];
+    const float driveWeight = juce::jlimit(0.0f, 1.0f, p.driveDb / 24.0f);
+
+    return juce::jlimit(0.0f, 1.0f, fromEnergy * (0.35f + 0.65f * driveWeight));
+}
+
 juce::AudioProcessorEditor* EmberAudioProcessor::createEditor()
 {
     return new EmberAudioProcessorEditor(*this);

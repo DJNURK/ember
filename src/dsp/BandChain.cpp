@@ -167,6 +167,7 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
         for (int ch = 0; ch < numCh; ++ch)
             buffer.copyFrom(ch, 0, dryBuffer, ch, 0, numSamples);
         applyLevelPanWidth(buffer, numSamples);
+        heatRatio.store(1.0f, std::memory_order_relaxed); // adds nothing, so it is cold
         return;
     }
 
@@ -322,14 +323,48 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
         const float m1 = smoothedMix.getCurrentValue();
         const float dm = (m1 - m0) / static_cast<float>(juce::jmax(1, numSamples));
 
+        // Heat is measured here because this loop already holds the band's
+        // input and its final output in registers: the measurement costs two
+        // multiply-adds per sample on one channel and no extra loads. It is
+        // published for the GUI and changes no sample.
+        float inAcc = 0.0f;
+        float outAcc = 0.0f;
+
         float mix = m0;
         for (int i = 0; i < numSamples; ++i)
         {
             for (int ch = 0; ch < numCh; ++ch)
                 wet[ch][i] = mix * wet[ch][i] + (1.0f - mix) * dry[ch][i];
+
+            const float in = dry[0][i];
+            const float out = wet[0][i];
+            inAcc += in * in;
+            outAcc += out * out;
+
             mix += dm;
         }
+
+        publishHeat(inAcc, outAcc, numSamples);
     }
+}
+
+void BandChain::publishHeat(float inSumSquares, float outSumSquares, int numSamples) noexcept
+{
+    const auto n = static_cast<float>(juce::jmax(1, numSamples));
+    const float inRms = std::sqrt(inSumSquares / n);
+    const float outRms = std::sqrt(outSumSquares / n);
+
+    // Below the noise floor the ratio is meaningless - dividing two tiny
+    // numbers produces violent swings that would make a silent band flicker.
+    float ratio = 1.0f;
+
+    if (inRms > 1.0e-6f && outRms > 1.0e-9f)
+        ratio = outRms / inRms;
+
+    if (! std::isfinite(ratio))
+        ratio = 1.0f;
+
+    heatRatio.store(juce::jlimit(0.0f, 8.0f, ratio), std::memory_order_relaxed);
 }
 
 void BandChain::applyLevelPanWidth(juce::AudioBuffer<float>& buffer, int numSamples) noexcept

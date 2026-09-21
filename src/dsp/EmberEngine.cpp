@@ -151,6 +151,11 @@ float EmberEngine::getBandLevel(int band) const noexcept
     return band >= 0 && band < kMaxBands ? bandLevels[static_cast<size_t>(band)].load(std::memory_order_relaxed) : 0.0f;
 }
 
+float EmberEngine::getBandHeatRatio(int band) const noexcept
+{
+    return band >= 0 && band < kMaxBands ? bands[static_cast<size_t>(band)].getHeatRatio() : 1.0f;
+}
+
 void EmberEngine::setParameters(const GlobalParams& global, const BandParams* bandsIn, int numBandParams) noexcept
 {
     const int requested = juce::jlimit(kMinBands, kMaxBands, global.numBands);

@@ -68,6 +68,15 @@ public:
     float getBandLevel(int band) const noexcept { return engine.getBandLevel(band); }
     float getBandGainReductionDb(int band) const noexcept { return engine.getBandGainReductionDb(band); }
 
+    /** Per-band heat, 0 (cold) to 1 (glowing), for the visualiser.
+
+        The engine publishes a raw output/input RMS ratio per block; this folds
+        in how hard the band is driven and normalises to the 0..1 the GUI wants.
+        A band adding no harmonics reads 0 however loud it is, which is the
+        point: heat is saturation, not level. Smoothing happens in the editor's
+        60 Hz tick, so this stays a pure read. */
+    float getBandHeat(int band) const noexcept;
+
     /** Which band the GUI has selected. Persisted with the plugin state. */
     int getSelectedBand() const noexcept { return selectedBand.load(std::memory_order_relaxed); }
     void setSelectedBand(int band) noexcept;

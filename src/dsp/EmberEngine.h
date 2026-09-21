@@ -70,6 +70,10 @@ public:
     /** Peak level of each band's output, for the GUI band "heat" overlay. */
     float getBandLevel(int band) const noexcept;
 
+    /** How much energy band `band` is adding: output RMS over input RMS, 1
+        meaning unchanged. Drives the heat visualisation. Measurement only. */
+    float getBandHeatRatio(int band) const noexcept;
+
 private:
     void pushSpectrum(const juce::AudioBuffer<float>& in, const juce::AudioBuffer<float>& out, int numSamples) noexcept;
     void accumulateSpectrum(const float* input, const float* output, int numSamples) noexcept;
