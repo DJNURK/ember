@@ -5,7 +5,11 @@
 // session. This walks the real editor - the same one createEditor() returns,
 // with a real processor behind it - and writes what it paints.
 //
-//   ember_rendereditor <output.png> [width] [height] [scale] [preset] [driveDb]
+//   ember_rendereditor <output.png> [width] [height] [scale] [preset] [driveDb] [variant]
+//
+// `variant` is 0 for Ember and 1 for Cool Ember. Rendering both is how the
+// token system gets checked: if any component hard-codes an accent it shows up
+// immediately as the one thing that did not move.
 //
 // `preset` is a factory program index; without it the editor is photographed
 // in its default state, which shows no preset name and few active controls.
@@ -18,6 +22,7 @@
 #include "plugin/PluginProcessor.h"
 #include "plugin/PluginEditor.h"
 #include "plugin/ParameterIDs.h"
+#include "gui/EmberTheme.h"
 
 int main(int argc, char** argv)
 {
@@ -31,6 +36,10 @@ int main(int argc, char** argv)
     // Applied to every band, for the heat renders: the display should look
     // visibly different at 0, 15 and 35 dB or the heat metaphor is not working.
     const float driveDb = argc > 6 ? juce::String(argv[6]).getFloatValue() : -1000.0f;
+    const int variant = argc > 7 ? juce::String(argv[7]).getIntValue() : 0;
+
+    ember::gui::EmberTheme::setVariant(variant == 1 ? ember::gui::ThemeVariant::coolEmber
+                                                    : ember::gui::ThemeVariant::emberDefault);
 
     ember::EmberAudioProcessor proc;
     proc.prepareToPlay(48000.0, 512);

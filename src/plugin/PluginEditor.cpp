@@ -63,6 +63,25 @@ void EmberAudioProcessorEditor::wirePanels()
     spectrum.onBandSelected = [this](int band) { selectBand(band); };
     bandPanel.onBandClicked = [this](int band) { selectBand(band); };
 
+    globalBar.onZoomRequested = [this](float factor)
+    {
+        // Zoom sets the window to the design's default size scaled, rather than
+        // multiplying whatever size it happens to be - otherwise repeated zooms
+        // compound and 125 % twice lands at 156 %.
+        setSize(juce::roundToInt(static_cast<float>(gui::Metrics::defaultWidth) * factor),
+                juce::roundToInt(static_cast<float>(gui::Metrics::defaultHeight) * factor));
+    };
+
+    globalBar.onAppearanceChanged = [this]
+    {
+        // Colours come from the theme at paint time, so nothing needs rebuilding
+        // - but every component has to be told to look again.
+        for (auto* child : getChildren())
+            child->repaint();
+
+        repaint();
+    };
+
     // A knob that accepts a modulation drop does not know how to build a
     // routing; it hands the (target, source) pair up and the modulation panel
     // creates it, which is also where a rejected routing gets reported.
@@ -103,7 +122,7 @@ void EmberAudioProcessorEditor::selectBand(int band)
 
 void EmberAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(gui::EmberColours::backgroundDeep);
+    g.fillAll(gui::EmberColours::backgroundDeep());
 }
 
 void EmberAudioProcessorEditor::resized()

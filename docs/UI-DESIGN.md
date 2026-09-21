@@ -89,6 +89,13 @@ every other token alone. It exists to prove the token indirection is real: if
 any component hard-codes a colour, switching variants will expose it
 immediately.
 
+It did exactly that. The first migration made `EmberColours` a set of
+`static const juce::Colour` members initialised from the tokens, which meant
+they captured the default palette once at load: rendering the variant showed
+knob arcs and heat bars shifting to amber-gold while the band chips, COMPARE
+and Mod buttons stayed orange. They are accessor functions now, reading the
+live tokens on every call, and the whole interface follows the variant.
+
 ---
 
 ## 2. Spacing, radius, stroke

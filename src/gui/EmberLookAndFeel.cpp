@@ -28,24 +28,69 @@ const ThemeTokens& tk()
 }
 } // namespace
 
-const juce::Colour EmberColours::backgroundDeep{tk().bgDeep};
-const juce::Colour EmberColours::background{tk().panel};
-const juce::Colour EmberColours::panelSunken{tk().bgDeep.brighter(0.02f)};
-const juce::Colour EmberColours::panel{tk().panel};
-const juce::Colour EmberColours::panelRaised{tk().panelRaised};
+juce::Colour EmberColours::backgroundDeep()
+{
+    return tk().bgDeep;
+}
+juce::Colour EmberColours::background()
+{
+    return tk().panel;
+}
+juce::Colour EmberColours::panelSunken()
+{
+    return tk().bgDeep.brighter(0.02f);
+}
+juce::Colour EmberColours::panel()
+{
+    return tk().panel;
+}
+juce::Colour EmberColours::panelRaised()
+{
+    return tk().panelRaised;
+}
 
-const juce::Colour EmberColours::outline{tk().panelEdge};
-const juce::Colour EmberColours::outlineStrong{tk().panelEdge.brighter(0.18f)};
-const juce::Colour EmberColours::track{tk().panelEdge.brighter(0.10f)};
+juce::Colour EmberColours::outline()
+{
+    return tk().panelEdge;
+}
+juce::Colour EmberColours::outlineStrong()
+{
+    return tk().panelEdge.brighter(0.18f);
+}
+juce::Colour EmberColours::track()
+{
+    return tk().panelEdge.brighter(0.10f);
+}
 
-const juce::Colour EmberColours::textPrimary{tk().text};
-const juce::Colour EmberColours::textSecondary{tk().textDim};
-const juce::Colour EmberColours::textDisabled{tk().textMuted};
+juce::Colour EmberColours::textPrimary()
+{
+    return tk().text;
+}
+juce::Colour EmberColours::textSecondary()
+{
+    return tk().textDim;
+}
+juce::Colour EmberColours::textDisabled()
+{
+    return tk().textMuted;
+}
 
-const juce::Colour EmberColours::accent{tk().ember};
-const juce::Colour EmberColours::accentDim{tk().emberDeep};
-const juce::Colour EmberColours::accentGlow{tk().ember.withAlpha(0.20f)};
-const juce::Colour EmberColours::warning{tk().danger};
+juce::Colour EmberColours::accent()
+{
+    return tk().ember;
+}
+juce::Colour EmberColours::accentDim()
+{
+    return tk().emberDeep;
+}
+juce::Colour EmberColours::accentGlow()
+{
+    return tk().ember.withAlpha(0.20f);
+}
+juce::Colour EmberColours::warning()
+{
+    return tk().danger;
+}
 
 namespace
 {
@@ -152,7 +197,7 @@ juce::Colour EmberStyleProps::accentColourFor(const juce::Component& component)
     if (const auto* value = component.getProperties().getVarPointer(accentPropertyId()))
         return juce::Colour(static_cast<juce::uint32>(static_cast<juce::int64>(*value)));
 
-    return EmberColours::accent;
+    return EmberColours::accent();
 }
 
 void EmberStyleProps::setToggleLook(juce::Button& button, ToggleLook look)
@@ -367,75 +412,75 @@ const float EmberLookAndFeel::kRotaryEndAngle = juce::MathConstants<float>::pi *
 EmberLookAndFeel::EmberLookAndFeel()
 {
     // Every ColourId the plugin can reach, so nothing falls back to stock JUCE.
-    setColour(juce::ResizableWindow::backgroundColourId, EmberColours::backgroundDeep);
-    setColour(juce::DocumentWindow::textColourId, EmberColours::textPrimary);
+    setColour(juce::ResizableWindow::backgroundColourId, EmberColours::backgroundDeep());
+    setColour(juce::DocumentWindow::textColourId, EmberColours::textPrimary());
 
-    setColour(juce::Slider::backgroundColourId, EmberColours::track);
-    setColour(juce::Slider::trackColourId, EmberColours::accent);
-    setColour(juce::Slider::thumbColourId, EmberColours::textPrimary);
-    setColour(juce::Slider::rotarySliderFillColourId, EmberColours::accent);
-    setColour(juce::Slider::rotarySliderOutlineColourId, EmberColours::track);
-    setColour(juce::Slider::textBoxTextColourId, EmberColours::textPrimary);
-    setColour(juce::Slider::textBoxBackgroundColourId, EmberColours::panelSunken);
-    setColour(juce::Slider::textBoxHighlightColourId, EmberColours::accent.withAlpha(0.35f));
+    setColour(juce::Slider::backgroundColourId, EmberColours::track());
+    setColour(juce::Slider::trackColourId, EmberColours::accent());
+    setColour(juce::Slider::thumbColourId, EmberColours::textPrimary());
+    setColour(juce::Slider::rotarySliderFillColourId, EmberColours::accent());
+    setColour(juce::Slider::rotarySliderOutlineColourId, EmberColours::track());
+    setColour(juce::Slider::textBoxTextColourId, EmberColours::textPrimary());
+    setColour(juce::Slider::textBoxBackgroundColourId, EmberColours::panelSunken());
+    setColour(juce::Slider::textBoxHighlightColourId, EmberColours::accent().withAlpha(0.35f));
     setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
 
-    setColour(juce::Label::textColourId, EmberColours::textSecondary);
+    setColour(juce::Label::textColourId, EmberColours::textSecondary());
     setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
     setColour(juce::Label::outlineColourId, juce::Colours::transparentBlack);
-    setColour(juce::Label::textWhenEditingColourId, EmberColours::textPrimary);
-    setColour(juce::Label::backgroundWhenEditingColourId, EmberColours::panelSunken);
-    setColour(juce::Label::outlineWhenEditingColourId, EmberColours::accent);
+    setColour(juce::Label::textWhenEditingColourId, EmberColours::textPrimary());
+    setColour(juce::Label::backgroundWhenEditingColourId, EmberColours::panelSunken());
+    setColour(juce::Label::outlineWhenEditingColourId, EmberColours::accent());
 
-    setColour(juce::TextButton::buttonColourId, EmberColours::panelRaised);
-    setColour(juce::TextButton::buttonOnColourId, EmberColours::accentDim);
-    setColour(juce::TextButton::textColourOffId, EmberColours::textSecondary);
-    setColour(juce::TextButton::textColourOnId, EmberColours::textPrimary);
+    setColour(juce::TextButton::buttonColourId, EmberColours::panelRaised());
+    setColour(juce::TextButton::buttonOnColourId, EmberColours::accentDim());
+    setColour(juce::TextButton::textColourOffId, EmberColours::textSecondary());
+    setColour(juce::TextButton::textColourOnId, EmberColours::textPrimary());
 
-    setColour(juce::ToggleButton::textColourId, EmberColours::textSecondary);
-    setColour(juce::ToggleButton::tickColourId, EmberColours::accent);
-    setColour(juce::ToggleButton::tickDisabledColourId, EmberColours::textDisabled);
+    setColour(juce::ToggleButton::textColourId, EmberColours::textSecondary());
+    setColour(juce::ToggleButton::tickColourId, EmberColours::accent());
+    setColour(juce::ToggleButton::tickDisabledColourId, EmberColours::textDisabled());
 
-    setColour(juce::ComboBox::backgroundColourId, EmberColours::panelRaised);
-    setColour(juce::ComboBox::textColourId, EmberColours::textPrimary);
-    setColour(juce::ComboBox::outlineColourId, EmberColours::outline);
-    setColour(juce::ComboBox::buttonColourId, EmberColours::textSecondary);
-    setColour(juce::ComboBox::arrowColourId, EmberColours::textSecondary);
-    setColour(juce::ComboBox::focusedOutlineColourId, EmberColours::accent);
+    setColour(juce::ComboBox::backgroundColourId, EmberColours::panelRaised());
+    setColour(juce::ComboBox::textColourId, EmberColours::textPrimary());
+    setColour(juce::ComboBox::outlineColourId, EmberColours::outline());
+    setColour(juce::ComboBox::buttonColourId, EmberColours::textSecondary());
+    setColour(juce::ComboBox::arrowColourId, EmberColours::textSecondary());
+    setColour(juce::ComboBox::focusedOutlineColourId, EmberColours::accent());
 
-    setColour(juce::PopupMenu::backgroundColourId, EmberColours::panelRaised);
-    setColour(juce::PopupMenu::textColourId, EmberColours::textPrimary);
-    setColour(juce::PopupMenu::headerTextColourId, EmberColours::textSecondary);
-    setColour(juce::PopupMenu::highlightedBackgroundColourId, EmberColours::accent.withAlpha(0.20f));
-    setColour(juce::PopupMenu::highlightedTextColourId, EmberColours::accent);
+    setColour(juce::PopupMenu::backgroundColourId, EmberColours::panelRaised());
+    setColour(juce::PopupMenu::textColourId, EmberColours::textPrimary());
+    setColour(juce::PopupMenu::headerTextColourId, EmberColours::textSecondary());
+    setColour(juce::PopupMenu::highlightedBackgroundColourId, EmberColours::accent().withAlpha(0.20f));
+    setColour(juce::PopupMenu::highlightedTextColourId, EmberColours::accent());
 
-    setColour(juce::TextEditor::backgroundColourId, EmberColours::panelSunken);
-    setColour(juce::TextEditor::textColourId, EmberColours::textPrimary);
-    setColour(juce::TextEditor::outlineColourId, EmberColours::outline);
-    setColour(juce::TextEditor::focusedOutlineColourId, EmberColours::accent);
-    setColour(juce::TextEditor::highlightColourId, EmberColours::accent.withAlpha(0.32f));
-    setColour(juce::TextEditor::highlightedTextColourId, EmberColours::textPrimary);
+    setColour(juce::TextEditor::backgroundColourId, EmberColours::panelSunken());
+    setColour(juce::TextEditor::textColourId, EmberColours::textPrimary());
+    setColour(juce::TextEditor::outlineColourId, EmberColours::outline());
+    setColour(juce::TextEditor::focusedOutlineColourId, EmberColours::accent());
+    setColour(juce::TextEditor::highlightColourId, EmberColours::accent().withAlpha(0.32f));
+    setColour(juce::TextEditor::highlightedTextColourId, EmberColours::textPrimary());
     setColour(juce::TextEditor::shadowColourId, juce::Colours::transparentBlack);
-    setColour(juce::CaretComponent::caretColourId, EmberColours::accent);
+    setColour(juce::CaretComponent::caretColourId, EmberColours::accent());
 
-    setColour(juce::TooltipWindow::backgroundColourId, EmberColours::panelRaised);
-    setColour(juce::TooltipWindow::textColourId, EmberColours::textPrimary);
-    setColour(juce::TooltipWindow::outlineColourId, EmberColours::outlineStrong);
+    setColour(juce::TooltipWindow::backgroundColourId, EmberColours::panelRaised());
+    setColour(juce::TooltipWindow::textColourId, EmberColours::textPrimary());
+    setColour(juce::TooltipWindow::outlineColourId, EmberColours::outlineStrong());
 
     setColour(juce::ScrollBar::backgroundColourId, juce::Colours::transparentBlack);
-    setColour(juce::ScrollBar::thumbColourId, EmberColours::outlineStrong);
-    setColour(juce::ScrollBar::trackColourId, EmberColours::panelSunken);
+    setColour(juce::ScrollBar::thumbColourId, EmberColours::outlineStrong());
+    setColour(juce::ScrollBar::trackColourId, EmberColours::panelSunken());
 
-    setColour(juce::AlertWindow::backgroundColourId, EmberColours::panel);
-    setColour(juce::AlertWindow::textColourId, EmberColours::textPrimary);
-    setColour(juce::AlertWindow::outlineColourId, EmberColours::outlineStrong);
+    setColour(juce::AlertWindow::backgroundColourId, EmberColours::panel());
+    setColour(juce::AlertWindow::textColourId, EmberColours::textPrimary());
+    setColour(juce::AlertWindow::outlineColourId, EmberColours::outlineStrong());
 
-    setColour(juce::BubbleComponent::backgroundColourId, EmberColours::panelRaised);
-    setColour(juce::BubbleComponent::outlineColourId, EmberColours::outlineStrong);
+    setColour(juce::BubbleComponent::backgroundColourId, EmberColours::panelRaised());
+    setColour(juce::BubbleComponent::outlineColourId, EmberColours::outlineStrong());
 
-    setColour(juce::HyperlinkButton::textColourId, EmberColours::accent);
-    setColour(juce::GroupComponent::outlineColourId, EmberColours::outline);
-    setColour(juce::GroupComponent::textColourId, EmberColours::textSecondary);
+    setColour(juce::HyperlinkButton::textColourId, EmberColours::accent());
+    setColour(juce::GroupComponent::outlineColourId, EmberColours::outline());
+    setColour(juce::GroupComponent::textColourId, EmberColours::textSecondary());
 }
 
 EmberLookAndFeel::~EmberLookAndFeel() = default;
@@ -716,7 +761,7 @@ void EmberLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int wid
         return;
 
     const bool enabled = slider.isEnabled();
-    const auto accent = enabled ? EmberStyleProps::accentColourFor(slider) : EmberColours::textDisabled;
+    const auto accent = enabled ? EmberStyleProps::accentColourFor(slider) : EmberColours::textDisabled();
     const bool horizontal = !slider.isVertical();
 
     if (slider.isBar())
@@ -746,7 +791,7 @@ void EmberLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int wid
             ? juce::Rectangle<float>(area.getX(), area.getCentreY() - thickness * 0.5f, area.getWidth(), thickness)
             : juce::Rectangle<float>(area.getCentreX() - thickness * 0.5f, area.getY(), thickness, area.getHeight());
 
-    g.setColour(EmberColours::track);
+    g.setColour(EmberColours::track());
     g.fillRoundedRectangle(trackArea, thickness * 0.5f);
 
     // Filled span: between the two thumbs for a range slider, from the anchor
@@ -786,9 +831,9 @@ void EmberLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int wid
             horizontal ? juce::Rectangle<float>(thumbShort, thumbLong).withCentre({position, area.getCentreY()})
                        : juce::Rectangle<float>(thumbLong, thumbShort).withCentre({area.getCentreX(), position});
 
-        g.setColour(enabled ? EmberColours::textPrimary : EmberColours::textDisabled);
+        g.setColour(enabled ? EmberColours::textPrimary() : EmberColours::textDisabled());
         g.fillRoundedRectangle(thumb, thumbShort * 0.42f);
-        g.setColour(EmberColours::backgroundDeep.withAlpha(0.6f));
+        g.setColour(EmberColours::backgroundDeep().withAlpha(0.6f));
         g.drawRoundedRectangle(thumb.reduced(0.5f), thumbShort * 0.42f, 1.0f);
     };
 
@@ -822,13 +867,13 @@ juce::Label* EmberLookAndFeel::createSliderTextBox(juce::Slider& slider)
     label->setColour(juce::Label::textColourId, slider.findColour(juce::Slider::textBoxTextColourId));
     label->setColour(juce::Label::backgroundColourId, slider.findColour(juce::Slider::textBoxBackgroundColourId));
     label->setColour(juce::Label::outlineColourId, juce::Colours::transparentBlack);
-    label->setColour(juce::Label::textWhenEditingColourId, EmberColours::textPrimary);
-    label->setColour(juce::Label::backgroundWhenEditingColourId, EmberColours::panelSunken);
+    label->setColour(juce::Label::textWhenEditingColourId, EmberColours::textPrimary());
+    label->setColour(juce::Label::backgroundWhenEditingColourId, EmberColours::panelSunken());
     label->setColour(juce::Label::outlineWhenEditingColourId, EmberStyleProps::accentColourFor(slider));
-    label->setColour(juce::TextEditor::textColourId, EmberColours::textPrimary);
+    label->setColour(juce::TextEditor::textColourId, EmberColours::textPrimary());
     label->setColour(juce::TextEditor::backgroundColourId, juce::Colours::transparentBlack);
-    label->setColour(juce::TextEditor::highlightColourId, EmberColours::accent.withAlpha(0.32f));
-    label->setColour(juce::TextEditor::highlightedTextColourId, EmberColours::textPrimary);
+    label->setColour(juce::TextEditor::highlightColourId, EmberColours::accent().withAlpha(0.32f));
+    label->setColour(juce::TextEditor::highlightedTextColourId, EmberColours::textPrimary());
     label->setColour(juce::TextEditor::outlineColourId, juce::Colours::transparentBlack);
 
     return label;
@@ -1042,9 +1087,9 @@ void EmberLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& b
         auto colour = button.findColour(juce::ToggleButton::textColourId);
 
         if (!enabled)
-            colour = EmberColours::textDisabled;
+            colour = EmberColours::textDisabled();
         else if (on)
-            colour = EmberColours::textPrimary;
+            colour = EmberColours::textPrimary();
 
         g.setColour(colour);
         g.setFont(EmberFonts::forHeight(area.getHeight(), 0.46f, false));
@@ -1057,12 +1102,12 @@ void EmberLookAndFeel::drawTickBox(juce::Graphics& g, juce::Component& component
                                    bool shouldDrawButtonAsDown)
 {
     const juce::Rectangle<float> box(x, y, w, h);
-    const auto accent = isEnabled ? EmberStyleProps::accentColourFor(component) : EmberColours::textDisabled;
+    const auto accent = isEnabled ? EmberStyleProps::accentColourFor(component) : EmberColours::textDisabled();
     const float corner = juce::jmax(2.0f, w * 0.22f);
 
-    g.setColour(shouldDrawButtonAsDown ? EmberColours::panelRaised : EmberColours::panelSunken);
+    g.setColour(shouldDrawButtonAsDown ? EmberColours::panelRaised() : EmberColours::panelSunken());
     g.fillRoundedRectangle(box, corner);
-    g.setColour(shouldDrawButtonAsHighlighted ? EmberColours::outlineStrong : EmberColours::outline);
+    g.setColour(shouldDrawButtonAsHighlighted ? EmberColours::outlineStrong() : EmberColours::outline());
     g.drawRoundedRectangle(box.reduced(0.5f), corner, 1.0f);
 
     if (ticked)
@@ -1086,7 +1131,7 @@ void EmberLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, bo
     g.fillRoundedRectangle(area.reduced(0.5f), corner);
 
     const bool highlighted = isButtonDown || box.isPopupActive() || box.hasKeyboardFocus(false);
-    g.setColour(!enabled ? EmberColours::outline : (highlighted ? accent.withAlpha(0.8f) : EmberColours::outline));
+    g.setColour(!enabled ? EmberColours::outline() : (highlighted ? accent.withAlpha(0.8f) : EmberColours::outline()));
     g.drawRoundedRectangle(area.reduced(0.5f), corner, 1.0f);
 
     // Chevron, sized from the button area JUCE hands us.
@@ -1100,7 +1145,7 @@ void EmberLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, bo
     chevron.lineTo(centre.x, centre.y + chevronWidth * 0.34f);
     chevron.lineTo(centre.x + chevronWidth * 0.5f, centre.y - chevronWidth * 0.26f);
 
-    g.setColour(!enabled ? EmberColours::textDisabled
+    g.setColour(!enabled ? EmberColours::textDisabled()
                          : (highlighted ? accent : box.findColour(juce::ComboBox::arrowColourId)));
     g.strokePath(chevron, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 }
@@ -1118,16 +1163,16 @@ void EmberLookAndFeel::positionComboBoxText(juce::ComboBox& box, juce::Label& la
     label.setBounds(inset, 1, juce::jmax(0, box.getWidth() - arrowWidth - inset), box.getHeight() - 2);
     label.setFont(getComboBoxFont(box));
     label.setColour(juce::Label::textColourId,
-                    box.isEnabled() ? box.findColour(juce::ComboBox::textColourId) : EmberColours::textDisabled);
+                    box.isEnabled() ? box.findColour(juce::ComboBox::textColourId) : EmberColours::textDisabled());
 }
 
 //==============================================================================
 void EmberLookAndFeel::drawPopupMenuBackgroundWithOptions(juce::Graphics& g, int width, int height,
                                                           const juce::PopupMenu::Options&)
 {
-    g.fillAll(EmberColours::panelRaised);
+    g.fillAll(EmberColours::panelRaised());
 
-    g.setColour(EmberColours::outlineStrong);
+    g.setColour(EmberColours::outlineStrong());
     g.drawRect(0, 0, width, height, 1);
 }
 
@@ -1139,7 +1184,7 @@ void EmberLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectangl
     if (isSeparator)
     {
         const auto line = area.reduced(area.getHeight() / 2, 0).toFloat();
-        drawHairline(g, line, EmberColours::outline);
+        drawHairline(g, line, EmberColours::outline());
         return;
     }
 
@@ -1147,16 +1192,16 @@ void EmberLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectangl
 
     if (isHighlighted && isActive)
     {
-        g.setColour(EmberColours::accent.withAlpha(0.16f));
+        g.setColour(EmberColours::accent().withAlpha(0.16f));
         g.fillRoundedRectangle(bounds, 3.0f);
     }
 
-    auto colour = textColour != nullptr ? *textColour : EmberColours::textPrimary;
+    auto colour = textColour != nullptr ? *textColour : EmberColours::textPrimary();
 
     if (!isActive)
-        colour = EmberColours::textDisabled;
+        colour = EmberColours::textDisabled();
     else if (isHighlighted)
-        colour = EmberColours::accent;
+        colour = EmberColours::accent();
 
     g.setColour(colour);
     g.setFont(getPopupMenuFont());
@@ -1198,7 +1243,7 @@ void EmberLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectangl
         const float shortcutWidth = juce::GlyphArrangement::getStringWidth(shortcutFont, shortcutKeyText) + 6.0f;
 
         g.setFont(shortcutFont);
-        g.setColour(EmberColours::textSecondary);
+        g.setColour(EmberColours::textSecondary());
         g.drawFittedText(shortcutKeyText, textArea.removeFromRight(shortcutWidth).toNearestInt(),
                          juce::Justification::centredRight, 1, 1.0f);
         g.setColour(colour);
@@ -1294,14 +1339,14 @@ void EmberLookAndFeel::drawTooltip(juce::Graphics& g, const juce::String& text, 
 {
     const juce::Rectangle<float> area(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
 
-    g.setColour(EmberColours::panelRaised);
+    g.setColour(EmberColours::panelRaised());
     g.fillRoundedRectangle(area, 4.0f);
-    g.setColour(EmberColours::outlineStrong);
+    g.setColour(EmberColours::outlineStrong());
     g.drawRoundedRectangle(area.reduced(0.5f), 4.0f, 1.0f);
 
     const auto textArea = area.reduced(8.0f, 5.0f);
     const auto layout = layoutTooltipText(text, EmberFonts::get(EmberFonts::Role::body, uiScale),
-                                          EmberColours::textPrimary, juce::jmax(10.0f, textArea.getWidth()));
+                                          EmberColours::textPrimary(), juce::jmax(10.0f, textArea.getWidth()));
     layout.draw(g, textArea);
 }
 
@@ -1312,7 +1357,7 @@ juce::Rectangle<int> EmberLookAndFeel::getTooltipBounds(const juce::String& tipT
     const int padY = 5;
     const float maxTextWidth = juce::jmax(120.0f, 300.0f * uiScale);
     const auto layout = layoutTooltipText(tipText, EmberFonts::get(EmberFonts::Role::body, uiScale),
-                                          EmberColours::textPrimary, maxTextWidth);
+                                          EmberColours::textPrimary(), maxTextWidth);
 
     const int w = juce::roundToInt(std::ceil(layout.getWidth())) + padX * 2;
     const int h = juce::roundToInt(std::ceil(layout.getHeight())) + padY * 2;
@@ -1332,7 +1377,7 @@ void EmberLookAndFeel::drawScrollbar(juce::Graphics& g, juce::ScrollBar& scrollb
     const juce::Rectangle<float> area(static_cast<float>(x), static_cast<float>(y), static_cast<float>(width),
                                       static_cast<float>(height));
 
-    g.setColour(EmberColours::panelSunken.withAlpha(0.5f));
+    g.setColour(EmberColours::panelSunken().withAlpha(0.5f));
     g.fillRect(area);
 
     if (thumbSize <= 0)
@@ -1345,8 +1390,8 @@ void EmberLookAndFeel::drawScrollbar(juce::Graphics& g, juce::ScrollBar& scrollb
             : juce::Rectangle<float>(static_cast<float>(thumbStartPosition), area.getY() + area.getHeight() * 0.25f,
                                      static_cast<float>(thumbSize), area.getHeight() * 0.5f);
 
-    g.setColour(isMouseDown ? EmberColours::accent
-                            : (isMouseOver ? EmberColours::textSecondary : EmberColours::outlineStrong));
+    g.setColour(isMouseDown ? EmberColours::accent()
+                            : (isMouseOver ? EmberColours::textSecondary() : EmberColours::outlineStrong()));
     g.fillRoundedRectangle(thumb, juce::jmin(thumb.getWidth(), thumb.getHeight()) * 0.5f);
 }
 } // namespace ember::gui

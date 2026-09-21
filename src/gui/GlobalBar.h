@@ -277,6 +277,14 @@ private:
 public:
     void setIoSectionVisible(bool shouldBeVisible);
 
+    /** The user picked a zoom factor. The editor owns its own size, so the bar
+        only reports the request. */
+    std::function<void(float zoomFactor)> onZoomRequested;
+
+    /** The accent variant or the reduce-motion setting changed; everything
+        needs to repaint from the theme. */
+    std::function<void()> onAppearanceChanged;
+
 private:
     enum class Optional
     {

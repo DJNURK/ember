@@ -120,9 +120,9 @@ juce::Image createSourceDragImage(int flatIndex)
 
     const auto area = juce::Rectangle<float>(0.0f, 0.0f, width, kHeight).reduced(1.5f);
 
-    g.setColour(EmberColours::backgroundDeep.withAlpha(0.95f));
+    g.setColour(EmberColours::backgroundDeep().withAlpha(0.95f));
     g.fillRoundedRectangle(area, 5.0f);
-    g.setColour(EmberColours::accent);
+    g.setColour(EmberColours::accent());
     g.drawRoundedRectangle(area, 5.0f, 1.5f);
 
     // The same grip mark the tile shows, so the badge reads as "this is the
@@ -134,13 +134,13 @@ juce::Image createSourceDragImage(int flatIndex)
         {
             const float x = area.getX() + 9.0f + static_cast<float>(column) * 5.0f;
             const float y = area.getCentreY() + (static_cast<float>(row) - 1.0f) * 5.0f;
-            g.setColour(EmberColours::accent.withAlpha(0.85f));
+            g.setColour(EmberColours::accent().withAlpha(0.85f));
             g.fillEllipse(x - dot, y - dot, dot * 2.0f, dot * 2.0f);
         }
     }
 
     g.setFont(font);
-    g.setColour(EmberColours::textPrimary);
+    g.setColour(EmberColours::textPrimary());
     g.drawText(text, area.withTrimmedLeft(24.0f), juce::Justification::centredLeft, false);
 
     return image;
@@ -202,7 +202,7 @@ public:
         const float spacingX = radius * 3.2f;
         const float spacingY = radius * 3.2f;
 
-        g.setColour(hovering ? EmberColours::accent : EmberColours::textDisabled);
+        g.setColour(hovering ? EmberColours::accent() : EmberColours::textDisabled());
 
         for (int column = 0; column < 2; ++column)
         {
@@ -304,10 +304,10 @@ public:
         const auto area = getLocalBounds().toFloat().reduced(0.5f);
         const float corner = 3.5f;
 
-        g.setColour(selected ? EmberColours::panelRaised : EmberColours::panel);
+        g.setColour(selected ? EmberColours::panelRaised() : EmberColours::panel());
         g.fillRoundedRectangle(area, corner);
 
-        g.setColour(selected ? EmberColours::accent : EmberColours::outline);
+        g.setColour(selected ? EmberColours::accent() : EmberColours::outline());
         g.drawRoundedRectangle(area.reduced(0.5f), corner, selected ? 1.4f : 1.0f);
 
         auto body = area.reduced(3.0f);
@@ -325,19 +325,19 @@ public:
 
         if (textRow.getWidth() > readoutWidth * 2.2f)
         {
-            g.setColour(EmberColours::textDisabled);
+            g.setColour(EmberColours::textDisabled());
             g.drawText(readout, textRow.removeFromRight(readoutWidth), juce::Justification::centredRight, false);
         }
 
-        g.setColour(selected ? EmberColours::textPrimary : EmberColours::textSecondary);
+        g.setColour(selected ? EmberColours::textPrimary() : EmberColours::textSecondary());
         g.drawText(name, textRow, juce::Justification::centredLeft, false);
 
         // The value bar: bipolar sources grow out of the centre, unipolar ones
         // out of the left edge, so the polarity is readable without a legend.
-        g.setColour(EmberColours::track);
+        g.setColour(EmberColours::track());
         g.fillRoundedRectangle(bar, barHeight * 0.5f);
 
-        const auto accent = selected ? EmberColours::accent : EmberColours::accent.withAlpha(0.62f);
+        const auto accent = selected ? EmberColours::accent() : EmberColours::accent().withAlpha(0.62f);
         const float clamped = juce::jlimit(info.bipolar ? -1.0f : 0.0f, 1.0f, value);
 
         auto filled = bar;
@@ -362,7 +362,7 @@ public:
 
         if (info.bipolar)
         {
-            g.setColour(EmberColours::outlineStrong);
+            g.setColour(EmberColours::outlineStrong());
             g.fillRect(juce::Rectangle<float>(bar.getCentreX() - 0.5f, bar.getY(), 1.0f, bar.getHeight()));
         }
     }
@@ -428,7 +428,7 @@ public:
         const auto plot = area.reduced(4.0f);
         const float zeroY = bipolar ? plot.getCentreY() : plot.getBottom();
 
-        g.setColour(EmberColours::outline);
+        g.setColour(EmberColours::outline());
         g.drawHorizontalLine(juce::roundToInt(zeroY), plot.getX(), plot.getRight());
 
         juce::Path curve;
@@ -458,10 +458,10 @@ public:
         fill.lineTo(plot.getRight(), zeroY);
         fill.closeSubPath();
 
-        g.setColour(EmberColours::accent.withAlpha(0.14f));
+        g.setColour(EmberColours::accent().withAlpha(0.14f));
         g.fillPath(fill);
 
-        g.setColour(EmberColours::accent);
+        g.setColour(EmberColours::accent());
         g.strokePath(curve, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
         const auto labelRow = area.reduced(6.0f, 3.0f).removeFromTop(juce::jmin(14.0f, area.getHeight() * 0.3f));
@@ -470,12 +470,12 @@ public:
 
         if (caption.isNotEmpty())
         {
-            g.setColour(EmberColours::textDisabled);
+            g.setColour(EmberColours::textDisabled());
             g.drawText(caption, labelRow, juce::Justification::topLeft, false);
         }
 
         const float latest = history[static_cast<size_t>((head + kScopeLength - 1) % kScopeLength)];
-        g.setColour(EmberColours::textSecondary);
+        g.setColour(EmberColours::textSecondary());
         g.drawText(formatSourceValue(latest, bipolar), labelRow, juce::Justification::topRight, false);
     }
 
@@ -643,7 +643,7 @@ public:
         if (depth < 0.995f)
         {
             const float half = plot.getHeight() * 0.5f * depth;
-            g.setColour(EmberColours::panelRaised.withAlpha(0.45f));
+            g.setColour(EmberColours::panelRaised().withAlpha(0.45f));
             g.fillRect(juce::Rectangle<float>(plot.getX(), plot.getCentreY() - half, plot.getWidth(), half * 2.0f));
         }
 
@@ -651,7 +651,7 @@ public:
         const int steps = stepsParameter != nullptr ? juce::roundToInt(stepsParameter->load()) : 0;
         const int divisions = steps >= 2 ? juce::jmin(steps, 32) : 4;
 
-        g.setColour(EmberColours::outline.withAlpha(steps >= 2 ? 0.9f : 0.55f));
+        g.setColour(EmberColours::outline().withAlpha(steps >= 2 ? 0.9f : 0.55f));
 
         for (int i = 1; i < divisions; ++i)
         {
@@ -662,7 +662,7 @@ public:
         for (int i = 1; i < 4; ++i)
         {
             const float y = plot.getY() + plot.getHeight() * static_cast<float>(i) / 4.0f;
-            g.setColour(i == 2 ? EmberColours::outlineStrong : EmberColours::outline.withAlpha(0.5f));
+            g.setColour(i == 2 ? EmberColours::outlineStrong() : EmberColours::outline().withAlpha(0.5f));
             g.fillRect(juce::Rectangle<float>(plot.getX(), y, plot.getWidth(), 1.0f));
         }
 
@@ -695,17 +695,17 @@ public:
         fill.lineTo(plot.getRight(), plot.getCentreY());
         fill.closeSubPath();
 
-        g.setColour(EmberColours::accent.withAlpha(0.13f));
+        g.setColour(EmberColours::accent().withAlpha(0.13f));
         g.fillPath(fill);
 
-        g.setColour(EmberColours::accent);
+        g.setColour(EmberColours::accent());
         g.strokePath(curve, juce::PathStrokeType(1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
         // ---- live output, as a line across the field
         const float liveY = plot.getCentreY() - juce::jlimit(-1.0f, 1.0f, liveValue) * plot.getHeight() * 0.5f;
-        g.setColour(EmberColours::accentGlow.withAlpha(0.5f));
+        g.setColour(EmberColours::accentGlow().withAlpha(0.5f));
         g.fillRect(juce::Rectangle<float>(plot.getX(), liveY - 0.5f, plot.getWidth(), 1.0f));
-        g.setColour(EmberColours::accent);
+        g.setColour(EmberColours::accent());
         g.fillEllipse(juce::Rectangle<float>(6.0f, 6.0f).withCentre({plot.getRight(), liveY}));
 
         // ---- breakpoints
@@ -716,9 +716,9 @@ public:
             const bool active = (i == dragPoint) || (i == hoverPoint);
             const float radius = active ? 5.4f : 4.0f;
 
-            g.setColour(active ? EmberColours::accent : EmberColours::panelRaised);
+            g.setColour(active ? EmberColours::accent() : EmberColours::panelRaised());
             g.fillEllipse(juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(centre));
-            g.setColour(active ? EmberColours::textPrimary : EmberColours::accent);
+            g.setColour(active ? EmberColours::textPrimary() : EmberColours::accent());
             g.drawEllipse(juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(centre), 1.3f);
         }
 
@@ -734,9 +734,9 @@ public:
             const auto box = juce::Rectangle<float>(width, font.getHeight() + 5.0f)
                                  .withCentre({plot.getCentreX(), plot.getY() + font.getHeight() * 0.9f});
 
-            g.setColour(EmberColours::backgroundDeep.withAlpha(0.88f));
+            g.setColour(EmberColours::backgroundDeep().withAlpha(0.88f));
             g.fillRoundedRectangle(box, 3.0f);
-            g.setColour(EmberColours::accent);
+            g.setColour(EmberColours::accent());
             g.setFont(font);
             g.drawText(label, box, juce::Justification::centred, false);
         }
@@ -745,7 +745,7 @@ public:
         {
             const auto font = EmberFonts::sized(10.0f, false);
             g.setFont(font);
-            g.setColour(EmberColours::textDisabled);
+            g.setColour(EmberColours::textDisabled());
             g.drawText("point limit reached", plot.reduced(4.0f), juce::Justification::bottomRight, false);
         }
     }
@@ -1166,7 +1166,7 @@ public:
 
         const auto plot = area.reduced(6.0f);
 
-        g.setColour(EmberColours::outline.withAlpha(0.6f));
+        g.setColour(EmberColours::outline().withAlpha(0.6f));
 
         for (int i = 1; i < 4; ++i)
         {
@@ -1179,17 +1179,17 @@ public:
 
         const auto puck = puckCentre(plot);
 
-        g.setColour(EmberColours::accent.withAlpha(0.35f));
+        g.setColour(EmberColours::accent().withAlpha(0.35f));
         g.fillRect(juce::Rectangle<float>(puck.x - 0.5f, plot.getY(), 1.0f, plot.getHeight()));
         g.fillRect(juce::Rectangle<float>(plot.getX(), puck.y - 0.5f, plot.getWidth(), 1.0f));
 
         const float radius = juce::jlimit(4.0f, 9.0f, plot.getWidth() * 0.045f);
 
-        g.setColour(EmberColours::accentGlow.withAlpha(0.35f));
+        g.setColour(EmberColours::accentGlow().withAlpha(0.35f));
         g.fillEllipse(juce::Rectangle<float>(radius * 3.4f, radius * 3.4f).withCentre(puck));
-        g.setColour(EmberColours::accent);
+        g.setColour(EmberColours::accent());
         g.fillEllipse(juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(puck));
-        g.setColour(EmberColours::backgroundDeep);
+        g.setColour(EmberColours::backgroundDeep());
         g.drawEllipse(juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(puck), 1.2f);
     }
 
@@ -1359,7 +1359,7 @@ public:
 
         if (bipolar)
         {
-            g.setColour(EmberColours::outlineStrong);
+            g.setColour(EmberColours::outlineStrong());
             g.fillRect(
                 juce::Rectangle<float>(area.getCentreX() - 0.5f, area.getY() + 1.5f, 1.0f, area.getHeight() - 3.0f));
         }
@@ -1367,7 +1367,7 @@ public:
         const auto text = formatValue != nullptr ? formatValue(getValue()) : juce::String(getValue(), 2);
 
         g.setFont(EmberFonts::forHeight(area.getHeight(), 0.58f, false));
-        g.setColour(isMouseOverOrDragging() ? EmberColours::textPrimary : EmberColours::textSecondary);
+        g.setColour(isMouseOverOrDragging() ? EmberColours::textPrimary() : EmberColours::textSecondary());
         g.drawText(text, area, juce::Justification::centred, false);
 
         if (isMouseOverOrDragging())
@@ -1438,13 +1438,13 @@ public:
         const auto chevron = area.removeFromRight(juce::jmin(12, area.getWidth() / 5));
 
         g.setFont(EmberFonts::forHeight(static_cast<float>(area.getHeight()), 0.56f, false));
-        g.setColour(hovering ? EmberColours::textPrimary : EmberColours::textSecondary);
+        g.setColour(hovering ? EmberColours::textPrimary() : EmberColours::textSecondary());
         g.drawFittedText(text, area, juce::Justification::centredLeft, 1, 0.75f);
 
         if (hovering)
         {
             const auto underline = getLocalBounds().toFloat().removeFromBottom(1.0f).reduced(1.0f, 0.0f);
-            g.setColour(EmberColours::accent.withAlpha(0.7f));
+            g.setColour(EmberColours::accent().withAlpha(0.7f));
             g.fillRect(underline);
 
             juce::Path arrow;
@@ -1453,7 +1453,7 @@ public:
             arrow.lineTo(box.getCentreX(), box.getBottom());
             arrow.lineTo(box.getRight(), box.getY());
 
-            g.setColour(EmberColours::accent);
+            g.setColour(EmberColours::accent());
             g.strokePath(arrow, juce::PathStrokeType(1.2f));
         }
     }
@@ -1626,10 +1626,10 @@ public:
     {
         auto area = getLocalBounds().toFloat();
 
-        g.setColour(EmberColours::panel);
+        g.setColour(EmberColours::panel());
         g.fillRect(area);
 
-        EmberLookAndFeel::drawHairline(g, area.removeFromBottom(1.0f), EmberColours::outlineStrong, false);
+        EmberLookAndFeel::drawHairline(g, area.removeFromBottom(1.0f), EmberColours::outlineStrong(), false);
 
         auto content = getLocalBounds().reduced(juce::roundToInt(6.0f * owner.uiScale()), 0);
         const float height = static_cast<float>(content.getHeight());
@@ -1654,7 +1654,7 @@ public:
             chevron.lineTo(centre.x + size, centre.y - size * 0.5f);
         }
 
-        g.setColour(EmberColours::accent);
+        g.setColour(EmberColours::accent());
         g.strokePath(chevron, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
         content.removeFromLeft(4);
@@ -1665,7 +1665,7 @@ public:
         const int titleWidth = juce::roundToInt(juce::GlyphArrangement::getStringWidth(titleFont, title)) + 8;
 
         g.setFont(titleFont);
-        g.setColour(EmberColours::textPrimary);
+        g.setColour(EmberColours::textPrimary());
         g.drawText(title, content.removeFromLeft(juce::jmin(titleWidth, content.getWidth())),
                    juce::Justification::centredLeft, false);
 
@@ -1678,7 +1678,7 @@ public:
         if (content.getWidth() > countWidth)
         {
             g.setFont(countFont);
-            g.setColour(EmberColours::textDisabled);
+            g.setColour(EmberColours::textDisabled());
             g.drawText(countText, content.removeFromLeft(countWidth), juce::Justification::centredLeft, false);
         }
 
@@ -1691,7 +1691,7 @@ public:
             const float alpha =
                 juce::jlimit(0.0f, 1.0f, static_cast<float>(messageTicks) / static_cast<float>(kMessageFadeTicks));
             g.setFont(EmberFonts::forHeight(height, 0.42f, false));
-            g.setColour((messageIsWarning ? EmberColours::warning : EmberColours::accent).withAlpha(alpha));
+            g.setColour((messageIsWarning ? EmberColours::warning() : EmberColours::accent()).withAlpha(alpha));
             g.drawFittedText(message, content, juce::Justification::centredRight, 1, 0.8f);
         }
     }
@@ -2075,7 +2075,7 @@ private:
             label->setText(caption, juce::dontSendNotification);
             label->setJustificationType(juce::Justification::centredRight);
             label->setInterceptsMouseClicks(false, false);
-            label->setColour(juce::Label::textColourId, EmberColours::textSecondary);
+            label->setColour(juce::Label::textColourId, EmberColours::textSecondary());
             addAndMakeVisible(*label);
 
             auto box = std::make_unique<EmberComboBox>();
@@ -2284,7 +2284,7 @@ public:
             const juce::Graphics::ScopedSaveState state(g);
             g.reduceClipRegion(headerArea);
             g.setFont(EmberFonts::forHeight(static_cast<float>(headerArea.getHeight()), 0.62f, true));
-            g.setColour(EmberColours::textDisabled);
+            g.setColour(EmberColours::textDisabled());
 
             g.drawText("SOURCE", columns.source, juce::Justification::centredLeft, false);
             g.drawText("DESTINATION", columns.destination, juce::Justification::centredLeft, false);
@@ -2297,7 +2297,7 @@ public:
         if (rows.empty())
         {
             g.setFont(EmberFonts::get(EmberFonts::Role::body, owner.uiScale()));
-            g.setColour(EmberColours::textDisabled);
+            g.setColour(EmberColours::textDisabled());
             g.drawFittedText("No routings yet. Drag a source grip onto any knob, or press Add Routing.",
                              rowViewport.getBounds().reduced(16), juce::Justification::centred, 2, 0.8f);
         }
@@ -2450,17 +2450,17 @@ private:
 
             if ((slot % 2) == 1)
             {
-                g.setColour(EmberColours::panel.withAlpha(0.5f));
+                g.setColour(EmberColours::panel().withAlpha(0.5f));
                 g.fillRect(area);
             }
 
             if (flashAmount > 0.0f)
             {
-                g.setColour(EmberColours::accent.withAlpha(flashAmount * 0.22f));
+                g.setColour(EmberColours::accent().withAlpha(flashAmount * 0.22f));
                 g.fillRect(area);
             }
 
-            EmberLookAndFeel::drawHairline(g, area.removeFromBottom(1.0f), EmberColours::outline, false);
+            EmberLookAndFeel::drawHairline(g, area.removeFromBottom(1.0f), EmberColours::outline(), false);
 
             const auto columns = matrixColumns(getLocalBounds().reduced(4, 2), owner.uiScale());
             const auto arrow = columns.arrow.toFloat().reduced(2.0f, 0.0f);
@@ -2472,7 +2472,7 @@ private:
             path.lineTo(arrow.getRight(), arrow.getCentreY());
             path.lineTo(arrow.getRight() - 4.0f, arrow.getCentreY() + 3.0f);
 
-            g.setColour(EmberColours::outlineStrong);
+            g.setColour(EmberColours::outlineStrong());
             g.strokePath(path, juce::PathStrokeType(1.2f));
         }
 

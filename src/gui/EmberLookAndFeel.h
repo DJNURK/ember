@@ -11,7 +11,7 @@
 
     HOW TO USE IT FROM A PANEL
     --------------------------
-      - Colours: `ember::gui::EmberColours::panel`, `::accent`, `::band (i)`.
+      - Colours: `ember::gui::EmberColours::panel()`, `::accent`, `::band (i)`.
         Never invent a colour locally; if something is missing, add it here so
         every panel changes together.
       - Fonts:   `ember::gui::EmberFonts::get (Role::section, uiScale)` for the
@@ -48,27 +48,27 @@ namespace ember::gui
 struct EmberColours
 {
     // ---- surfaces, darkest to lightest -------------------------------------
-    static const juce::Colour backgroundDeep; ///< behind everything; the editor's fill
-    static const juce::Colour background;     ///< default component background
-    static const juce::Colour panelSunken;    ///< wells: meters, displays, text fields
-    static const juce::Colour panel;          ///< a card / grouped region
-    static const juce::Colour panelRaised;    ///< a control sitting on a card
+    static juce::Colour backgroundDeep(); ///< behind everything; the editor's fill
+    static juce::Colour background();     ///< default component background
+    static juce::Colour panelSunken();    ///< wells: meters, displays, text fields
+    static juce::Colour panel();          ///< a card / grouped region
+    static juce::Colour panelRaised();    ///< a control sitting on a card
 
     // ---- lines -------------------------------------------------------------
-    static const juce::Colour outline;       ///< hairlines and control borders
-    static const juce::Colour outlineStrong; ///< region separators, focused borders
-    static const juce::Colour track;         ///< unfilled slider/knob track
+    static juce::Colour outline();       ///< hairlines and control borders
+    static juce::Colour outlineStrong(); ///< region separators, focused borders
+    static juce::Colour track();         ///< unfilled slider/knob track
 
     // ---- text --------------------------------------------------------------
-    static const juce::Colour textPrimary;   ///< values, button labels
-    static const juce::Colour textSecondary; ///< captions, units, secondary rows
-    static const juce::Colour textDisabled;  ///< greyed-out controls
+    static juce::Colour textPrimary();   ///< values, button labels
+    static juce::Colour textSecondary(); ///< captions, units, secondary rows
+    static juce::Colour textDisabled();  ///< greyed-out controls
 
     // ---- the one accent ----------------------------------------------------
-    static const juce::Colour accent;     ///< warm amber, #FF8A3D
-    static const juce::Colour accentDim;  ///< the same hue, held back
-    static const juce::Colour accentGlow; ///< highlight wash / hover fills
-    static const juce::Colour warning;    ///< clipping, destructive menu items
+    static juce::Colour accent();     ///< warm amber, #FF8A3D
+    static juce::Colour accentDim();  ///< the same hue, held back
+    static juce::Colour accentGlow(); ///< highlight wash / hover fills
+    static juce::Colour warning();    ///< clipping, destructive menu items
 
     // ---- per-band ramp -----------------------------------------------------
     /** Number of distinct band hues; matches `ember::kMaxBands`. */
@@ -113,7 +113,7 @@ struct EmberStyleProps
     /** Removes an override set by `setAccentColour`. */
     static void clearAccentColour(juce::Component& component);
 
-    /** The component's accent override, or `EmberColours::accent` if it has none. */
+    /** The component's accent override, or `EmberColours::accent()` if it has none. */
     static juce::Colour accentColourFor(const juce::Component& component);
 
     /** Chooses how `drawToggleButton` renders this button. Default: `pill`. */

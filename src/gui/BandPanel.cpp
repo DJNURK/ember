@@ -241,10 +241,10 @@ public:
             const auto strip = scaleArea.toFloat();
             const float lineY = strip.getY() + 1.5f;
 
-            g.setColour(EmberColours::outline);
+            g.setColour(EmberColours::outline());
             g.drawLine(strip.getX(), lineY, strip.getRight(), lineY, 1.0f);
 
-            g.setColour(EmberColours::outlineStrong);
+            g.setColour(EmberColours::outlineStrong());
             g.drawLine(strip.getCentreX(), lineY - 2.5f, strip.getCentreX(), lineY + 2.5f, 1.2f);
 
             const auto textArea = strip.withTrimmedTop(3.0f);
@@ -259,25 +259,25 @@ public:
 
             if (textArea.getWidth() >= needed)
             {
-                g.setColour(expanding ? accent : EmberColours::textDisabled);
+                g.setColour(expanding ? accent : EmberColours::textDisabled());
                 g.drawText("EXPAND", textArea, juce::Justification::centredLeft, false);
 
-                g.setColour(compressing ? accent : EmberColours::textDisabled);
+                g.setColour(compressing ? accent : EmberColours::textDisabled());
                 g.drawText("COMPRESS", textArea, juce::Justification::centredRight, false);
             }
             else if (textArea.getWidth() >= 28.0f)
             {
-                g.setColour(expanding ? accent : EmberColours::textDisabled);
+                g.setColour(expanding ? accent : EmberColours::textDisabled());
                 g.drawText(juce::String::fromUTF8("\xe2\x86\x90"), textArea, juce::Justification::centredLeft, false);
 
-                g.setColour(compressing ? accent : EmberColours::textDisabled);
+                g.setColour(compressing ? accent : EmberColours::textDisabled());
                 g.drawText(juce::String::fromUTF8("\xe2\x86\x92"), textArea, juce::Justification::centredRight, false);
             }
         }
 
         if (meterCaptionArea.getHeight() > 6)
         {
-            g.setColour(EmberColours::textDisabled);
+            g.setColour(EmberColours::textDisabled());
             g.setFont(captionFont);
             g.drawText("GR", meterCaptionArea, juce::Justification::centredTop, false);
         }
@@ -353,7 +353,7 @@ struct BandPanel::BandControls
         // ---- band state ----------------------------------------------------
         bypass.attachTo(processorToUse.getAPVTS(), pid::bypass(bandIndex));
         bypass.setTooltip("Bypass this band: it passes through unprocessed.");
-        EmberStyleProps::setAccentColour(bypass, EmberColours::warning);
+        EmberStyleProps::setAccentColour(bypass, EmberColours::warning());
 
         solo.attachTo(processorToUse.getAPVTS(), pid::solo(bandIndex));
         solo.setTooltip("Solo this band: every other band is muted.");
@@ -1278,18 +1278,18 @@ void BandPanel::paint(juce::Graphics& g)
         auto title = titleArea.toFloat();
         auto nameArea = title.removeFromTop(title.getHeight() * 0.56f);
 
-        g.setColour(EmberColours::textPrimary);
+        g.setColour(EmberColours::textPrimary());
         g.setFont(bandNameFont);
         g.drawText("BAND " + juce::String(currentBand + 1), nameArea, juce::Justification::centredLeft, true);
 
-        g.setColour(bandActive ? EmberColours::textSecondary : EmberColours::warning.withAlpha(0.8f));
+        g.setColour(bandActive ? EmberColours::textSecondary() : EmberColours::warning().withAlpha(0.8f));
         g.setFont(rangeFont);
         g.drawText(rangeText, title, juce::Justification::centredLeft, true);
     }
 
     if (outputMeter.isVisible() && meterLabelArea.getWidth() > 10)
     {
-        g.setColour(EmberColours::textDisabled);
+        g.setColour(EmberColours::textDisabled());
         g.setFont(meterLabelFont);
         g.drawText("OUT", meterLabelArea, juce::Justification::centredRight, false);
     }

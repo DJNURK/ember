@@ -554,14 +554,14 @@ void SpectrumDisplay::paintGrid(juce::Graphics& g, float scale) const
             const float y = yForDecibels(decibels);
 
             EmberLookAndFeel::drawHairline(g, juce::Rectangle<float>(plotArea.getX(), y, plotArea.getWidth(), 1.0f),
-                                           EmberColours::outline.withAlpha(decibels < -0.5f ? 0.42f : 0.7f));
+                                           EmberColours::outline().withAlpha(decibels < -0.5f ? 0.42f : 0.7f));
 
             if (plotArea.getWidth() > labelWidth * 3.0f)
             {
                 const auto textArea = juce::Rectangle<float>(plotArea.getRight() - labelWidth - 3.0f * scale,
                                                              y - labelHeight - 1.0f, labelWidth, labelHeight);
 
-                g.setColour(EmberColours::textDisabled.withAlpha(0.6f));
+                g.setColour(EmberColours::textDisabled().withAlpha(0.6f));
                 g.drawText(juce::String(juce::roundToInt(decibels)), textArea, juce::Justification::centredRight,
                            false);
             }
@@ -579,7 +579,7 @@ void SpectrumDisplay::paintGrid(juce::Graphics& g, float scale) const
         const float x = xForFrequency(line.hz);
 
         EmberLookAndFeel::drawHairline(g, juce::Rectangle<float>(x, plotArea.getY(), 1.0f, plotArea.getHeight()),
-                                       EmberColours::outline.withAlpha(0.48f), true);
+                                       EmberColours::outline().withAlpha(0.48f), true);
 
         if (!roomForLabels)
             continue;
@@ -593,7 +593,7 @@ void SpectrumDisplay::paintGrid(juce::Graphics& g, float scale) const
             textArea.getRight() > static_cast<float>(getWidth()))
             continue;
 
-        g.setColour(EmberColours::textDisabled);
+        g.setColour(EmberColours::textDisabled());
         g.drawText(text, textArea, juce::Justification::centred, false);
         lastLabelRight = textArea.getRight();
     }
@@ -620,12 +620,12 @@ void SpectrumDisplay::paintSpectra(juce::Graphics& g, float scale)
         fillPath.lineTo(plotArea.getX(), plotArea.getBottom() + 2.0f);
         fillPath.closeSubPath();
 
-        g.setGradientFill(juce::ColourGradient(EmberColours::textSecondary.withAlpha(0.20f), plotArea.getCentreX(),
-                                               plotArea.getY(), EmberColours::textSecondary.withAlpha(0.05f),
+        g.setGradientFill(juce::ColourGradient(EmberColours::textSecondary().withAlpha(0.20f), plotArea.getCentreX(),
+                                               plotArea.getY(), EmberColours::textSecondary().withAlpha(0.05f),
                                                plotArea.getCentreX(), plotArea.getBottom(), false));
         g.fillPath(fillPath);
 
-        g.setColour(EmberColours::textSecondary.withAlpha(0.34f));
+        g.setColour(EmberColours::textSecondary().withAlpha(0.34f));
         g.strokePath(curvePath, juce::PathStrokeType(juce::jmax(1.0f, 0.9f * scale), juce::PathStrokeType::curved,
                                                      juce::PathStrokeType::rounded));
     }
@@ -634,11 +634,11 @@ void SpectrumDisplay::paintSpectra(juce::Graphics& g, float scale)
 
     if (!curvePath.isEmpty())
     {
-        g.setColour(EmberColours::accentGlow.withAlpha(0.16f));
+        g.setColour(EmberColours::accentGlow().withAlpha(0.16f));
         g.strokePath(curvePath, juce::PathStrokeType(juce::jmax(2.5f, 3.4f * scale), juce::PathStrokeType::curved,
                                                      juce::PathStrokeType::rounded));
 
-        g.setColour(EmberColours::accent.withAlpha(0.94f));
+        g.setColour(EmberColours::accent().withAlpha(0.94f));
         g.strokePath(curvePath, juce::PathStrokeType(juce::jmax(1.0f, 1.5f * scale), juce::PathStrokeType::curved,
                                                      juce::PathStrokeType::rounded));
     }
@@ -686,7 +686,7 @@ void SpectrumDisplay::paintCrossovers(juce::Graphics& g, float scale) const
         {
             const float modulatedX = xForFrequency(modulatedHz[index]);
 
-            g.setColour(EmberColours::accent.withAlpha(0.32f));
+            g.setColour(EmberColours::accent().withAlpha(0.32f));
             g.fillRect(juce::Rectangle<float>(modulatedX - 0.5f, plotArea.getY(), 1.0f, plotArea.getHeight()));
         }
 
@@ -695,11 +695,11 @@ void SpectrumDisplay::paintCrossovers(juce::Graphics& g, float scale) const
         // A dark halo under a light line: the edge then reads with the same
         // weight over a bright band region as it does over the empty top of the
         // display, which a single flat line does not.
-        g.setColour(EmberColours::backgroundDeep.withAlpha(0.5f));
+        g.setColour(EmberColours::backgroundDeep().withAlpha(0.5f));
         g.fillRect(juce::Rectangle<float>(x - thickness * 0.5f - 1.0f, plotArea.getY(), thickness + 2.0f,
                                           plotArea.getHeight()));
 
-        g.setColour(highlighted ? EmberColours::accent : EmberColours::textSecondary.withAlpha(0.72f));
+        g.setColour(highlighted ? EmberColours::accent() : EmberColours::textSecondary().withAlpha(0.72f));
         g.fillRect(juce::Rectangle<float>(x - thickness * 0.5f, plotArea.getY(), thickness, plotArea.getHeight()));
 
         if (handleHeight < 8.0f)
@@ -709,17 +709,17 @@ void SpectrumDisplay::paintCrossovers(juce::Graphics& g, float scale) const
             juce::Rectangle<float>(handleWidth, handleHeight)
                 .withCentre(juce::Point<float>(x, plotArea.getBottom() - handleHeight * 0.5f - 2.0f * scale));
 
-        g.setColour(highlighted ? EmberColours::accent : EmberColours::outlineStrong);
+        g.setColour(highlighted ? EmberColours::accent() : EmberColours::outlineStrong());
         g.fillRoundedRectangle(handle, handleWidth * 0.45f);
-        g.setColour(highlighted ? EmberColours::accent.brighter(0.3f) : EmberColours::textSecondary.withAlpha(0.85f));
+        g.setColour(highlighted ? EmberColours::accent().brighter(0.3f) : EmberColours::textSecondary().withAlpha(0.85f));
         g.drawRoundedRectangle(handle.reduced(0.5f), handleWidth * 0.45f, 1.0f);
 
         const float gripOffset = handleWidth * 0.2f;
         const float gripHeight = handleHeight * 0.4f;
         const float gripTop = handle.getCentreY() - gripHeight * 0.5f;
 
-        g.setColour(highlighted ? EmberColours::backgroundDeep.withAlpha(0.8f)
-                                : EmberColours::textPrimary.withAlpha(0.7f));
+        g.setColour(highlighted ? EmberColours::backgroundDeep().withAlpha(0.8f)
+                                : EmberColours::textPrimary().withAlpha(0.7f));
         g.fillRect(juce::Rectangle<float>(x - gripOffset - 0.5f, gripTop, 1.0f, gripHeight));
         g.fillRect(juce::Rectangle<float>(x + gripOffset - 0.5f, gripTop, 1.0f, gripHeight));
     }
@@ -747,13 +747,13 @@ void SpectrumDisplay::paintDragReadout(juce::Graphics& g, float scale) const
 
     const float corner = juce::jmax(2.0f, 3.0f * scale);
 
-    g.setColour(EmberColours::backgroundDeep.withAlpha(0.94f));
+    g.setColour(EmberColours::backgroundDeep().withAlpha(0.94f));
     g.fillRoundedRectangle(box, corner);
-    g.setColour(EmberColours::accent.withAlpha(0.85f));
+    g.setColour(EmberColours::accent().withAlpha(0.85f));
     g.drawRoundedRectangle(box.reduced(0.5f), corner, 1.0f);
 
     g.setFont(font);
-    g.setColour(EmberColours::textPrimary);
+    g.setColour(EmberColours::textPrimary());
     g.drawText(text, box, juce::Justification::centred, false);
 }
 

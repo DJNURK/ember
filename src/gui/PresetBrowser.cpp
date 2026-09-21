@@ -57,7 +57,7 @@ void drawDownChevron(juce::Graphics& g, juce::Rectangle<float> area, juce::Colou
     stays open so the user can correct the name and try again. */
 void showPromptError(juce::Label& label, const juce::String& message)
 {
-    label.setColour(juce::Label::textColourId, EmberColours::warning);
+    label.setColour(juce::Label::textColourId, EmberColours::warning());
     label.setText(message, juce::dontSendNotification);
 }
 
@@ -153,7 +153,7 @@ PresetBrowser::PresetBrowser(EmberAudioProcessor& processorToUse) : manager(proc
     searchField.setMultiLine(false, false);
     searchField.setReturnKeyStartsNewLine(false);
     searchField.setJustification(juce::Justification::centredLeft);
-    searchField.setTextToShowWhenEmpty("Search", EmberColours::textDisabled);
+    searchField.setTextToShowWhenEmpty("Search", EmberColours::textDisabled());
     searchField.setTooltip("Filter by preset or category name");
     searchField.onTextChange = [this] { applyFilter(); };
     searchField.onReturnKey = [this] { loadSelectedPreset(); };
@@ -215,7 +215,7 @@ PresetBrowser::PresetBrowser(EmberAudioProcessor& processorToUse) : manager(proc
     nameField.setReturnKeyStartsNewLine(false);
     nameField.setSelectAllWhenFocused(true);
     nameField.setJustification(juce::Justification::centredLeft);
-    nameField.setTextToShowWhenEmpty("Preset name", EmberColours::textDisabled);
+    nameField.setTextToShowWhenEmpty("Preset name", EmberColours::textDisabled());
     nameField.onReturnKey = [this] { confirmPrompt(); };
     nameField.onEscapeKey = [this] { cancelPrompt(); };
     nameField.onTextChange = [this]
@@ -530,7 +530,7 @@ void PresetBrowser::setPrompt(PromptMode mode)
     nameField.setVisible(mode == PromptMode::save || mode == PromptMode::rename);
     categoryField.setVisible(mode == PromptMode::save);
 
-    promptLabel.setColour(juce::Label::textColourId, EmberColours::textSecondary);
+    promptLabel.setColour(juce::Label::textColourId, EmberColours::textSecondary());
     confirmButton.setEmberStyle(mode == PromptMode::removeAsked ? EmberButton::Style::danger
                                                                 : EmberButton::Style::accent);
 
@@ -704,7 +704,7 @@ float PresetBrowser::scale() const
 
 void PresetBrowser::paint(juce::Graphics& g)
 {
-    g.fillAll(EmberColours::backgroundDeep.withAlpha(kBackdropAlpha));
+    g.fillAll(EmberColours::backgroundDeep().withAlpha(kBackdropAlpha));
 
     if (panelArea.getWidth() < 2.0f || panelArea.getHeight() < 2.0f)
         return;
@@ -1036,19 +1036,19 @@ void PresetBrowser::paintCategoryRow(int rowNumber, juce::Graphics& g, int width
 
     if (rowIsSelected)
     {
-        g.setColour(EmberColours::accentGlow);
+        g.setColour(EmberColours::accentGlow());
         g.fillRoundedRectangle(row, corner);
     }
     else if (hovered)
     {
-        g.setColour(EmberColours::panelRaised.withAlpha(0.55f));
+        g.setColour(EmberColours::panelRaised().withAlpha(0.55f));
         g.fillRoundedRectangle(row, corner);
     }
 
     if (rowIsSelected)
     {
         const float barWidth = juce::jmax(1.5f, row.getHeight() * 0.10f);
-        g.setColour(EmberColours::accent);
+        g.setColour(EmberColours::accent());
         g.fillRoundedRectangle(row.withWidth(barWidth).reduced(0.0f, row.getHeight() * 0.18f), barWidth * 0.5f);
     }
 
@@ -1068,14 +1068,14 @@ void PresetBrowser::paintCategoryRow(int rowNumber, juce::Graphics& g, int width
     if (text.getWidth() > countWidth * 2.0f)
     {
         g.setFont(countFont);
-        g.setColour(rowIsSelected ? EmberColours::accentDim : EmberColours::textDisabled);
+        g.setColour(rowIsSelected ? EmberColours::accentDim() : EmberColours::textDisabled());
         g.drawText(countText, text.removeFromRight(countWidth), juce::Justification::centredRight, false);
         text.removeFromRight(pad * 0.5f);
     }
 
     g.setFont(EmberFonts::forHeight(row.getHeight(), 0.46f, false));
-    g.setColour(rowIsSelected ? EmberColours::accent
-                              : (hovered ? EmberColours::textPrimary : EmberColours::textSecondary));
+    g.setColour(rowIsSelected ? EmberColours::accent()
+                              : (hovered ? EmberColours::textPrimary() : EmberColours::textSecondary()));
     g.drawFittedText(name, text.toNearestInt(), juce::Justification::centredLeft, 1, 0.85f);
 }
 
@@ -1096,21 +1096,21 @@ void PresetBrowser::paintPresetRow(int rowNumber, juce::Graphics& g, int width, 
 
     // A hairline wherever the factory block meets the user block.
     if (rowNumber > 0 && shownPresets.getReference(rowNumber - 1).isFactory != info.isFactory)
-        EmberLookAndFeel::drawHairline(g, area.withHeight(1.0f), EmberColours::outline);
+        EmberLookAndFeel::drawHairline(g, area.withHeight(1.0f), EmberColours::outline());
 
     auto row = area.reduced(2.0f, 1.0f);
     const float corner = juce::jmin(4.0f, row.getHeight() * 0.3f);
 
     if (rowIsSelected)
     {
-        g.setColour(EmberColours::accentGlow);
+        g.setColour(EmberColours::accentGlow());
         g.fillRoundedRectangle(row, corner);
-        g.setColour(EmberColours::accent.withAlpha(0.5f));
+        g.setColour(EmberColours::accent().withAlpha(0.5f));
         g.drawRoundedRectangle(row.reduced(0.5f), corner, 1.0f);
     }
     else if (hovered)
     {
-        g.setColour(EmberColours::panelRaised.withAlpha(0.55f));
+        g.setColour(EmberColours::panelRaised().withAlpha(0.55f));
         g.fillRoundedRectangle(row, corner);
     }
 
@@ -1126,12 +1126,12 @@ void PresetBrowser::paintPresetRow(int rowNumber, juce::Graphics& g, int width, 
 
     if (info.isFactory)
     {
-        g.setColour(isCurrent ? EmberColours::accent : EmberColours::textDisabled);
+        g.setColour(isCurrent ? EmberColours::accent() : EmberColours::textDisabled());
         g.drawEllipse(marker.reduced(0.5f), juce::jmax(1.0f, dot * 0.16f));
     }
     else
     {
-        g.setColour(isCurrent ? EmberColours::accent : EmberColours::accentDim);
+        g.setColour(isCurrent ? EmberColours::accent() : EmberColours::accentDim());
         g.fillEllipse(marker);
     }
 
@@ -1143,7 +1143,7 @@ void PresetBrowser::paintPresetRow(int rowNumber, juce::Graphics& g, int width, 
     if (text.getWidth() > tagWidth * 1.8f)
     {
         g.setFont(tagFont);
-        g.setColour(info.isFactory ? EmberColours::textDisabled : EmberColours::accentDim);
+        g.setColour(info.isFactory ? EmberColours::textDisabled() : EmberColours::accentDim());
         g.drawText(tag, text.removeFromRight(tagWidth), juce::Justification::centredRight, false);
         text.removeFromRight(pad * 0.6f);
     }
@@ -1151,11 +1151,11 @@ void PresetBrowser::paintPresetRow(int rowNumber, juce::Graphics& g, int width, 
     g.setFont(EmberFonts::forHeight(row.getHeight(), 0.48f, false));
 
     if (isCurrent)
-        g.setColour(EmberColours::accent);
+        g.setColour(EmberColours::accent());
     else if (rowIsSelected || hovered)
-        g.setColour(EmberColours::textPrimary);
+        g.setColour(EmberColours::textPrimary());
     else
-        g.setColour(info.isFactory ? EmberColours::textSecondary : EmberColours::textPrimary);
+        g.setColour(info.isFactory ? EmberColours::textSecondary() : EmberColours::textPrimary());
 
     g.drawFittedText(info.name, text.toNearestInt(), juce::Justification::centredLeft, 1, 0.85f);
 }
@@ -1178,19 +1178,19 @@ void PresetBar::ChevronButton::paintButton(juce::Graphics& g, bool shouldDrawBut
 
     if (shouldDrawButtonAsHighlighted && isEnabled())
     {
-        g.setColour(EmberColours::panelRaised.withAlpha(shouldDrawButtonAsDown ? 0.9f : 0.6f));
+        g.setColour(EmberColours::panelRaised().withAlpha(shouldDrawButtonAsDown ? 0.9f : 0.6f));
         g.fillRoundedRectangle(area.reduced(area.getWidth() * 0.14f, area.getHeight() * 0.16f),
                                juce::jmax(2.0f, area.getHeight() * 0.18f));
     }
 
-    auto colour = EmberColours::textSecondary;
+    auto colour = EmberColours::textSecondary();
 
     if (!isEnabled())
-        colour = EmberColours::textDisabled;
+        colour = EmberColours::textDisabled();
     else if (shouldDrawButtonAsDown)
-        colour = EmberColours::accent;
+        colour = EmberColours::accent();
     else if (shouldDrawButtonAsHighlighted)
-        colour = EmberColours::textPrimary;
+        colour = EmberColours::textPrimary();
 
     const float size = juce::jmax(2.5f, juce::jmin(area.getWidth(), area.getHeight()) * 0.22f);
     const auto centre = area.getCentre();
@@ -1233,7 +1233,7 @@ void PresetBar::NameDisplay::paintButton(juce::Graphics& g, bool shouldDrawButto
 
     if (shouldDrawButtonAsHighlighted)
     {
-        g.setColour(EmberColours::panelRaised.withAlpha(shouldDrawButtonAsDown ? 0.85f : 0.55f));
+        g.setColour(EmberColours::panelRaised().withAlpha(shouldDrawButtonAsDown ? 0.85f : 0.55f));
         g.fillRoundedRectangle(area.reduced(1.0f), juce::jmax(2.0f, area.getHeight() * 0.22f));
     }
 
@@ -1243,7 +1243,7 @@ void PresetBar::NameDisplay::paintButton(juce::Graphics& g, bool shouldDrawButto
     // Trailing hint that this opens the browser.
     auto chevronArea = content.removeFromRight(juce::jlimit(7.0f, 16.0f, area.getHeight() * 0.40f));
     drawDownChevron(g, chevronArea,
-                    shouldDrawButtonAsHighlighted ? EmberColours::textSecondary : EmberColours::textDisabled);
+                    shouldDrawButtonAsHighlighted ? EmberColours::textSecondary() : EmberColours::textDisabled());
 
     const auto categoryFont = EmberFonts::forHeight(area.getHeight(), 0.38f, false);
     const auto categoryText = category.toUpperCase();
@@ -1256,7 +1256,7 @@ void PresetBar::NameDisplay::paintButton(juce::Graphics& g, bool shouldDrawButto
         {
             content.removeFromRight(pad * 0.4f);
             g.setFont(categoryFont);
-            g.setColour(EmberColours::textDisabled);
+            g.setColour(EmberColours::textDisabled());
             g.drawText(categoryText, content.removeFromRight(categoryWidth), juce::Justification::centredRight, false);
         }
     }
@@ -1270,8 +1270,8 @@ void PresetBar::NameDisplay::paintButton(juce::Graphics& g, bool shouldDrawButto
     auto nameArea = content.removeFromLeft(juce::jmax(0.0f, juce::jmin(nameWidth, content.getWidth() - dotSlot)));
 
     g.setFont(nameFont);
-    g.setColour(shouldDrawButtonAsHighlighted ? EmberColours::textPrimary
-                                              : EmberColours::textPrimary.withMultipliedBrightness(0.94f));
+    g.setColour(shouldDrawButtonAsHighlighted ? EmberColours::textPrimary()
+                                              : EmberColours::textPrimary().withMultipliedBrightness(0.94f));
     g.drawFittedText(name.isEmpty() ? juce::String("Init") : name, nameArea.toNearestInt(),
                      juce::Justification::centredLeft, 1, 0.8f);
 
@@ -1279,7 +1279,7 @@ void PresetBar::NameDisplay::paintButton(juce::Graphics& g, bool shouldDrawButto
     {
         const auto dotArea =
             juce::Rectangle<float>(dot, dot).withCentre({content.getX() + dot * 1.1f, content.getCentreY()});
-        g.setColour(EmberColours::accent);
+        g.setColour(EmberColours::accent());
         g.fillEllipse(dotArea);
     }
 }
