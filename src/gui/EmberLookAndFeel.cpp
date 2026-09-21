@@ -451,11 +451,50 @@ void EmberLookAndFeel::drawPanel(juce::Graphics& g, juce::Rectangle<float> area,
     if (area.getWidth() < 1.0f || area.getHeight() < 1.0f)
         return;
 
-    const auto base = raised ? EmberColours::panelRaised : EmberColours::panel;
+    const auto& tk = EmberTheme::tokens();
+    const auto base = raised ? tk.panelRaised : tk.panel;
+
+    // A raised panel casts a shadow. Two soft passes beneath it read as a
+    // machined plate sitting on the chassis rather than as a coloured
+    // rectangle, and cost two fills.
+    if (raised)
+    {
+        g.setColour(tk.panelShadow.withAlpha(0.5f));
+        g.fillRoundedRectangle(area.translated(0.0f, static_cast<float>(Metrics::shadowOffsetY)), cornerSize);
+        g.setColour(tk.panelShadow.withAlpha(0.25f));
+        g.fillRoundedRectangle(area.translated(0.0f, static_cast<float>(Metrics::shadowOffsetY) * 2.0f).expanded(1.0f),
+                               cornerSize + 1.0f);
+    }
+
     g.setGradientFill(surfaceGradient(area, base, raised ? 0.09f : 0.05f));
     g.fillRoundedRectangle(area, cornerSize);
 
-    g.setColour(EmberColours::outline);
+    // Brushed metal, clipped to the panel. At 5 % it is invisible as texture
+    // and entirely responsible for the surface not looking like flat fill.
+    {
+        juce::Graphics::ScopedSaveState save{g};
+        juce::Path clip;
+        clip.addRoundedRectangle(area, cornerSize);
+        g.reduceClipRegion(clip);
+        TextureCache::fillBrushed(g, area.getSmallestIntegerContainer(), raised ? 0.055f : 0.04f);
+    }
+
+    // The light comes from above-left, so the top edge catches it and the
+    // bottom edge falls into shadow. Drawn as two arcs of the same rounded
+    // rectangle rather than a single outline.
+    juce::Path topEdge;
+    topEdge.startNewSubPath(area.getX() + cornerSize, area.getY() + 0.5f);
+    topEdge.lineTo(area.getRight() - cornerSize, area.getY() + 0.5f);
+    g.setColour(tk.panelEdge.brighter(raised ? 0.22f : 0.08f));
+    g.strokePath(topEdge, juce::PathStrokeType(Metrics::bevel));
+
+    juce::Path bottomEdge;
+    bottomEdge.startNewSubPath(area.getX() + cornerSize, area.getBottom() - 0.5f);
+    bottomEdge.lineTo(area.getRight() - cornerSize, area.getBottom() - 0.5f);
+    g.setColour(tk.panelShadow.withAlpha(0.6f));
+    g.strokePath(bottomEdge, juce::PathStrokeType(Metrics::bevel));
+
+    g.setColour(tk.panelEdge);
     g.drawRoundedRectangle(area.reduced(0.5f), cornerSize, 1.0f);
 }
 
@@ -464,11 +503,21 @@ void EmberLookAndFeel::drawWell(juce::Graphics& g, juce::Rectangle<float> area, 
     if (area.getWidth() < 1.0f || area.getHeight() < 1.0f)
         return;
 
-    g.setGradientFill(juce::ColourGradient(EmberColours::backgroundDeep, area.getCentreX(), area.getY(),
-                                           EmberColours::panelSunken, area.getCentreX(), area.getBottom(), false));
+    const auto& tk = EmberTheme::tokens();
+
+    // A well is the inverse of a panel: darkest at the top, where the lip
+    // above it would cast a shadow into the recess.
+    g.setGradientFill(juce::ColourGradient(tk.bgDeep.darker(0.25f), area.getCentreX(), area.getY(), tk.bgDeep,
+                                           area.getCentreX(), area.getBottom(), false));
     g.fillRoundedRectangle(area, cornerSize);
 
-    g.setColour(EmberColours::outline.withAlpha(0.8f));
+    juce::Path innerTop;
+    innerTop.startNewSubPath(area.getX() + cornerSize, area.getY() + 0.5f);
+    innerTop.lineTo(area.getRight() - cornerSize, area.getY() + 0.5f);
+    g.setColour(tk.panelShadow);
+    g.strokePath(innerTop, juce::PathStrokeType(Metrics::bevel));
+
+    g.setColour(tk.panelEdge.withAlpha(0.8f));
     g.drawRoundedRectangle(area.reduced(0.5f), cornerSize, 1.0f);
 }
 
