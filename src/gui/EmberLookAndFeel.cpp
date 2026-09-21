@@ -864,7 +864,8 @@ void EmberLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& b
 
     const bool enabled = button.isEnabled();
     const bool on = button.getToggleState();
-    const auto accent = enabled ? EmberStyleProps::accentColourFor(button) : EmberColours::textDisabled;
+    const auto& tk = EmberTheme::tokens();
+    const auto accent = enabled ? EmberStyleProps::accentColourFor(button) : tk.textMuted;
     const auto look = EmberStyleProps::toggleLookFor(button);
 
     float textLeft = area.getX();
@@ -873,46 +874,83 @@ void EmberLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& b
     {
     case ToggleLook::pill:
     {
-        const float trackHeight = juce::jlimit(11.0f, 22.0f, area.getHeight() * 0.58f);
-        const float trackWidth = trackHeight * 1.85f;
-        const auto trackArea = juce::Rectangle<float>(trackWidth, trackHeight)
-                                   .withCentre({area.getX() + trackWidth * 0.5f, area.getCentreY()});
+        // A backlit panel switch, not a phone toggle: a recessed rectangular
+        // window with a filament inside it that lights when the switch is on.
+        const float windowHeight = juce::jlimit(12.0f, 22.0f, area.getHeight() * 0.60f);
+        const float windowWidth = windowHeight * 1.9f;
+        const auto window = juce::Rectangle<float>(windowWidth, windowHeight)
+                                .withCentre({area.getX() + windowWidth * 0.5f, area.getCentreY()});
+        const float radius = Metrics::controlRadius;
 
-        g.setColour(on ? accent.withAlpha(enabled ? 0.9f : 0.4f) : EmberColours::panelSunken);
-        g.fillRoundedRectangle(trackArea, trackHeight * 0.5f);
-        g.setColour(shouldDrawButtonAsHighlighted ? EmberColours::outlineStrong : EmberColours::outline);
-        g.drawRoundedRectangle(trackArea.reduced(0.5f), trackHeight * 0.5f, 1.0f);
+        // The well, and the shadow it casts inside its own top edge.
+        g.setColour(tk.bgDeep);
+        g.fillRoundedRectangle(window, radius);
+        g.setColour(tk.panelShadow.withAlpha(0.8f));
+        g.drawRoundedRectangle(window.reduced(0.5f).withTrimmedBottom(window.getHeight() * 0.5f), radius, 1.0f);
 
-        const float knobRadius = trackHeight * 0.5f - 2.0f;
-        const float knobX = on ? trackArea.getRight() - knobRadius - 2.0f : trackArea.getX() + knobRadius + 2.0f;
-        const auto knob =
-            juce::Rectangle<float>(knobRadius * 2.0f, knobRadius * 2.0f).withCentre({knobX, trackArea.getCentreY()});
+        // The filament: a short horizontal element across the middle.
+        const auto filament = juce::Rectangle<float>(window.getWidth() * 0.54f, juce::jmax(2.0f, windowHeight * 0.16f))
+                                  .withCentre(window.getCentre());
 
-        g.setColour(shouldDrawButtonAsDown ? EmberColours::textSecondary : EmberColours::textPrimary);
-        g.fillEllipse(knob);
+        if (on && enabled)
+        {
+            if (! EmberTheme::reduceMotion())
+            {
+                g.setColour(tk.tubeGlow.withAlpha(0.30f));
+                g.fillRoundedRectangle(filament.expanded(windowHeight * 0.30f), radius);
+                g.setColour(tk.tubeGlow.withAlpha(0.22f));
+                g.fillRoundedRectangle(window.reduced(1.0f), radius);
+            }
 
-        textLeft = trackArea.getRight() + juce::jmax(5.0f, trackHeight * 0.35f);
+            g.setColour(accent.interpolatedWith(tk.emberHot, 0.5f));
+            g.fillRoundedRectangle(filament, filament.getHeight() * 0.5f);
+        }
+        else
+        {
+            // Cold filament: visible, so the switch reads as "off" rather than
+            // as "empty".
+            g.setColour(enabled ? tk.textMuted : tk.textMuted.withAlpha(0.5f));
+            g.fillRoundedRectangle(filament, filament.getHeight() * 0.5f);
+        }
+
+        g.setColour(shouldDrawButtonAsHighlighted ? tk.panelEdge.brighter(0.25f) : tk.panelEdge);
+        g.drawRoundedRectangle(window.reduced(0.5f), radius, 1.0f);
+
+        textLeft = window.getRight() + juce::jmax(6.0f, windowHeight * 0.4f);
         break;
     }
 
     case ToggleLook::led:
     {
-        const float diameter = juce::jlimit(7.0f, 14.0f, area.getHeight() * 0.44f);
+        // The round sibling of the same idea: a lamp inset into the panel.
+        const float diameter = juce::jlimit(8.0f, 15.0f, area.getHeight() * 0.46f);
         const auto lamp = juce::Rectangle<float>(diameter, diameter)
                               .withCentre({area.getX() + diameter * 0.5f + 1.0f, area.getCentreY()});
 
+        g.setColour(tk.bgDeep);
+        g.fillEllipse(lamp);
+
         if (on && enabled)
         {
-            g.setColour(accent.withAlpha(0.22f));
-            g.fillEllipse(lamp.expanded(diameter * 0.45f));
+            if (! EmberTheme::reduceMotion())
+                GlowCache::draw(g, lamp.getCentre(), diameter * 1.5f, tk.tubeGlow, 0.45f);
+
+            juce::ColourGradient lit(accent.interpolatedWith(tk.emberHot, 0.45f), lamp.getCentreX(),
+                                     lamp.getCentreY() - diameter * 0.15f, accent.darker(0.4f), lamp.getCentreX(),
+                                     lamp.getBottom(), true);
+            g.setGradientFill(lit);
+            g.fillEllipse(lamp.reduced(1.0f));
+        }
+        else
+        {
+            g.setColour(enabled ? tk.textMuted.withAlpha(0.55f) : tk.textMuted.withAlpha(0.3f));
+            g.fillEllipse(lamp.reduced(diameter * 0.30f));
         }
 
-        g.setColour(on ? accent : EmberColours::panelSunken);
-        g.fillEllipse(lamp);
-        g.setColour(shouldDrawButtonAsHighlighted ? EmberColours::outlineStrong : EmberColours::outline);
+        g.setColour(shouldDrawButtonAsHighlighted ? tk.panelEdge.brighter(0.25f) : tk.panelEdge);
         g.drawEllipse(lamp.reduced(0.5f), 1.0f);
 
-        textLeft = lamp.getRight() + juce::jmax(5.0f, diameter * 0.5f);
+        textLeft = lamp.getRight() + juce::jmax(6.0f, diameter * 0.5f);
         break;
     }
 
