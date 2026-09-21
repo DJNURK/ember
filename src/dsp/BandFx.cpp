@@ -601,7 +601,7 @@ void Dynamics::process(float* const* channels, int numChannels, int numSamples) 
 //==============================================================================
 // ToneStack
 //==============================================================================
-void ToneStack::prepare(double newSampleRate, int maxBlockSize, int)
+void ToneStack::prepare(double newSampleRate, int, int)
 {
     sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
 
@@ -614,35 +614,39 @@ void ToneStack::prepare(double newSampleRate, int maxBlockSize, int)
     lastLow = lastMid = lastHigh = forceUpdate;
     setGainsDb(lowDb, midDb, highDb);
 
-    // prepare() after the coefficients are in place: it calls reset(), which is
-    // where the filter sizes its state for the (now second-order) coefficients.
-    // That is the only allocation the tone stack ever makes.
-    const juce::dsp::ProcessSpec spec{sampleRate, static_cast<juce::uint32>(juce::jmax(1, maxBlockSize)), 1u};
-
-    for (auto& perChannel : filters)
-        for (auto& f : perChannel)
-            f.prepare(spec);
+    reset();
 }
 
 void ToneStack::reset() noexcept
 {
-    for (auto& perChannel : filters)
-        for (auto& f : perChannel)
-            f.reset();
+    for (auto& perChannel : state)
+        for (auto& section : perChannel)
+            section.fill(0.0f);
+}
+
+/** The normalisation `juce::dsp::IIR::Coefficients` applies when a six-element
+    design is assigned to it: divide through by a0, and drop a0 itself. A zero
+    a0 yields all-zero coefficients, exactly as JUCE's does. */
+void ToneStack::setSection(size_t index, const std::array<float, 6>& design) noexcept
+{
+    const float a0 = design[3];
+    const float a0Inv = juce::approximatelyEqual(a0, 0.0f) ? 0.0f : 1.0f / a0;
+
+    auto& c = coeffs[index];
+    c[0] = design[0] * a0Inv;
+    c[1] = design[1] * a0Inv;
+    c[2] = design[2] * a0Inv;
+    c[3] = design[4] * a0Inv;
+    c[4] = design[5] * a0Inv;
 }
 
 /**
-    Called at CONTROL RATE from BandChain::setParameters — once per block at
+    Called at CONTROL RATE from BandChain::setParameters - once per block at
     most, never per sample.
 
-    juce::dsp::IIR::Coefficients are reference counted, and handing a filter a
-    freshly made Coefficients object allocates. This never does: the coefficient
-    objects are created once (by the Filter constructors, then resized to second
-    order in prepare()) and from here on only their raw values are overwritten.
-    ArrayCoefficients::make* returns a plain std::array on the stack, and
-    Coefficients::operator= copies into storage that is already big enough, so
-    the whole update is a handful of stores. Each stage is redesigned only when
-    its own gain actually moved.
+    Nothing here allocates: `ArrayCoefficients::make*` returns a plain
+    std::array on the stack and the normalised result is stored into fixed
+    members. Each section is redesigned only when its own gain actually moved.
 */
 void ToneStack::setGainsDb(float lowDb, float midDb, float highDb) noexcept
 {
@@ -651,67 +655,113 @@ void ToneStack::setGainsDb(float lowDb, float midDb, float highDb) noexcept
     if (!juce::exactlyEqual(lowDb, lastLow))
     {
         lastLow = lowDb;
-        const auto c =
-            ArrayCoeffs::makeLowShelf(sampleRate, kToneLowHz, kToneShelfQ, juce::Decibels::decibelsToGain(lowDb));
-        for (auto& perChannel : filters)
-            *perChannel[0].coefficients = c;
+        setSection(0,
+                   ArrayCoeffs::makeLowShelf(sampleRate, kToneLowHz, kToneShelfQ,
+                                             juce::Decibels::decibelsToGain(lowDb)));
     }
 
     if (!juce::exactlyEqual(midDb, lastMid))
     {
         lastMid = midDb;
-        const auto c =
-            ArrayCoeffs::makePeakFilter(sampleRate, kToneMidHz, kToneMidQ, juce::Decibels::decibelsToGain(midDb));
-        for (auto& perChannel : filters)
-            *perChannel[1].coefficients = c;
+        setSection(1, ArrayCoeffs::makePeakFilter(sampleRate, kToneMidHz, kToneMidQ,
+                                                  juce::Decibels::decibelsToGain(midDb)));
     }
 
     if (!juce::exactlyEqual(highDb, lastHigh))
     {
         lastHigh = highDb;
-        const auto c =
-            ArrayCoeffs::makeHighShelf(sampleRate, kToneHighHz, kToneShelfQ, juce::Decibels::decibelsToGain(highDb));
-        for (auto& perChannel : filters)
-            *perChannel[2].coefficients = c;
+        setSection(2, ArrayCoeffs::makeHighShelf(sampleRate, kToneHighHz, kToneShelfQ,
+                                                 juce::Decibels::decibelsToGain(highDb)));
     }
 }
+
+namespace
+{
+/** Three transposed-direct-form-II biquads in series, `NumCh` channels at a
+    time. Each section's output feeds the next, so one channel on its own is a
+    chain of three dependent multiply-adds with nothing to fill the gaps;
+    running both channels in the same iteration covers two chains in the time of
+    one. The per-channel arithmetic is `juce::dsp::IIR::Filter`'s, in the same
+    order. */
+template <int NumCh>
+void toneKernel(float* const* d, int numSamples, const std::array<std::array<float, 5>, 3>& coeffs,
+                std::array<std::array<std::array<float, 2>, 3>, 2>& state) noexcept
+{
+    float s[NumCh][3][2];
+
+    for (int k = 0; k < NumCh; ++k)
+        for (int n = 0; n < 3; ++n)
+        {
+            s[k][n][0] = state[static_cast<size_t>(k)][static_cast<size_t>(n)][0];
+            s[k][n][1] = state[static_cast<size_t>(k)][static_cast<size_t>(n)][1];
+        }
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+        float x[NumCh];
+
+        for (int k = 0; k < NumCh; ++k)
+            x[k] = dsputil::sanitise(d[k][i]);
+
+        for (int n = 0; n < 3; ++n)
+        {
+            const auto& c = coeffs[static_cast<size_t>(n)];
+
+            for (int k = 0; k < NumCh; ++k)
+            {
+                const float y = (c[0] * x[k]) + s[k][n][0];
+                s[k][n][0] = (c[1] * x[k]) - (c[3] * y) + s[k][n][1];
+                s[k][n][1] = (c[2] * x[k]) - (c[4] * y);
+                x[k] = y;
+            }
+        }
+
+        for (int k = 0; k < NumCh; ++k)
+            d[k][i] = x[k];
+    }
+
+    for (int k = 0; k < NumCh; ++k)
+        for (int n = 0; n < 3; ++n)
+        {
+            // Denormal guard for sample-by-sample use, as JUCE's filter applies
+            // after every block.
+            juce::dsp::util::snapToZero(s[k][n][0]);
+            juce::dsp::util::snapToZero(s[k][n][1]);
+            state[static_cast<size_t>(k)][static_cast<size_t>(n)][0] = s[k][n][0];
+            state[static_cast<size_t>(k)][static_cast<size_t>(n)][1] = s[k][n][1];
+        }
+}
+} // namespace
 
 void ToneStack::process(float* const* channels, int numChannels, int numSamples) noexcept
 {
     if (channels == nullptr || numSamples <= 0 || numChannels <= 0)
         return;
 
-    const int nc = juce::jmin(numChannels, static_cast<int>(filters.size()));
+    const int nc = juce::jmin(numChannels, static_cast<int>(state.size()));
 
+    // A flat setting leaves unity coefficients, so the sections are left running
+    // rather than branched around: skipping would freeze whatever state is still
+    // ringing out and click on the way back.
+    if (nc >= 2)
+        toneKernel<2>(channels, numSamples, coeffs, state);
+    else
+        toneKernel<1>(channels, numSamples, coeffs, state);
+
+    // NaN backstop: an IIR cannot recover from a poisoned state on its own.
     for (int ch = 0; ch < nc; ++ch)
     {
-        auto& perChannel = filters[static_cast<size_t>(ch)];
-        auto& low = perChannel[0];
-        auto& mid = perChannel[1];
-        auto& high = perChannel[2];
-        auto* d = channels[ch];
-
-        // Three biquads in one pass. A flat setting leaves unity coefficients,
-        // so this is left running rather than branched around: skipping would
-        // freeze whatever state is still ringing out and click on the way back.
-        for (int i = 0; i < numSamples; ++i)
-            d[i] = high.processSample(mid.processSample(low.processSample(dsputil::sanitise(d[i]))));
-
-        // Denormal guard for sample-by-sample use, plus a NaN backstop: an IIR
-        // cannot recover from a poisoned state on its own.
-        low.snapToZero();
-        mid.snapToZero();
-        high.snapToZero();
-
-        if (!dsputil::isFinite(d[numSamples - 1]))
+        if (!dsputil::isFinite(channels[ch][numSamples - 1]))
         {
-            low.reset();
-            mid.reset();
-            high.reset();
+            reset();
 
-            for (int i = 0; i < numSamples; ++i)
-                d[i] = dsputil::sanitise(d[i]);
+            for (int c2 = 0; c2 < nc; ++c2)
+                for (int i = 0; i < numSamples; ++i)
+                    channels[c2][i] = dsputil::sanitise(channels[c2][i]);
+
+            break;
         }
     }
 }
+
 } // namespace ember

@@ -19,6 +19,94 @@ constexpr float kMaxCrossoverHz = 20000.0f;
     us a descending or duplicated list still yields a usable, stable filter set. */
 constexpr float kMinCrossoverRatio = 1.02f;
 
+/**
+    `juce::dsp::LinkwitzRileyFilter<float>` written out.
+
+    The same topology-preserving structure, the same coefficient update and the
+    same order of operations, so the output is bit-identical. What it is not is
+    a call: JUCE instantiates that filter in a translation unit of its own, so
+    every splitter sample and every all-pass sample went through a real function
+    call that could neither be inlined nor scheduled against its neighbours. A
+    six-band split is five splitter calls per sample plus ten all-pass passes
+    per channel over the block, and the crossover was 13% of the engine.
+
+    The state is held per channel here rather than inside the filter so both
+    channels of a stereo pair can be driven through the same section in one
+    iteration — the splitter tree is a chain of five dependent sections, about
+    thirty operations deep, and a single channel leaves the core waiting on it.
+*/
+struct LrTpt
+{
+    void prepare(double newSampleRate, int numChannels)
+    {
+        sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
+        state.assign(static_cast<size_t>(juce::jmax(1, numChannels)) * 4u, 0.0f);
+        update();
+    }
+
+    void setCutoffFrequency(float newCutoffHz) noexcept
+    {
+        cutoffHz = newCutoffHz;
+        update();
+    }
+
+    void reset() noexcept { std::fill(state.begin(), state.end(), 0.0f); }
+
+    void snapToZero() noexcept
+    {
+        for (auto& v : state)
+            juce::dsp::util::snapToZero(v);
+    }
+
+    float* channelState(int channel) noexcept { return state.data() + 4u * static_cast<size_t>(channel); }
+
+    /** The band-split output pair: the 4th-order lowpass and the complementary
+        highpass that sums with it to this filter's own 2nd-order all-pass. */
+    void processLowHigh(float* s, float x, float& low, float& high) const noexcept
+    {
+        const float yH = (x - (R2 + g) * s[0] - s[1]) * h;
+        const float yB = g * yH + s[0];
+        s[0] = g * yH + yB;
+        const float yL = g * yB + s[1];
+        s[1] = g * yB + yL;
+
+        const float yH2 = (yL - (R2 + g) * s[2] - s[3]) * h;
+        const float yB2 = g * yH2 + s[2];
+        s[2] = g * yH2 + yB2;
+        const float yL2 = g * yB2 + s[3];
+        s[3] = g * yB2 + yL2;
+
+        low = yL2;
+        high = yL - R2 * yB + yH - yL2;
+    }
+
+    /** That 2nd-order all-pass on its own, for the phase compensation. Only the
+        first section's state is used, exactly as JUCE's all-pass mode does. */
+    float processAllpass(float* s, float x) const noexcept
+    {
+        const float yH = (x - (R2 + g) * s[0] - s[1]) * h;
+        const float yB = g * yH + s[0];
+        s[0] = g * yH + yB;
+        const float yL = g * yB + s[1];
+        s[1] = g * yB + yL;
+
+        return yL - R2 * yB + yH;
+    }
+
+private:
+    void update() noexcept
+    {
+        g = static_cast<float>(std::tan(juce::MathConstants<double>::pi * static_cast<double>(cutoffHz) / sampleRate));
+        R2 = static_cast<float>(std::sqrt(2.0));
+        h = static_cast<float>(1.0 / (1.0 + static_cast<double>(R2 * g) + static_cast<double>(g * g)));
+    }
+
+    std::vector<float> state;
+    double sampleRate{44100.0};
+    float cutoffHz{2000.0f};
+    float g{0.0f}, R2{0.0f}, h{0.0f};
+};
+
 /** Linear-phase prototypes are ~10 ms per side. Long enough for a usable
     transition width down to ~60 Hz, short enough that the reported latency
     stays inside what every host comfortably compensates. */
@@ -130,7 +218,7 @@ struct Crossover::Impl
     std::array<bool, static_cast<size_t>(kMaxCrossovers)> firDirty{{}};
 
     // ------------------------------------------------------------ LR4 state
-    using LrFilter = juce::dsp::LinkwitzRileyFilter<float>;
+    using LrFilter = LrTpt;
 
     std::array<LrFilter, static_cast<size_t>(kMaxCrossovers)> splitters;
 
@@ -162,23 +250,12 @@ struct Crossover::Impl
         maxBlockSize = juce::jmax(1, newMaxBlockSize);
         numChannels = juce::jlimit(1, 32, newNumChannels);
 
-        const juce::dsp::ProcessSpec spec{sampleRate, static_cast<juce::uint32>(maxBlockSize),
-                                          static_cast<juce::uint32>(numChannels)};
-
         for (auto& f : splitters)
-        {
-            f.setType(juce::dsp::LinkwitzRileyFilterType::lowpass);
-            f.prepare(spec);
-        }
+            f.prepare(sampleRate, numChannels);
 
         for (auto& row : allpass)
-        {
             for (auto& f : row)
-            {
-                f.setType(juce::dsp::LinkwitzRileyFilterType::allpass);
-                f.prepare(spec);
-            }
-        }
+                f.prepare(sampleRate, numChannels);
 
         // Both modes are planned up front so setMode() never has to build
         // anything while the engine is live.
@@ -373,47 +450,101 @@ struct Crossover::Impl
     }
 
     // -------------------------------------------------------------- process
-    void processLR4(const juce::AudioBuffer<float>& input, std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut,
-                    int numSamples, int nCh) noexcept
+    /** The splitter tree for `NumCh` channels starting at `firstCh`. */
+    template <int NumCh>
+    void splitPass(const juce::AudioBuffer<float>& input, std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut,
+                   int numSamples, int firstCh) noexcept
     {
         const int nb = numBands;
         const int nx = nb - 1;
 
-        for (int ch = 0; ch < nCh; ++ch)
+        const float* src[NumCh];
+        float* dst[static_cast<size_t>(kMaxBands)][NumCh];
+        float* st[static_cast<size_t>(kMaxCrossovers)][NumCh];
+
+        for (int k = 0; k < NumCh; ++k)
         {
-            const float* src = input.getReadPointer(ch);
-            float* dst[kMaxBands]{};
+            src[k] = input.getReadPointer(firstCh + k);
 
             for (int b = 0; b < nb; ++b)
-                dst[b] = bandOut[static_cast<size_t>(b)].getWritePointer(ch);
+                dst[b][k] = bandOut[static_cast<size_t>(b)].getWritePointer(firstCh + k);
 
-            for (int i = 0; i < numSamples; ++i)
+            for (int j = 0; j < nx; ++j)
+                st[j][k] = splitters[static_cast<size_t>(j)].channelState(firstCh + k);
+        }
+
+        for (int i = 0; i < numSamples; ++i)
+        {
+            float x[NumCh];
+
+            for (int k = 0; k < NumCh; ++k)
+                x[k] = dsputil::sanitise(src[k][i]);
+
+            for (int j = 0; j < nx; ++j)
             {
-                float x = dsputil::sanitise(src[i]);
+                const auto& f = splitters[static_cast<size_t>(j)];
 
-                for (int j = 0; j < nx; ++j)
+                for (int k = 0; k < NumCh; ++k)
                 {
                     float lo = 0.0f, hi = 0.0f;
-                    splitters[static_cast<size_t>(j)].processSample(ch, x, lo, hi);
-                    dst[j][i] = lo;
-                    x = hi;
+                    f.processLowHigh(st[j][k], x[k], lo, hi);
+                    dst[j][k][i] = lo;
+                    x[k] = hi;
                 }
-
-                dst[nb - 1][i] = x;
             }
 
-            // Phase compensation: band b skipped every crossover after b.
-            for (int b = 0; b < nx; ++b)
+            for (int k = 0; k < NumCh; ++k)
+                dst[nb - 1][k][i] = x[k];
+        }
+    }
+
+    /** Phase compensation: band b skipped every crossover after b. */
+    template <int NumCh>
+    void allpassPass(std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut, int numSamples, int firstCh) noexcept
+    {
+        const int nx = numBands - 1;
+
+        for (int b = 0; b < nx; ++b)
+        {
+            float* d[NumCh];
+
+            for (int k = 0; k < NumCh; ++k)
+                d[k] = bandOut[static_cast<size_t>(b)].getWritePointer(firstCh + k);
+
+            for (int j = b + 1; j < nx; ++j)
             {
-                float* d = dst[b];
+                auto& ap = allpass[static_cast<size_t>(b)][static_cast<size_t>(j)];
+                float* st[NumCh];
 
-                for (int j = b + 1; j < nx; ++j)
-                {
-                    auto& ap = allpass[static_cast<size_t>(b)][static_cast<size_t>(j)];
+                for (int k = 0; k < NumCh; ++k)
+                    st[k] = ap.channelState(firstCh + k);
 
-                    for (int i = 0; i < numSamples; ++i)
-                        d[i] = ap.processSample(ch, d[i]);
-                }
+                for (int i = 0; i < numSamples; ++i)
+                    for (int k = 0; k < NumCh; ++k)
+                        d[k][i] = ap.processAllpass(st[k], d[k][i]);
+            }
+        }
+    }
+
+    void processLR4(const juce::AudioBuffer<float>& input, std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut,
+                    int numSamples, int nCh) noexcept
+    {
+        const int nx = numBands - 1;
+
+        // Channels are taken in pairs: every filter state is per channel, so the
+        // result is unchanged, but the second channel fills the gaps in the
+        // first one's dependency chain.
+        for (int ch = 0; ch < nCh; ch += 2)
+        {
+            if (nCh - ch >= 2)
+            {
+                splitPass<2>(input, bandOut, numSamples, ch);
+                allpassPass<2>(bandOut, numSamples, ch);
+            }
+            else
+            {
+                splitPass<1>(input, bandOut, numSamples, ch);
+                allpassPass<1>(bandOut, numSamples, ch);
             }
         }
 
