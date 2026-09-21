@@ -26,7 +26,7 @@ float heatAtDrive(EmberAudioProcessor& proc, float driveDb)
 
     // Long enough for the drive smoother and the band's own smoothers to
     // settle; heat read mid-ramp would just measure the smoother.
-    for (int block = 0; block < 120; ++block)
+    for (int block = 0; block < 400; ++block)
     {
         for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
             for (int i = 0; i < buffer.getNumSamples(); ++i)
@@ -44,6 +44,15 @@ TEST_CASE("heat rises with drive", "[heat]")
     EmberAudioProcessor proc;
     proc.prepareToPlay(48000.0, 512);
 
+    // Measured on a style that actually saturates. The default style is the
+    // cleanest one Ember has, and asking for a large heat SEPARATION from it
+    // tests the style's gentleness rather than the metric: at 35 dB it reads
+    // about 0.15 in total, so a 0.15 difference was never achievable. The
+    // ordering claims below hold for every style; the magnitude claim needs a
+    // style where the magnitude means something.
+    if (auto* p = proc.getAPVTS().getParameter(pid::style(0)))
+        p->setValueNotifyingHost(p->convertTo0to1(9.0f));
+
     const auto cold = heatAtDrive(proc, 0.0f);
     const auto warm = heatAtDrive(proc, 15.0f);
     const auto hot = heatAtDrive(proc, 35.0f);
@@ -58,6 +67,26 @@ TEST_CASE("heat rises with drive", "[heat]")
     // The three renders the acceptance criteria ask for have to look different,
     // not merely differ in the last decimal.
     REQUIRE(hot - cold > 0.15f);
+}
+
+TEST_CASE("heat rises with drive on every style", "[heat]")
+{
+    // The ordering is the real behavioural claim and it must hold everywhere,
+    // including the styles too clean to produce a large number.
+    for (const int style : {0, 1, 3, 9, 14})
+    {
+        EmberAudioProcessor proc;
+        proc.prepareToPlay(48000.0, 512);
+
+        if (auto* p = proc.getAPVTS().getParameter(pid::style(0)))
+            p->setValueNotifyingHost(p->convertTo0to1(static_cast<float>(style)));
+
+        const auto cold = heatAtDrive(proc, 0.0f);
+        const auto hot = heatAtDrive(proc, 35.0f);
+
+        INFO("style " << style << ": cold " << cold << ", hot " << hot);
+        REQUIRE(hot > cold);
+    }
 }
 
 TEST_CASE("heat stays in range for every band and never goes non-finite", "[heat]")
@@ -142,4 +171,39 @@ TEST_CASE("a bypassed band is cold however hard it is driven", "[heat]")
     }
 
     REQUIRE(proc.getBandHeat(0) <= 0.05f);
+}
+
+TEST_CASE("probe: heat by style at 35 dB", "[heat][.probe]")
+{
+    // Not part of the suite (tagged hidden). Run with "[.probe]" to see what
+    // each style actually reports, which is the only way to tell a clean style
+    // from a broken measurement.
+    for (int style : {0, 1, 3, 9, 14})
+    {
+        EmberAudioProcessor proc;
+        proc.prepareToPlay(48000.0, 512);
+
+        auto& apvts = proc.getAPVTS();
+
+        if (auto* p = apvts.getParameter(pid::style(0)))
+            p->setValueNotifyingHost(p->convertTo0to1(static_cast<float>(style)));
+
+        if (auto* p = apvts.getParameter(pid::drive(0)))
+            p->setValueNotifyingHost(p->convertTo0to1(35.0f));
+
+        juce::AudioBuffer<float> buffer(2, 512);
+        juce::MidiBuffer midi;
+        juce::Random rng{0x4321};
+
+        for (int block = 0; block < 150; ++block)
+        {
+            for (int ch = 0; ch < 2; ++ch)
+                for (int i = 0; i < 512; ++i)
+                    buffer.setSample(ch, i, (rng.nextFloat() * 2.0f - 1.0f) * 0.25f);
+
+            proc.processBlock(buffer, midi);
+        }
+
+        WARN("style " << style << " heat " << proc.getBandHeat(0));
+    }
 }
