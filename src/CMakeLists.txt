@@ -30,6 +30,7 @@ target_sources(ember_dsp PRIVATE
     gui/BandPanel.cpp
     gui/GlobalBar.cpp
     gui/FooterBar.cpp
+    gui/Wordmark.cpp
     gui/ModPanel.cpp
     gui/PresetBrowser.cpp)
 

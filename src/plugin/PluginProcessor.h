@@ -86,6 +86,11 @@ public:
         GUI reads a number instead of a blur. */
     float getCpuLoadPercent() const noexcept { return cpuLoadPercent.load(std::memory_order_relaxed); }
 
+    /** Heat across the whole plugin, 0..1: the band heats weighted by how much
+        signal each band actually carries, so a screaming band with nothing in
+        it does not light the logo. */
+    float getGlobalHeat() const noexcept;
+
     /** Which band the GUI has selected. Persisted with the plugin state. */
     int getSelectedBand() const noexcept { return selectedBand.load(std::memory_order_relaxed); }
     void setSelectedBand(int band) noexcept;

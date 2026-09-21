@@ -845,6 +845,25 @@ float EmberAudioProcessor::getBandHeat(int band) const noexcept
     return juce::jlimit(0.0f, 1.0f, shaped * driveWeight);
 }
 
+float EmberAudioProcessor::getGlobalHeat() const noexcept
+{
+    const int bands = juce::jlimit(kMinBands, kMaxBands, globalParams.numBands);
+
+    float weighted = 0.0f;
+    float weight = 0.0f;
+
+    for (int b = 0; b < bands; ++b)
+    {
+        // Weight by the band's own level, or a silent band driven to the moon
+        // would light the logo as brightly as the one doing the work.
+        const float level = juce::jlimit(0.0f, 1.0f, engine.getBandLevel(b));
+        weighted += getBandHeat(b) * level;
+        weight += level;
+    }
+
+    return weight > 1.0e-6f ? juce::jlimit(0.0f, 1.0f, weighted / weight) : 0.0f;
+}
+
 juce::AudioProcessorEditor* EmberAudioProcessor::createEditor()
 {
     return new EmberAudioProcessorEditor(*this);

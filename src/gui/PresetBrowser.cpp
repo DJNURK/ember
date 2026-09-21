@@ -1288,12 +1288,13 @@ void PresetBar::NameDisplay::paintButton(juce::Graphics& g, bool shouldDrawButto
 // PresetBar
 //==============================================================================
 PresetBar::PresetBar(EmberAudioProcessor& processorToUse)
-    : processor(processorToUse), manager(processorToUse.getPresetManager())
+    : processor(processorToUse), manager(processorToUse.getPresetManager()), wordmark(processorToUse)
 {
     previousButton.onClick = [this] { manager.loadPrevious(); };
     nextButton.onClick = [this] { manager.loadNext(); };
     nameDisplay.onClick = [this] { showBrowser(); };
 
+    addAndMakeVisible(wordmark);
     addAndMakeVisible(previousButton);
     addAndMakeVisible(nameDisplay);
     addAndMakeVisible(nextButton);
@@ -1469,6 +1470,19 @@ void PresetBar::resized()
     auto area = getLocalBounds();
 
     const int chevronWidth = juce::jlimit(14, 44, juce::roundToInt(static_cast<float>(area.getHeight()) * 0.80f));
+
+    // The logo takes the left end, but only where there is room for it to be
+    // legible - below that the preset name matters more than the branding.
+    const int logoWidth = wordmark.preferredWidth(area.getHeight());
+    const bool showLogo = area.getWidth() > logoWidth * 3;
+
+    wordmark.setVisible(showLogo);
+
+    if (showLogo)
+    {
+        wordmark.setBounds(area.removeFromLeft(logoWidth));
+        area.removeFromLeft(juce::jmax(6, area.getHeight() / 3));
+    }
 
     previousButton.setBounds(area.removeFromLeft(chevronWidth));
     nextButton.setBounds(area.removeFromRight(chevronWidth));
