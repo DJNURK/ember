@@ -844,55 +844,78 @@ void EmberLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& but
                                             const juce::Colour& backgroundColour, bool shouldDrawButtonAsHighlighted,
                                             bool shouldDrawButtonAsDown)
 {
-    const auto area = button.getLocalBounds().toFloat().reduced(0.5f);
+    auto area = button.getLocalBounds().toFloat().reduced(0.5f);
 
     if (area.getWidth() < 1.0f || area.getHeight() < 1.0f)
         return;
 
+    const auto& tk = EmberTheme::tokens();
     const float corner = cornerFor(area.getHeight(), uiScale);
     const auto accent = EmberStyleProps::accentColourFor(button);
-    const bool on = button.getToggleState();
+    const bool on = button.getToggleState() && button.isEnabled();
+
+    // Pressing pushes the whole face down one pixel. It is the cheapest
+    // possible press affordance and the only one that reads as a real key.
+    if (shouldDrawButtonAsDown)
+        area = area.translated(0.0f, 1.0f);
 
     auto fill = backgroundColour;
 
-    if (!button.isEnabled())
+    if (! button.isEnabled())
         fill = fill.withMultipliedSaturation(0.25f).withMultipliedBrightness(0.7f);
     else if (shouldDrawButtonAsDown)
-        fill = fill.brighter(0.22f);
+        fill = fill.darker(0.12f);
     else if (shouldDrawButtonAsHighlighted)
         fill = fill.brighter(0.10f);
 
-    g.setGradientFill(surfaceGradient(area, fill, 0.06f));
-    g.fillRoundedRectangle(area, corner);
+    // Hover glow behind the face, not inside it: the button appears to warm up
+    // rather than to change colour.
+    if (shouldDrawButtonAsHighlighted && button.isEnabled() && ! EmberTheme::reduceMotion())
+        GlowCache::drawForRect(g, area, corner, on ? tk.tubeGlow : tk.ember, on ? 0.55f : 0.30f);
 
-    // A fully transparent fill is a "ghost" button: the edge is all it has, so
-    // it gets the stronger one.
-    const auto restingOutline = backgroundColour.isTransparent() || shouldDrawButtonAsHighlighted
-                                    ? EmberColours::outlineStrong
-                                    : EmberColours::outline;
+    if (! fill.isTransparent())
+    {
+        g.setGradientFill(surfaceGradient(area, fill, 0.06f));
+        g.fillRoundedRectangle(area, corner);
+    }
 
-    g.setColour(on && button.isEnabled() ? accent.withAlpha(0.85f) : restingOutline);
+    if (on)
+    {
+        g.setColour(accent.withAlpha(0.18f));
+        g.fillRoundedRectangle(area, corner);
+    }
+
+    // A transparent fill is a "ghost" button: its edge is all it has.
+    const auto restingOutline =
+        backgroundColour.isTransparent() || shouldDrawButtonAsHighlighted ? tk.panelEdge.brighter(0.18f) : tk.panelEdge;
+
+    g.setColour(on ? accent.withAlpha(0.9f) : restingOutline);
     g.drawRoundedRectangle(area, corner, 1.0f);
 }
 
 void EmberLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& button, bool shouldDrawButtonAsHighlighted,
                                       bool shouldDrawButtonAsDown)
 {
-    const auto font = getTextButtonFont(button, button.getHeight());
-    g.setFont(font);
+    const auto& tk = EmberTheme::tokens();
+
+    g.setFont(getTextButtonFont(button, button.getHeight()));
 
     auto colour = button.findColour(button.getToggleState() ? juce::TextButton::textColourOnId
                                                             : juce::TextButton::textColourOffId);
 
-    if (!button.isEnabled())
-        colour = EmberColours::textDisabled;
+    if (! button.isEnabled())
+        colour = tk.textMuted;
     else if (shouldDrawButtonAsDown || shouldDrawButtonAsHighlighted)
         colour = colour.brighter(0.25f);
 
     g.setColour(colour);
 
     const int inset = juce::jmax(2, juce::roundToInt(static_cast<float>(button.getHeight()) * 0.2f));
-    const auto area = button.getLocalBounds().reduced(inset, 1);
+    auto area = button.getLocalBounds().reduced(inset, 1);
+
+    // Follow the face down, or the label floats free of the key it belongs to.
+    if (shouldDrawButtonAsDown)
+        area = area.translated(0, 1);
 
     g.drawFittedText(button.getButtonText(), area, juce::Justification::centred, 1, 0.75f);
 }
@@ -902,7 +925,6 @@ juce::Font EmberLookAndFeel::getTextButtonFont(juce::TextButton&, int buttonHeig
     return EmberFonts::forHeight(static_cast<float>(buttonHeight), 0.45f, false);
 }
 
-//==============================================================================
 void EmberLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& button,
                                         bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
 {
