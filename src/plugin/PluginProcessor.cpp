@@ -876,6 +876,31 @@ float EmberAudioProcessor::getGlobalHeat() const noexcept
     return weight > 1.0e-6f ? juce::jlimit(0.0f, 1.0f, weighted / weight) : 0.0f;
 }
 
+void EmberAudioProcessor::getBandSpanHz(int band, float& lowHz, float& highHz) const noexcept
+{
+    lowHz = 20.0f;
+    highHz = 20000.0f;
+
+    const int active = juce::jlimit(kMinBands, kMaxBands, globalParams.numBands);
+    const int numEdges = active - 1;
+
+    if (band < 0 || band >= active || numEdges <= 0)
+        return;
+
+    std::array<float, static_cast<size_t>(kMaxCrossovers)> edges{};
+
+    for (int i = 0; i < numEdges; ++i)
+        edges[static_cast<size_t>(i)] = globalParams.crossoverHz[static_cast<size_t>(i)];
+
+    std::sort(edges.begin(), edges.begin() + numEdges);
+
+    if (band > 0)
+        lowHz = edges[static_cast<size_t>(band - 1)];
+
+    if (band < numEdges)
+        highHz = edges[static_cast<size_t>(band)];
+}
+
 juce::AudioProcessorEditor* EmberAudioProcessor::createEditor()
 {
     return new EmberAudioProcessorEditor(*this);

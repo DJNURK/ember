@@ -91,6 +91,12 @@ public:
         it does not light the logo. */
     float getGlobalHeat() const noexcept;
 
+    /** The frequency span band `band` covers, from the current crossovers.
+
+        The crossover parameters are independent, so automation can cross them
+        over one another; this sorts before reading edges off. */
+    void getBandSpanHz(int band, float& lowHz, float& highHz) const noexcept;
+
     /** Which band the GUI has selected. Persisted with the plugin state. */
     int getSelectedBand() const noexcept { return selectedBand.load(std::memory_order_relaxed); }
     void setSelectedBand(int band) noexcept;

@@ -1,5 +1,6 @@
 #include "gui/BandPanel.h"
 #include "gui/EmberTheme.h"
+#include "gui/ToneEqPanel.h"
 
 #include "dsp/styles/SaturationStyle.h"
 #include "plugin/ParameterIDs.h"
@@ -359,6 +360,10 @@ struct BandPanel::BandControls
         solo.setTooltip("Solo this band: every other band is muted.");
         EmberStyleProps::setAccentColour(solo, colour);
 
+        toneEq = std::make_unique<ToneEqPanel>(processorToUse, bandIndex);
+        owner.addChildComponent(toneEq.get());
+        allComponents.add(toneEq.get());
+
         const std::initializer_list<juce::Component*> everything{
             &styleBox,          &drive,    &mix,     &level,   &pan,      &width,  &feedbackAmount,
             &feedbackFrequency, &dynamics, &toneLow, &toneMid, &toneHigh, &bypass, &solo};
@@ -418,6 +423,10 @@ struct BandPanel::BandControls
     DynamicsControl dynamics;
 
     EmberToggle bypass, solo;
+
+    /** The tone stage as a curve. Replaces the three anonymous Low/Mid/High
+        knobs, which told you three numbers and nothing about their shape. */
+    std::unique_ptr<ToneEqPanel> toneEq;
 
     std::atomic<float>* styleValue{nullptr};
 
@@ -776,6 +785,27 @@ void BandPanel::layoutCompactModule(juce::Rectangle<int> slot, BandControls& con
         return;
 
     controls.drive.setBounds(juce::Rectangle<int>(size, size).withCentre(area.getCentre()));
+
+    // A 40x14 sparkline of the tone curve, so an unselected module still says
+    // at a glance which bands have shaping on them.
+    if (controls.toneEq != nullptr)
+    {
+        const int sparkWidth = juce::jmin(juce::roundToInt(40.0f * scale), area.getWidth() - 8);
+        const int sparkHeight = juce::roundToInt(14.0f * scale);
+
+        if (sparkWidth > 16 && area.getHeight() > size + sparkHeight)
+        {
+            controls.toneEq->setCompact(true);
+            controls.toneEq->setVisible(true);
+            controls.toneEq->setBounds(
+                juce::Rectangle<int>(sparkWidth, sparkHeight)
+                    .withCentre({area.getCentreX(), area.getBottom() - sparkHeight}));
+        }
+        else
+        {
+            controls.toneEq->setVisible(false);
+        }
+    }
 }
 
 void BandPanel::mouseDown(const juce::MouseEvent& event)
@@ -935,8 +965,25 @@ void BandPanel::layoutKnobGrid(juce::Rectangle<int> area, BandControls& controls
     };
 
     place(largeRow, {&controls.drive, &controls.mix, &controls.level});
-    place(smallRow, {&controls.feedbackAmount, &controls.feedbackFrequency, &controls.dynamics, &controls.toneLow,
-                     &controls.toneMid, &controls.toneHigh, &controls.pan, &controls.width});
+
+    // The tone knobs are gone: the EQ panel is the tone stage now. It takes the
+    // right-hand half of the small row, where the three of them used to sit.
+    if (controls.toneEq != nullptr && smallRow.getWidth() > 180)
+    {
+        auto eqArea = smallRow.removeFromRight(smallRow.getWidth() / 2);
+        smallRow.removeFromRight(gap);
+
+        controls.toneEq->setCompact(eqArea.getHeight() < ToneEqPanel::minimumUsefulSize().y / 2);
+        controls.toneEq->setVisible(true);
+        controls.toneEq->setBounds(eqArea);
+    }
+    else if (controls.toneEq != nullptr)
+    {
+        controls.toneEq->setVisible(false);
+    }
+
+    place(smallRow, {&controls.feedbackAmount, &controls.feedbackFrequency, &controls.dynamics, &controls.pan,
+                     &controls.width});
 }
 
 void BandPanel::layoutGroups(juce::Rectangle<int> area, BandControls& controls)
