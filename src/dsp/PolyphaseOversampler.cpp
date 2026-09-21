@@ -311,9 +311,9 @@ void PolyphaseOversampler::prepare(int numChannels, int numStages, int maxBlockS
     totalLatency = design.totalLatency;
     fractionalDelay = design.fractionalDelay;
 
-    fractionalDelayLine.prepare(
-        {0.0, static_cast<juce::uint32>(maxBlock), static_cast<juce::uint32>(channels)});
-    fractionalDelayLine.setDelay(fractionalDelay);
+    // JUCE's Thiran path always lands on delayInt == 0 for a delay in
+    // (0.618, 1.618], so the whole line collapses to this one coefficient.
+    compAlpha = (1.0f - fractionalDelay) / (1.0f + fractionalDelay);
 
     ready = true;
     reset();
@@ -329,7 +329,8 @@ void PolyphaseOversampler::reset() noexcept
         s.buffer.clear();
     }
 
-    fractionalDelayLine.reset();
+    compPrevIn.fill(0.0f);
+    compPrevOut.fill(0.0f);
 }
 
 juce::dsp::AudioBlock<float> PolyphaseOversampler::processSamplesUp(
@@ -423,8 +424,26 @@ void PolyphaseOversampler::processSamplesDown(juce::dsp::AudioBlock<float>& outp
 
     if (fractionalDelay > 0.0f)
     {
-        auto context = juce::dsp::ProcessContextReplacing<float>(output);
-        fractionalDelayLine.process(context);
+        const float alpha = compAlpha;
+
+        for (int ch = 0; ch < numCh; ++ch)
+        {
+            auto* d = output.getChannelPointer(static_cast<size_t>(ch));
+            float prevIn = compPrevIn[static_cast<size_t>(ch)];
+            float prevOut = compPrevOut[static_cast<size_t>(ch)];
+
+            for (int i = 0; i < baseSamples; ++i)
+            {
+                const float x = d[i];
+                const float y = prevIn + alpha * (x - prevOut);
+                prevIn = x;
+                prevOut = y;
+                d[i] = y;
+            }
+
+            compPrevIn[static_cast<size_t>(ch)] = prevIn;
+            compPrevOut[static_cast<size_t>(ch)] = prevOut;
+        }
     }
 }
 } // namespace ember

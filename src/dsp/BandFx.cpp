@@ -259,6 +259,84 @@ void FeedbackLoop::setParameters(float amount01, float frequency) noexcept
     delaySamples = juce::jlimit(1.0f, longest, wanted);
 }
 
+namespace
+{
+/** The feedback stage for `NumCh` channels at once.
+
+    Both channels share one delay tuning, so the read index, its fraction and
+    the wrap are the same for both: computing them once instead of once per
+    channel is free work removed. The rest is per-channel state, and running the
+    two channels in the same iteration also gives the core two independent
+    copies of the resonator's recurrence and of `fastTanh`'s division to overlap
+    — the loop is short enough that a channel-at-a-time version leaves most of
+    that latency exposed.
+
+    Arithmetic per channel is unchanged, operation for operation, so the output
+    is bit-identical to the one-channel-at-a-time form. */
+template <int NumCh>
+void feedbackKernel(float* const* d, float* const* lines, int numSamples, int lineLength, float delaySamples,
+                    float a1, float a2, float a3, float fbGain, float invInject, float* ic1State,
+                    float* ic2State, int& writePosition) noexcept
+{
+    float ic1[NumCh], ic2[NumCh];
+
+    for (int k = 0; k < NumCh; ++k)
+    {
+        ic1[k] = ic1State[k];
+        ic2[k] = ic2State[k];
+    }
+
+    int wp = writePosition;
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+        // ---- fractional delay read (linear interpolation) ------------------
+        const float readPos = static_cast<float>(wp) - delaySamples;
+        int i0 = static_cast<int>(std::floor(readPos));
+        const float frac = readPos - static_cast<float>(i0);
+
+        while (i0 < 0)
+            i0 += lineLength;
+        while (i0 >= lineLength)
+            i0 -= lineLength;
+
+        const int i1 = (i0 + 1 >= lineLength) ? 0 : i0 + 1;
+
+        for (int k = 0; k < NumCh; ++k)
+        {
+            const float s0 = lines[k][i0];
+            const float s1 = lines[k][i1];
+            const float delayed = dsputil::sanitise(s0 + frac * (s1 - s0));
+
+            // ---- bandpass (TPT SVF, band output) ---------------------------
+            const float v3 = delayed - ic2[k];
+            const float v1 = a1 * ic1[k] + a2 * v3;
+            const float v2 = ic2[k] + a2 * ic1[k] + a3 * v3;
+            ic1[k] = 2.0f * v1 - ic1[k];
+            ic2[k] = 2.0f * v2 - ic2[k];
+
+            // ---- limiter inside the loop, then the stage output ------------
+            const float inject = kInjectCeiling * dsputil::fastTanh(fbGain * v1 * invInject);
+            const float y = dsputil::hardClip(dsputil::sanitise(d[k][i]) + inject, kHardCeiling);
+
+            lines[k][wp] = y;
+            d[k][i] = y;
+        }
+
+        if (++wp >= lineLength)
+            wp = 0;
+    }
+
+    for (int k = 0; k < NumCh; ++k)
+    {
+        ic1State[k] = dsputil::sanitise(ic1[k]);
+        ic2State[k] = dsputil::sanitise(ic2[k]);
+    }
+
+    writePosition = wp;
+}
+} // namespace
+
 void FeedbackLoop::process(float* const* channels, int numChannels, int numSamples) noexcept
 {
     // True bypass: no reads, no writes, not even a pass over the buffer.
@@ -272,69 +350,49 @@ void FeedbackLoop::process(float* const* channels, int numChannels, int numSampl
     const float fbGain = amount * kMaxLoopGain * k;
     const float invInject = 1.0f / kInjectCeiling;
 
+    const size_t wanted = static_cast<size_t>(lineLength);
+    const bool stereoReady = nc >= 2 && delayLine[0].size() == wanted && delayLine[1].size() == wanted;
+
+    // Per-block guard: one bad host buffer must not poison the resonator.
     for (int ch = 0; ch < nc; ++ch)
     {
         const size_t c = static_cast<size_t>(ch);
-        auto& line = delayLine[c];
 
-        if (line.size() != static_cast<size_t>(lineLength))
-            continue; // not prepared for this channel
-
-        // Per-block guard: one bad host buffer must not poison the resonator.
         if (!(dsputil::isFinite(svfIc1[c]) && dsputil::isFinite(svfIc2[c])))
         {
             svfIc1[c] = 0.0f;
             svfIc2[c] = 0.0f;
         }
 
-        float ic1 = svfIc1[c];
-        float ic2 = svfIc2[c];
-        int wp = writePos[c];
+        if (writePos[c] < 0 || writePos[c] >= lineLength)
+            writePos[c] = 0;
+    }
 
-        if (wp < 0 || wp >= lineLength)
-            wp = 0;
+    if (stereoReady)
+    {
+        // Both channels always advance the write position together, so one
+        // position covers them; it is written back to both so the per-channel
+        // fallback below can pick up wherever this left off.
+        float* lines[2] = {delayLine[0].data(), delayLine[1].data()};
+        int wp = writePos[0];
+        feedbackKernel<2>(channels, lines, numSamples, lineLength, delaySamples, a1, a2, a3, fbGain, invInject,
+                          svfIc1.data(), svfIc2.data(), wp);
+        writePos[0] = wp;
+        writePos[1] = wp;
+        return;
+    }
 
-        auto* d = channels[ch];
+    for (int ch = 0; ch < nc; ++ch)
+    {
+        const size_t c = static_cast<size_t>(ch);
 
-        for (int i = 0; i < numSamples; ++i)
-        {
-            // ---- fractional delay read (linear interpolation) --------------
-            const float readPos = static_cast<float>(wp) - delaySamples;
-            int i0 = static_cast<int>(std::floor(readPos));
-            const float frac = readPos - static_cast<float>(i0);
+        if (delayLine[c].size() != wanted)
+            continue; // not prepared for this channel
 
-            while (i0 < 0)
-                i0 += lineLength;
-            while (i0 >= lineLength)
-                i0 -= lineLength;
-
-            const int i1 = (i0 + 1 >= lineLength) ? 0 : i0 + 1;
-            const float s0 = line[static_cast<size_t>(i0)];
-            const float s1 = line[static_cast<size_t>(i1)];
-            const float delayed = dsputil::sanitise(s0 + frac * (s1 - s0));
-
-            // ---- bandpass (TPT SVF, band output) ---------------------------
-            const float v3 = delayed - ic2;
-            const float v1 = a1 * ic1 + a2 * v3;
-            const float v2 = ic2 + a2 * ic1 + a3 * v3;
-            ic1 = 2.0f * v1 - ic1;
-            ic2 = 2.0f * v2 - ic2;
-
-            // ---- limiter inside the loop, then the stage output ------------
-            const float inject = kInjectCeiling * dsputil::fastTanh(fbGain * v1 * invInject);
-            const float y = dsputil::hardClip(dsputil::sanitise(d[i]) + inject, kHardCeiling);
-
-            line[static_cast<size_t>(wp)] = y;
-
-            if (++wp >= lineLength)
-                wp = 0;
-
-            d[i] = y;
-        }
-
-        svfIc1[c] = dsputil::sanitise(ic1);
-        svfIc2[c] = dsputil::sanitise(ic2);
-        writePos[c] = wp;
+        float* lines[1] = {delayLine[c].data()};
+        float* data[1] = {channels[ch]};
+        feedbackKernel<1>(data, lines, numSamples, lineLength, delaySamples, a1, a2, a3, fbGain, invInject,
+                          &svfIc1[c], &svfIc2[c], writePos[c]);
     }
 }
 

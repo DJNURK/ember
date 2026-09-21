@@ -91,7 +91,18 @@ private:
     };
 
     std::vector<Stage> stages;
-    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Thiran> fractionalDelayLine{8};
+
+    /** The integer-latency compensator. JUCE builds this out of a
+        `DelayLine<float, Thiran>` whose delay is always between 0.618 and 1.618
+        samples, which reduces to a bare first-order allpass:
+
+            y[n] = x[n-1] + alpha * (x[n] - y[n-1]),  alpha = (1-f) / (1+f)
+
+        — the ring buffer, the modulo and the two `getSample` calls around it
+        all fall away. Written out, it is the same three floating-point
+        operations in the same order, so the result is bit-identical. */
+    std::array<float, 2> compPrevIn{}, compPrevOut{};
+    float compAlpha{0.0f};
     float fractionalDelay{0.0f};
     float totalLatency{0.0f};
     int channels{2};
