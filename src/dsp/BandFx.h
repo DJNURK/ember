@@ -124,11 +124,26 @@ public:
     [[nodiscard]] float getHighDb() const noexcept { return lastHigh; }
 
 private:
-    using Filter = juce::dsp::IIR::Filter<float>;
-    using Coeffs = juce::dsp::IIR::Coefficients<float>;
+    /** Normalise a `juce::dsp::IIR::ArrayCoefficients` design into one section,
+        by the same division by a0 that `IIR::Coefficients` would do. */
+    void setSection(size_t index, const std::array<float, 6>& design) noexcept;
+
     double sampleRate{44100.0};
     float lastLow{0.0f}, lastMid{0.0f}, lastHigh{0.0f};
     Shape shape;
-    std::array<std::array<Filter, 3>, 2> filters; // [channel][low, mid, high]
+
+    /** b0, b1, b2, a1, a2 for the low shelf, the mid peak and the high shelf.
+        The three sections are the same for both channels, which is why they are
+        held here rather than inside a per-channel filter object: the hot loop
+        then reads one set of fifteen floats and runs both channels against it.
+
+        This is `juce::dsp::IIR::Filter`'s transposed direct form II written out.
+        Keeping the JUCE object meant an out-of-line call per sample per section
+        - six per stereo frame - each of which re-read the coefficient order
+        through a `getFilterOrder` stub before doing three multiply-adds. */
+    std::array<std::array<float, 5>, 3> coeffs{
+        {{{1.0f, 0.0f, 0.0f, 0.0f, 0.0f}}, {{1.0f, 0.0f, 0.0f, 0.0f, 0.0f}}, {{1.0f, 0.0f, 0.0f, 0.0f, 0.0f}}}};
+
+    std::array<std::array<std::array<float, 2>, 3>, 2> state{}; // [channel][section][order]
 };
 } // namespace ember

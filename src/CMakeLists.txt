@@ -6,6 +6,7 @@ add_library(ember_dsp STATIC)
 target_sources(ember_dsp PRIVATE
     dsp/EmberEngine.cpp
     dsp/BandChain.cpp
+    dsp/PolyphaseOversampler.cpp
     dsp/BandFx.cpp
     dsp/Crossover.cpp
     dsp/StyleCalibrator.cpp

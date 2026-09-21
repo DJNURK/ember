@@ -23,21 +23,31 @@ void BandChain::prepare(double hostSampleRate, int maxBlockSize, int numChannels
 
     const int numStages = static_cast<int>(factor); // Off=0, x2=1, x4=2, x8=3, x16=4
 
-    if (numStages > 0)
+    usingPolyphase = !linearPhaseOversampling;
+    hasOversampling = numStages > 0;
+
+    if (hasOversampling && usingPolyphase)
     {
-        oversampler = std::make_unique<juce::dsp::Oversampling<float>>(
+        firOversampler.reset();
+        polyphase.prepare(channels, numStages, maxBlock);
+        latencySamples = polyphase.getLatencyInSamples();
+    }
+    else if (hasOversampling)
+    {
+        polyphase.prepare(channels, 0, maxBlock);
+        firOversampler = std::make_unique<juce::dsp::Oversampling<float>>(
             static_cast<size_t>(channels), static_cast<size_t>(numStages),
-            linearPhaseOversampling ? juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple
-                                    : juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR,
+            juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple,
             true,  // maximum quality
             true); // integer latency where possible
-        oversampler->initProcessing(static_cast<size_t>(maxBlock));
-        oversampler->reset();
-        latencySamples = static_cast<float>(oversampler->getLatencyInSamples());
+        firOversampler->initProcessing(static_cast<size_t>(maxBlock));
+        firOversampler->reset();
+        latencySamples = static_cast<float>(firOversampler->getLatencyInSamples());
     }
     else
     {
-        oversampler.reset();
+        firOversampler.reset();
+        polyphase.prepare(channels, 0, maxBlock);
         latencySamples = 0.0f;
     }
 
@@ -56,12 +66,7 @@ void BandChain::prepare(double hostSampleRate, int maxBlockSize, int numChannels
     dynamics.prepare(hostRate, maxBlock, channels);
     tone.prepare(hostRate, maxBlock, channels);
 
-    // Order matters: prepare() establishes the channel count, and
-    // setMaximumDelayInSamples resizes while keeping it, so preparing second
-    // would leave the line sized for zero channels.
-    dryDelay.prepare({hostRate, static_cast<juce::uint32>(maxBlock), static_cast<juce::uint32>(channels)});
-    dryDelay.setMaximumDelayInSamples(juce::jmax(8, static_cast<int>(std::ceil(latencySamples)) + 8));
-    dryDelay.setDelay(latencySamples);
+    dryDelay.prepare(channels, static_cast<int>(std::floor(latencySamples)));
 
     dryBuffer.setSize(channels, maxBlock, false, false, true);
     fadeBuffer.setSize(channels, osBlock, false, false, true);
@@ -88,8 +93,10 @@ void BandChain::reset() noexcept
     for (auto& s : styles)
         s->reset();
 
-    if (oversampler != nullptr)
-        oversampler->reset();
+    polyphase.reset();
+
+    if (firOversampler != nullptr)
+        firOversampler->reset();
 
     dcBlocker.reset();
     feedback.reset();
@@ -154,18 +161,7 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
     for (int ch = 0; ch < numCh; ++ch)
         dryBuffer.copyFrom(ch, 0, buffer, ch, 0, numSamples);
 
-    if (latencySamples > 0.0f)
-    {
-        for (int ch = 0; ch < numCh; ++ch)
-        {
-            auto* d = dryBuffer.getWritePointer(ch);
-            for (int i = 0; i < numSamples; ++i)
-            {
-                dryDelay.pushSample(ch, d[i]);
-                d[i] = dryDelay.popSample(ch);
-            }
-        }
-    }
+    dryDelay.process(dryBuffer.getArrayOfWritePointers(), numCh, numSamples);
 
     // A fully bypassed band still has to come out with the same latency as its
     // neighbours, otherwise the band sum combs. The dry path above already
@@ -198,9 +194,10 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
     juce::dsp::AudioBlock<float> block(buffer.getArrayOfWritePointers(), static_cast<size_t>(numCh),
                                        static_cast<size_t>(numSamples));
 
-    if (oversampler != nullptr)
+    if (hasOversampling)
     {
-        auto up = oversampler->processSamplesUp(block);
+        auto up = usingPolyphase ? polyphase.processSamplesUp(juce::dsp::AudioBlock<const float>(block))
+                                 : firOversampler->processSamplesUp(block);
         const int n = static_cast<int>(up.getNumSamples());
 
         // AudioBlock exposes channels one at a time; the style interface wants
@@ -259,7 +256,10 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
             }
         }
 
-        oversampler->processSamplesDown(block);
+        if (usingPolyphase)
+            polyphase.processSamplesDown(block);
+        else
+            firOversampler->processSamplesDown(block);
     }
     else
     {

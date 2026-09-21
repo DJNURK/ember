@@ -1,6 +1,7 @@
 #pragma once
 #include <cmath>
 #include <algorithm>
+#include <vector>
 #include <juce_dsp/juce_dsp.h>
 
 namespace ember::dsputil
@@ -74,6 +75,76 @@ public:
 private:
     double sr{44100.0};
     float coeff{0.0f}, state{0.0f};
+};
+
+/**
+    A dry-path delay of a whole number of samples.
+
+    This is what `juce::dsp::DelayLine<float, None>` does — push, then pop the
+    sample written `delay` steps ago — without the call. JUCE instantiates that
+    template in a translation unit of its own, so the two-line loop around it
+    cost a pair of unbindable function calls per sample per channel, which in a
+    six-band chain is more than the whole tone stack.
+
+    The delay is set from an oversampler latency that is always integral by
+    construction; a fractional request is truncated, exactly as JUCE's None
+    interpolation truncates it.
+*/
+class IntegerDelay
+{
+public:
+    /** Allocates. Prepare thread only. */
+    void prepare(int numChannels, int delayInSamples)
+    {
+        channels = juce::jlimit(1, 2, numChannels);
+        length = juce::jmax(0, delayInSamples);
+        ring.assign(static_cast<size_t>(channels) * static_cast<size_t>(juce::jmax(1, length)), 0.0f);
+        reset();
+    }
+
+    void reset() noexcept
+    {
+        std::fill(ring.begin(), ring.end(), 0.0f);
+        position = 0;
+    }
+
+    int getLength() const noexcept { return length; }
+
+    /** In place: each sample leaves delayed by `length`. */
+    void process(float* const* data, int numChannels, int numSamples) noexcept
+    {
+        const int nc = juce::jmin(numChannels, channels);
+
+        if (length <= 0 || nc <= 0 || numSamples <= 0 || ring.empty())
+            return;
+
+        float* lines[2] = {nullptr, nullptr};
+        for (int ch = 0; ch < nc; ++ch)
+            lines[ch] = ring.data() + static_cast<size_t>(ch) * static_cast<size_t>(length);
+
+        int pos = position;
+
+        for (int i = 0; i < numSamples; ++i)
+        {
+            for (int ch = 0; ch < nc; ++ch)
+            {
+                const float held = lines[ch][pos];
+                lines[ch][pos] = data[ch][i];
+                data[ch][i] = held;
+            }
+
+            if (++pos >= length)
+                pos = 0;
+        }
+
+        position = pos;
+    }
+
+private:
+    std::vector<float> ring;
+    int channels{2};
+    int length{0};
+    int position{0};
 };
 
 /** Topology-preserving state-variable filter (Zavalishin). Used for tone

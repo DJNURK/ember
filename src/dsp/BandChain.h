@@ -5,6 +5,8 @@
 #include "dsp/EmberTypes.h"
 #include "dsp/BandParams.h"
 #include "dsp/BandFx.h"
+#include "dsp/DspUtils.h"
+#include "dsp/PolyphaseOversampler.h"
 #include "dsp/StyleCalibrator.h"
 #include "dsp/styles/SaturationStyle.h"
 
@@ -26,10 +28,11 @@ namespace ember
       obvious alternative — constructing the new style on demand — would
       allocate on the audio thread.
 
-    - The dry path is delayed by the oversampler's EXACT, fractional latency
-      using an interpolating delay line. Rounding to whole samples would leave
-      up to half a sample of misalignment, which comb-filters the top octave as
-      soon as the band mix is anywhere but fully wet.
+    - The dry path is delayed by the oversampler's EXACT latency. Leaving even
+      half a sample of misalignment there comb-filters the top octave as soon as
+      the band mix is anywhere but fully wet. Both oversamplers are built with
+      integer-latency compensation, so that exact figure is a whole number and
+      the delay needs no interpolation at all.
 */
 class BandChain
 {
@@ -55,8 +58,9 @@ public:
     /** In place, at the host sample rate. Realtime-safe. */
     void process(juce::AudioBuffer<float>& buffer, int numSamples) noexcept;
 
-    /** Latency this band adds, in host-rate samples (fractional). Identical for
-        every band at a given oversampling factor, so bands stay aligned. */
+    /** Latency this band adds, in host-rate samples. A whole number, because
+        both oversamplers compensate to one. Identical for every band at a given
+        oversampling factor, so bands stay aligned. */
     float getLatencySamples() const noexcept { return latencySamples; }
 
     float getGainReductionDb() const noexcept { return dynamics.getGainReductionDb(); }
@@ -84,12 +88,21 @@ private:
     float styleFade{1.0f}; ///< 1 = fully on currentStyle
     float styleFadeStep{1.0f};
 
-    std::unique_ptr<juce::dsp::Oversampling<float>> oversampler;
-    /** The oversampler is built with integer-latency compensation, so this
-        delay is always a whole number of samples and needs no interpolation. A
-        Lagrange interpolator here costs four multiply-adds per sample per
-        channel to compute a fraction that is always zero. */
-    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> dryDelay{256};
+    /** Two oversampler implementations, one live at a time.
+
+        The realtime path uses `PolyphaseOversampler`, which is JUCE's polyphase
+        IIR filter — the same design, bit for bit — run four lanes at a time
+        instead of a channel at a time; the offline / HQ path keeps JUCE's own
+        equiripple FIR, which only runs where CPU does not matter and so is not
+        worth reimplementing. `usingPolyphase` says which one is active. */
+    PolyphaseOversampler polyphase;
+    std::unique_ptr<juce::dsp::Oversampling<float>> firOversampler;
+    bool usingPolyphase{false};
+    bool hasOversampling{false};
+    /** Both oversamplers are built with integer-latency compensation, so this
+        delay is always a whole number of samples: no interpolator, and no
+        fractional arithmetic to compute a fraction that is always zero. */
+    dsputil::IntegerDelay dryDelay;
 
     DCBlocker dcBlocker;
     FeedbackLoop feedback;

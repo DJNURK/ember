@@ -7,7 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- Realtime CPU, full plugin with six modulation routings, on the host machine:
+  **6.57 % → 4.25 %** of one core at 6 bands / 4× / 48 kHz, and
+  **3.24 % → 2.15 %** at 3 bands, so the specification's 3 % target is now met
+  at three bands. 16× went 23.6 % → 15.8 % and 96 kHz 15.4 % → 9.9 %. Both
+  figures are medians of five alternating runs of the two binaries.
+
+  No audio changed. Every change is the same arithmetic in a different loop:
+  per-sample recursions that ran one channel to completion before starting the
+  other now run both in the same iteration, which covers two dependency chains
+  in the time of one; the tone stack, the crossover filters, the dry delays and
+  the oversampler's latency compensator are written out in place rather than
+  called out of line into JUCE's separately compiled filter classes; and the
+  oversampler's two polyphase cascades and two channels are now four lanes of
+  one SIMD register. A new test runs that oversampler against
+  `juce::dsp::Oversampling` and requires the two to agree exactly.
+
+  The aliasing, flatness, gain-match, stability and smoothing gates all report
+  the same numbers afterwards as before, to the digit. See `docs/STATUS.md` for
+  the full breakdown, including what was tried and did not pay.
+
+### Fixed
+
+- `docs/STATUS.md` quoted stale aliasing figures (−91.2 dB for hard clip at 16×
+  rather than the −88.7 dB the code actually measures, and −84 rather than −78
+  for Foldback). Re-measuring the unmodified code produced the corrected
+  figures exactly, so this is a documentation drift rather than a regression.
 
 ## [1.0.1] — 2026-09-16
 
