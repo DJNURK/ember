@@ -4,6 +4,7 @@
 #include "dsp/EmberTypes.h"
 #include "dsp/BandParams.h"
 #include "dsp/BandChain.h"
+#include "dsp/DspUtils.h"
 #include "dsp/Crossover.h"
 #include "dsp/SpectrumFifo.h"
 
@@ -84,7 +85,7 @@ private:
     juce::AudioBuffer<float> dryBuffer, sumBuffer, msBuffer;
 
     /** Whole-sample latency, as in BandChain: no interpolation needed. */
-    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> globalDryDelay{8192};
+    dsputil::IntegerDelay globalDryDelay;
 
     // Band-count crossfade
     float bandFade{1.0f};

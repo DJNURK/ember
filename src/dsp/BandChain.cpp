@@ -66,12 +66,7 @@ void BandChain::prepare(double hostSampleRate, int maxBlockSize, int numChannels
     dynamics.prepare(hostRate, maxBlock, channels);
     tone.prepare(hostRate, maxBlock, channels);
 
-    // Order matters: prepare() establishes the channel count, and
-    // setMaximumDelayInSamples resizes while keeping it, so preparing second
-    // would leave the line sized for zero channels.
-    dryDelay.prepare({hostRate, static_cast<juce::uint32>(maxBlock), static_cast<juce::uint32>(channels)});
-    dryDelay.setMaximumDelayInSamples(juce::jmax(8, static_cast<int>(std::ceil(latencySamples)) + 8));
-    dryDelay.setDelay(latencySamples);
+    dryDelay.prepare(channels, static_cast<int>(std::floor(latencySamples)));
 
     dryBuffer.setSize(channels, maxBlock, false, false, true);
     fadeBuffer.setSize(channels, osBlock, false, false, true);
@@ -158,18 +153,7 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
     for (int ch = 0; ch < numCh; ++ch)
         dryBuffer.copyFrom(ch, 0, buffer, ch, 0, numSamples);
 
-    if (latencySamples > 0.0f)
-    {
-        for (int ch = 0; ch < numCh; ++ch)
-        {
-            auto* d = dryBuffer.getWritePointer(ch);
-            for (int i = 0; i < numSamples; ++i)
-            {
-                dryDelay.pushSample(ch, d[i]);
-                d[i] = dryDelay.popSample(ch);
-            }
-        }
-    }
+    dryDelay.process(dryBuffer.getArrayOfWritePointers(), numCh, numSamples);
 
     // A fully bypassed band still has to come out with the same latency as its
     // neighbours, otherwise the band sum combs. The dry path above already

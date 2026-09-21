@@ -5,6 +5,7 @@
 #include "dsp/EmberTypes.h"
 #include "dsp/BandParams.h"
 #include "dsp/BandFx.h"
+#include "dsp/DspUtils.h"
 #include "dsp/PolyphaseOversampler.h"
 #include "dsp/StyleCalibrator.h"
 #include "dsp/styles/SaturationStyle.h"
@@ -86,7 +87,7 @@ private:
         delay is always a whole number of samples and needs no interpolation. A
         Lagrange interpolator here costs four multiply-adds per sample per
         channel to compute a fraction that is always zero. */
-    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> dryDelay{256};
+    dsputil::IntegerDelay dryDelay;
 
     DCBlocker dcBlocker;
     FeedbackLoop feedback;
