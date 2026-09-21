@@ -451,7 +451,7 @@ struct Crossover::Impl
 
     // -------------------------------------------------------------- process
     /** The splitter tree for `NumCh` channels starting at `firstCh`. */
-    template <int NumCh>
+    template<int NumCh>
     void splitPass(const juce::AudioBuffer<float>& input, std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut,
                    int numSamples, int firstCh) noexcept
     {
@@ -499,7 +499,7 @@ struct Crossover::Impl
     }
 
     /** Phase compensation: band b skipped every crossover after b. */
-    template <int NumCh>
+    template<int NumCh>
     void allpassPass(std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut, int numSamples, int firstCh) noexcept
     {
         const int nx = numBands - 1;

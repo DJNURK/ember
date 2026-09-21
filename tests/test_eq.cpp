@@ -91,7 +91,7 @@ TEST_CASE("the drawn tone curve matches the filters it describes", "[eq]")
 
     // Spread across the audible range, including the extremes where the
     // bilinear transform's frequency warping is worst.
-    const float probes[] = {30.0f, 60.0f, 120.0f, 250.0f, 500.0f, 1000.0f,
+    const float probes[] = {30.0f,   60.0f,   120.0f,  250.0f,   500.0f,  1000.0f,
                             2000.0f, 4000.0f, 8000.0f, 12000.0f, 16000.0f};
 
     for (const auto& setting : settings)

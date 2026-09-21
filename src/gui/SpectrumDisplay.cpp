@@ -711,7 +711,8 @@ void SpectrumDisplay::paintCrossovers(juce::Graphics& g, float scale) const
 
         g.setColour(highlighted ? EmberColours::accent() : EmberColours::outlineStrong());
         g.fillRoundedRectangle(handle, handleWidth * 0.45f);
-        g.setColour(highlighted ? EmberColours::accent().brighter(0.3f) : EmberColours::textSecondary().withAlpha(0.85f));
+        g.setColour(highlighted ? EmberColours::accent().brighter(0.3f)
+                                : EmberColours::textSecondary().withAlpha(0.85f));
         g.drawRoundedRectangle(handle.reduced(0.5f), handleWidth * 0.45f, 1.0f);
 
         const float gripOffset = handleWidth * 0.2f;

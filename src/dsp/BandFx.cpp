@@ -272,10 +272,10 @@ namespace
 
     Arithmetic per channel is unchanged, operation for operation, so the output
     is bit-identical to the one-channel-at-a-time form. */
-template <int NumCh>
-void feedbackKernel(float* const* d, float* const* lines, int numSamples, int lineLength, float delaySamples,
-                    float a1, float a2, float a3, float fbGain, float invInject, float* ic1State,
-                    float* ic2State, int& writePosition) noexcept
+template<int NumCh>
+void feedbackKernel(float* const* d, float* const* lines, int numSamples, int lineLength, float delaySamples, float a1,
+                    float a2, float a3, float fbGain, float invInject, float* ic1State, float* ic2State,
+                    int& writePosition) noexcept
 {
     float ic1[NumCh], ic2[NumCh];
 
@@ -390,8 +390,8 @@ void FeedbackLoop::process(float* const* channels, int numChannels, int numSampl
 
         float* lines[1] = {delayLine[c].data()};
         float* data[1] = {channels[ch]};
-        feedbackKernel<1>(data, lines, numSamples, lineLength, delaySamples, a1, a2, a3, fbGain, invInject,
-                          &svfIc1[c], &svfIc2[c], writePos[c]);
+        feedbackKernel<1>(data, lines, numSamples, lineLength, delaySamples, a1, a2, a3, fbGain, invInject, &svfIc1[c],
+                          &svfIc2[c], writePos[c]);
     }
 }
 
@@ -654,15 +654,15 @@ void ToneStack::setGainsDb(float lowDb, float midDb, float highDb) noexcept
     if (!juce::exactlyEqual(lowDb, lastLow))
     {
         lastLow = lowDb;
-        setSection(0, ArrayCoeffs::makeLowShelf(sampleRate, shape.lowHz, kToneShelfQ,
-                                                juce::Decibels::decibelsToGain(lowDb)));
+        setSection(
+            0, ArrayCoeffs::makeLowShelf(sampleRate, shape.lowHz, kToneShelfQ, juce::Decibels::decibelsToGain(lowDb)));
     }
 
     if (!juce::exactlyEqual(midDb, lastMid))
     {
         lastMid = midDb;
-        setSection(1, ArrayCoeffs::makePeakFilter(sampleRate, shape.midHz, shape.midQ,
-                                                  juce::Decibels::decibelsToGain(midDb)));
+        setSection(
+            1, ArrayCoeffs::makePeakFilter(sampleRate, shape.midHz, shape.midQ, juce::Decibels::decibelsToGain(midDb)));
     }
 
     if (!juce::exactlyEqual(highDb, lastHigh))
@@ -690,8 +690,8 @@ void ToneStack::setShape(const Shape& newShape) noexcept
     clamped.midQ = juce::jlimit(0.1f, 8.0f, newShape.midQ);
     clamped.highHz = juce::jlimit(20.0f, limit, newShape.highHz);
 
-    if (juce::exactlyEqual(clamped.lowHz, shape.lowHz) && juce::exactlyEqual(clamped.midHz, shape.midHz)
-        && juce::exactlyEqual(clamped.midQ, shape.midQ) && juce::exactlyEqual(clamped.highHz, shape.highHz))
+    if (juce::exactlyEqual(clamped.lowHz, shape.lowHz) && juce::exactlyEqual(clamped.midHz, shape.midHz) &&
+        juce::exactlyEqual(clamped.midQ, shape.midQ) && juce::exactlyEqual(clamped.highHz, shape.highHz))
         return;
 
     shape = clamped;
@@ -699,12 +699,12 @@ void ToneStack::setShape(const Shape& newShape) noexcept
     // A shape change invalidates all three, so rebuild rather than relying on
     // setGainsDb's "only if the gain moved" shortcut - which would leave the
     // filters on the old frequencies until the user also turned a gain knob.
-    const auto low = ArrayCoeffs::makeLowShelf(sampleRate, shape.lowHz, kToneShelfQ,
-                                               juce::Decibels::decibelsToGain(lastLow));
-    const auto mid = ArrayCoeffs::makePeakFilter(sampleRate, shape.midHz, shape.midQ,
-                                                 juce::Decibels::decibelsToGain(lastMid));
-    const auto high = ArrayCoeffs::makeHighShelf(sampleRate, shape.highHz, kToneShelfQ,
-                                                 juce::Decibels::decibelsToGain(lastHigh));
+    const auto low =
+        ArrayCoeffs::makeLowShelf(sampleRate, shape.lowHz, kToneShelfQ, juce::Decibels::decibelsToGain(lastLow));
+    const auto mid =
+        ArrayCoeffs::makePeakFilter(sampleRate, shape.midHz, shape.midQ, juce::Decibels::decibelsToGain(lastMid));
+    const auto high =
+        ArrayCoeffs::makeHighShelf(sampleRate, shape.highHz, kToneShelfQ, juce::Decibels::decibelsToGain(lastHigh));
 
     setSection(0, low);
     setSection(1, mid);
@@ -735,10 +735,10 @@ float ToneStack::magnitudeDbAt(float frequencyHz) const noexcept
         const std::complex<double> z{std::cos(-w), std::sin(-w)};
         const auto z2 = z * z;
 
-        const auto numerator = static_cast<double>(c[0]) + static_cast<double>(c[1]) * z
-                               + static_cast<double>(c[2]) * z2;
-        const auto denominator = static_cast<double>(c[3]) + static_cast<double>(c[4]) * z
-                                 + static_cast<double>(c[5]) * z2;
+        const auto numerator =
+            static_cast<double>(c[0]) + static_cast<double>(c[1]) * z + static_cast<double>(c[2]) * z2;
+        const auto denominator =
+            static_cast<double>(c[3]) + static_cast<double>(c[4]) * z + static_cast<double>(c[5]) * z2;
 
         const auto d = std::abs(denominator);
 
@@ -750,7 +750,6 @@ float ToneStack::magnitudeDbAt(float frequencyHz) const noexcept
     return static_cast<float>(juce::Decibels::gainToDecibels(juce::jmax(1.0e-6, total)));
 }
 
-
 namespace
 {
 /** Three transposed-direct-form-II biquads in series, `NumCh` channels at a
@@ -759,7 +758,7 @@ namespace
     running both channels in the same iteration covers two chains in the time of
     one. The per-channel arithmetic is `juce::dsp::IIR::Filter`'s, in the same
     order. */
-template <int NumCh>
+template<int NumCh>
 void toneKernel(float* const* d, int numSamples, const std::array<std::array<float, 5>, 3>& coeffs,
                 std::array<std::array<std::array<float, 2>, 3>, 2>& state) noexcept
 {

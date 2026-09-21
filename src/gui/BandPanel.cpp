@@ -530,7 +530,7 @@ void BandPanel::showControlsFor(int bandIndex)
         {
             const bool active = band < activeBandCount();
 
-            if (! active)
+            if (!active)
             {
                 controls->setControlsVisible(false);
                 controls->setPollingEnabled(false);
@@ -707,8 +707,8 @@ void BandPanel::resized()
 
     // ---- the selected module gets the full editor -------------------------
     auto& controls = controlsFor(currentBand);
-    auto area = moduleBounds[idx(currentBand)].reduced(juce::jmax(4, juce::roundToInt(
-                                                           static_cast<float>(Spacing::md) * scale)));
+    auto area = moduleBounds[idx(currentBand)].reduced(
+        juce::jmax(4, juce::roundToInt(static_cast<float>(Spacing::md) * scale)));
 
     const int gap = juce::jmax(6, juce::roundToInt(10.0f * scale));
     juce::ignoreUnused(SectionHeader::preferredHeight(scale));
@@ -797,9 +797,8 @@ void BandPanel::layoutCompactModule(juce::Rectangle<int> slot, BandControls& con
         {
             controls.toneEq->setCompact(true);
             controls.toneEq->setVisible(true);
-            controls.toneEq->setBounds(
-                juce::Rectangle<int>(sparkWidth, sparkHeight)
-                    .withCentre({area.getCentreX(), area.getBottom() - sparkHeight}));
+            controls.toneEq->setBounds(juce::Rectangle<int>(sparkWidth, sparkHeight)
+                                           .withCentre({area.getCentreX(), area.getBottom() - sparkHeight}));
         }
         else
         {
@@ -982,8 +981,8 @@ void BandPanel::layoutKnobGrid(juce::Rectangle<int> area, BandControls& controls
         controls.toneEq->setVisible(false);
     }
 
-    place(smallRow, {&controls.feedbackAmount, &controls.feedbackFrequency, &controls.dynamics, &controls.pan,
-                     &controls.width});
+    place(smallRow,
+          {&controls.feedbackAmount, &controls.feedbackFrequency, &controls.dynamics, &controls.pan, &controls.width});
 }
 
 void BandPanel::layoutGroups(juce::Rectangle<int> area, BandControls& controls)
@@ -1233,7 +1232,7 @@ void BandPanel::paintModuleChrome(juce::Graphics& g, int band, juce::Rectangle<i
 
     // Compact modules carry their own number, style name and heat bar, because
     // the full header only exists on the selected one.
-    if (! selected)
+    if (!selected)
     {
         auto inner = area.reduced(static_cast<float>(Spacing::sm) * scale);
         auto title = inner.withHeight(static_cast<float>(titleHeight));
@@ -1267,7 +1266,7 @@ void BandPanel::paintModuleChrome(juce::Graphics& g, int band, juce::Rectangle<i
             g.setColour(tint);
             g.fillRoundedRectangle(filled, barHeight * 0.5f);
 
-            if (! EmberTheme::reduceMotion())
+            if (!EmberTheme::reduceMotion())
                 GlowCache::drawForRect(g, filled, barHeight * 0.5f, tk.tubeGlow, heat * 0.5f);
         }
     }

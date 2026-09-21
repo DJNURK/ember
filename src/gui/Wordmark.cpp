@@ -60,7 +60,7 @@ int Wordmark::preferredWidth(int forHeight) const
     // own height in width. Measured from the cached path where we have one.
     const auto h = static_cast<float>(juce::jmax(1, forHeight));
 
-    if (! wordPath.isEmpty())
+    if (!wordPath.isEmpty())
         return juce::roundToInt(h * 0.62f + h * 0.22f + wordPath.getBounds().getWidth());
 
     return juce::roundToInt(h * 3.0f);
@@ -81,8 +81,8 @@ void Wordmark::rebuildPath()
         return;
 
     const float glyphSize = bounds.getHeight() * 0.62f;
-    filamentArea = juce::Rectangle<float>(glyphSize, glyphSize).withCentre({bounds.getX() + glyphSize * 0.55f,
-                                                                           bounds.getCentreY()});
+    filamentArea = juce::Rectangle<float>(glyphSize, glyphSize)
+                       .withCentre({bounds.getX() + glyphSize * 0.55f, bounds.getCentreY()});
 
     // The letterforms are cached as a path so paint() never lays out text. At
     // 30 Hz with a glow behind it, re-shaping a string every frame is the kind
@@ -159,7 +159,7 @@ void Wordmark::paint(juce::Graphics& g)
     glass.applyTransform(juce::AffineTransform::scale(filamentArea.getWidth(), filamentArea.getHeight())
                              .translated(filamentArea.getX(), filamentArea.getY()));
 
-    if (lit > 0.01f && ! EmberTheme::reduceMotion())
+    if (lit > 0.01f && !EmberTheme::reduceMotion())
         GlowCache::draw(g, filamentArea.getCentre(), filamentArea.getWidth() * (0.7f + lit * 0.6f), tk.tubeGlow,
                         lit * 0.75f);
 
@@ -186,7 +186,7 @@ void Wordmark::paint(juce::Graphics& g)
     }
 
     // ---- the word --------------------------------------------------------
-    if (! wordPath.isEmpty())
+    if (!wordPath.isEmpty())
     {
         // The word warms slightly too, but far less than the filament: the
         // filament is the indicator, the word is identity.

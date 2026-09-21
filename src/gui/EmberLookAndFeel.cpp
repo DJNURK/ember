@@ -395,8 +395,8 @@ juce::Font EmberFonts::condensed(float pointHeight, bool bold)
 
 bool EmberFonts::usingEmbeddedFaces()
 {
-    return embeddedFace(Family::interMedium) != nullptr && embeddedFace(Family::interSemiBold) != nullptr
-           && embeddedFace(Family::barlowMedium) != nullptr && embeddedFace(Family::barlowSemiBold) != nullptr;
+    return embeddedFace(Family::interMedium) != nullptr && embeddedFace(Family::interSemiBold) != nullptr &&
+           embeddedFace(Family::barlowMedium) != nullptr && embeddedFace(Family::barlowSemiBold) != nullptr;
 }
 
 //==============================================================================
@@ -683,12 +683,12 @@ void EmberLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int wid
         // The bloom under the fill. A wider translucent stroke of the same path
         // is a real glow and costs one extra stroke - blurring per frame to get
         // the same effect is what makes glowing interfaces expensive.
-        if (! EmberTheme::reduceMotion())
+        if (!EmberTheme::reduceMotion())
         {
             const float bloom = active ? 0.34f : 0.20f;
             g.setColour(tk.tubeGlow.withAlpha(bloom));
             g.strokePath(valuePath, juce::PathStrokeType(geo.valueThickness + Metrics::arcGlow * 2.0f,
-                                                        juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                                                         juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
 
         // Cooler where the arc starts, hotter where it ends, so a knob that is
@@ -737,7 +737,7 @@ void EmberLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int wid
     const auto inner = geo.centre.getPointOnCircumference(geo.bodyRadius * 0.30f, valueAngle);
     const auto outer = geo.centre.getPointOnCircumference(geo.bodyRadius * 0.88f, valueAngle);
 
-    if (enabled && ! EmberTheme::reduceMotion())
+    if (enabled && !EmberTheme::reduceMotion())
     {
         g.setColour(tk.tubeGlow.withAlpha(active ? 0.30f : 0.16f));
         g.drawLine(juce::Line<float>(inner, outer), geo.pointerThickness + 2.0f);
@@ -906,7 +906,7 @@ void EmberLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& but
 
     auto fill = backgroundColour;
 
-    if (! button.isEnabled())
+    if (!button.isEnabled())
         fill = fill.withMultipliedSaturation(0.25f).withMultipliedBrightness(0.7f);
     else if (shouldDrawButtonAsDown)
         fill = fill.darker(0.12f);
@@ -915,10 +915,10 @@ void EmberLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& but
 
     // Hover glow behind the face, not inside it: the button appears to warm up
     // rather than to change colour.
-    if (shouldDrawButtonAsHighlighted && button.isEnabled() && ! EmberTheme::reduceMotion())
+    if (shouldDrawButtonAsHighlighted && button.isEnabled() && !EmberTheme::reduceMotion())
         GlowCache::drawForRect(g, area, corner, on ? tk.tubeGlow : tk.ember, on ? 0.55f : 0.30f);
 
-    if (! fill.isTransparent())
+    if (!fill.isTransparent())
     {
         g.setGradientFill(surfaceGradient(area, fill, 0.06f));
         g.fillRoundedRectangle(area, corner);
@@ -948,7 +948,7 @@ void EmberLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& butto
     auto colour = button.findColour(button.getToggleState() ? juce::TextButton::textColourOnId
                                                             : juce::TextButton::textColourOffId);
 
-    if (! button.isEnabled())
+    if (!button.isEnabled())
         colour = tk.textMuted;
     else if (shouldDrawButtonAsDown || shouldDrawButtonAsHighlighted)
         colour = colour.brighter(0.25f);
@@ -1010,7 +1010,7 @@ void EmberLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& b
 
         if (on && enabled)
         {
-            if (! EmberTheme::reduceMotion())
+            if (!EmberTheme::reduceMotion())
             {
                 g.setColour(tk.tubeGlow.withAlpha(0.30f));
                 g.fillRoundedRectangle(filament.expanded(windowHeight * 0.30f), radius);
@@ -1048,7 +1048,7 @@ void EmberLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& b
 
         if (on && enabled)
         {
-            if (! EmberTheme::reduceMotion())
+            if (!EmberTheme::reduceMotion())
                 GlowCache::draw(g, lamp.getCentre(), diameter * 1.5f, tk.tubeGlow, 0.45f);
 
             juce::ColourGradient lit(accent.interpolatedWith(tk.emberHot, 0.45f), lamp.getCentreX(),

@@ -167,16 +167,16 @@ void EmberAudioProcessorEditor::resized()
 
     if (modExpanded)
     {
-        modHeight = juce::jmin(modWanted, remaining * gui::Metrics::modRailWeight
-                                              / (gui::Metrics::displayWeight + gui::Metrics::bandStripWeight
-                                                 + gui::Metrics::modRailWeight));
+        modHeight = juce::jmin(
+            modWanted, remaining * gui::Metrics::modRailWeight /
+                           (gui::Metrics::displayWeight + gui::Metrics::bandStripWeight + gui::Metrics::modRailWeight));
         modHeight = juce::jmax(modHeight, modCollapsed);
     }
 
     remaining -= modHeight;
 
-    const int bandHeight = juce::jmax(0, remaining * gui::Metrics::bandStripWeight
-                                             / (gui::Metrics::displayWeight + gui::Metrics::bandStripWeight));
+    const int bandHeight = juce::jmax(0, remaining * gui::Metrics::bandStripWeight /
+                                             (gui::Metrics::displayWeight + gui::Metrics::bandStripWeight));
 
     modPanel.setBounds(area.removeFromBottom(modHeight));
     area.removeFromBottom(spacing);

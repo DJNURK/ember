@@ -319,7 +319,7 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
     dcBlocker.process(post, numCh, numSamples);
     dynamics.process(post, numCh, numSamples);
 
-    if (! params.tonePreSaturation)
+    if (!params.tonePreSaturation)
         tone.process(post, numCh, numSamples);
 
     applyLevelPanWidth(buffer, numSamples);
@@ -398,7 +398,7 @@ void BandChain::publishHeat(float inIn, float inOut, float outOut) noexcept
         ratio = std::sqrt(juce::jmax(0.0f, residual) / outOut);
     }
 
-    if (! std::isfinite(ratio))
+    if (!std::isfinite(ratio))
         ratio = 0.0f;
 
     heatRatio.store(juce::jlimit(0.0f, 1.0f, ratio), std::memory_order_relaxed);

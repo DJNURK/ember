@@ -171,10 +171,10 @@ juce::Image makeGlowSprite(int diameter)
             const auto t = juce::jlimit(0.0f, 1.0f, 1.0f - d);
             const auto a = t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f); // smootherstep
 
-            data.setPixelColour(x, y,
-                                juce::Colour::fromRGBA(255, 255, 255,
-                                                       static_cast<juce::uint8>(juce::jlimit(0, 255,
-                                                                                             juce::roundToInt(a * 255.0f)))));
+            data.setPixelColour(
+                x, y,
+                juce::Colour::fromRGBA(255, 255, 255,
+                                       static_cast<juce::uint8>(juce::jlimit(0, 255, juce::roundToInt(a * 255.0f)))));
         }
     }
 
@@ -190,12 +190,12 @@ const juce::Image& GlowCache::sprite(Size size)
 
     switch (size)
     {
-        case Size::small:
-            return small;
-        case Size::medium:
-            return medium;
-        case Size::large:
-            return large;
+    case Size::small:
+        return small;
+    case Size::medium:
+        return medium;
+    case Size::large:
+        return large;
     }
 
     return medium;
@@ -208,20 +208,18 @@ void GlowCache::draw(juce::Graphics& g, juce::Point<float> centre, float radius,
     if (alpha <= 0.001f || radius <= 0.0f || EmberTheme::reduceMotion())
         return;
 
-    const auto size = radius <= 16.0f    ? Size::small
-                      : radius <= 32.0f  ? Size::medium
-                                         : Size::large;
+    const auto size = radius <= 16.0f ? Size::small : radius <= 32.0f ? Size::medium : Size::large;
 
     const auto& s = sprite(size);
     const auto d = radius * 2.0f;
 
     juce::Graphics::ScopedSaveState save{g};
     g.setColour(tint.withAlpha(alpha));
-    g.drawImageTransformed(s,
-                           juce::AffineTransform::scale(d / static_cast<float>(s.getWidth()),
-                                                        d / static_cast<float>(s.getHeight()))
-                               .translated(centre.x - radius, centre.y - radius),
-                           true);
+    g.drawImageTransformed(
+        s,
+        juce::AffineTransform::scale(d / static_cast<float>(s.getWidth()), d / static_cast<float>(s.getHeight()))
+            .translated(centre.x - radius, centre.y - radius),
+        true);
 }
 
 void GlowCache::drawForRect(juce::Graphics& g, juce::Rectangle<float> area, float cornerRadius, juce::Colour tint,
@@ -248,7 +246,7 @@ void GlowCache::drawForRect(juce::Graphics& g, juce::Rectangle<float> area, floa
 const ThemeTokens& EmberTheme::tokens() noexcept
 {
     return currentVariant.load(std::memory_order_relaxed) == ThemeVariant::coolEmber ? coolEmberTokens()
-                                                                                    : defaultTokens();
+                                                                                     : defaultTokens();
 }
 
 ThemeVariant EmberTheme::variant() noexcept
@@ -275,11 +273,10 @@ float EmberTheme::contrastRatio(juce::Colour a, juce::Colour b) noexcept
 {
     const auto luminance = [](juce::Colour c)
     {
-        const auto channel = [](float v)
-        { return v <= 0.03928f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f); };
+        const auto channel = [](float v) { return v <= 0.03928f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f); };
 
-        return 0.2126f * channel(c.getFloatRed()) + 0.7152f * channel(c.getFloatGreen())
-               + 0.0722f * channel(c.getFloatBlue());
+        return 0.2126f * channel(c.getFloatRed()) + 0.7152f * channel(c.getFloatGreen()) +
+               0.0722f * channel(c.getFloatBlue());
     };
 
     const auto la = luminance(a);

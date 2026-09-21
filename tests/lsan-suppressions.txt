@@ -1,0 +1,21 @@
+# LeakSanitizer suppressions.
+#
+# Every entry here must name a SYSTEM library and say why. Nothing owned by
+# Ember belongs in this file: a suppression on our own code would turn a real
+# leak into a silent one, which is worse than the leak.
+#
+# ---------------------------------------------------------------------------
+# fontconfig, and the expat parser it uses to read its configuration.
+#
+# Embedding Inter and Barlow Condensed means JUCE initialises fontconfig on
+# Linux even in a headless test run. fontconfig builds a global FcConfig from
+# /etc/fonts/*.conf on first use and keeps it for the lifetime of the process
+# by design - there is no teardown call, and FcFini() is documented as unsafe
+# to call from a library. LSan sees the 320 bytes still reachable at exit and
+# reports them.
+#
+# This is a well-known false positive, not a leak we can close: the allocation
+# is made inside libfontconfig, freed by nothing, and outlives any scope we
+# control.
+leak:libfontconfig
+leak:libexpat

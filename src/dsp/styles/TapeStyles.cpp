@@ -69,9 +69,8 @@ inline int usableChannels(float* const* channelData, int numChannels, int numSam
 */
 namespace
 {
-template <int NumCh>
-void cleanTapeKernel(float* const* data, int numSamples, float drive, float retain,
-                     dsputil::OnePole* rolloff) noexcept
+template<int NumCh>
+void cleanTapeKernel(float* const* data, int numSamples, float drive, float retain, dsputil::OnePole* rolloff) noexcept
 {
     dsputil::OnePole lp[NumCh];
 
@@ -159,7 +158,7 @@ void CleanTapeStyle::process(float* const* channelData, int numChannels, int num
 
 namespace
 {
-template <int NumCh>
+template<int NumCh>
 void warmTapeKernel(float* const* data, int numSamples, float drive, float magAmt, float squash, float retain,
                     dsputil::OnePole* level, dsputil::OnePole* mag, dsputil::OnePole* tone) noexcept
 {

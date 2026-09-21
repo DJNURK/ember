@@ -154,55 +154,39 @@ TEST_CASE("no role falls below the 10 px legibility floor", "[theme]")
 
 TEST_CASE("colour literals live only in EmberTheme.cpp", "[theme]")
 {
-    // A ratchet, not a wish. Files still carrying pre-redesign literals are
-    // listed here with their current count; the check fails if any count goes
-    // UP, or if a file not on the list gains a literal at all.
-    //
-    // As each panel is rebuilt against EmberTheme::tokens() its entry drops to
-    // zero and is deleted. When the list is empty the redesign's token rule is
-    // fully enforced and this becomes the strict test it is named after.
-    struct Budget
-    {
-        const char* file;
-        int allowed;
-    };
-
-    const Budget budgets[] = {};
-
+    // The rule the design states, enforced rather than documented: every colour
+    // in the GUI comes from EmberTheme::tokens(). This started as a ratchet with
+    // a per-file budget while the migration ran; the budgets are all zero now,
+    // so the check is simply that there are none.
     const juce::File guiDir{juce::String{EMBER_SOURCE_DIR} + "/src/gui"};
     REQUIRE(guiDir.isDirectory());
+
+    juce::StringArray offenders;
 
     for (const auto& entry : juce::RangedDirectoryIterator{guiDir, false, "*.cpp;*.h"})
     {
         const auto file = entry.getFile();
-        const auto name = file.getFileName();
 
-        if (name.startsWith("EmberTheme."))
+        if (file.getFileName().startsWith("EmberTheme."))
             continue;
 
-        int found = 0;
+        const auto lines = juce::StringArray::fromLines(file.loadFileAsString());
 
-        for (const auto& line : juce::StringArray::fromLines(file.loadFileAsString()))
+        for (int i = 0; i < lines.size(); ++i)
         {
             // transparentBlack is not a colour decision - it is JUCE's way of
             // saying "draw nothing", used to switch off a stock component's
             // background or outline. Counting it would force every such line
             // through the palette to express an absence.
-            const auto stripped = line.replace("juce::Colours::transparentBlack", "");
+            const auto stripped = lines[i].replace("juce::Colours::transparentBlack", "");
 
-            if (stripped.contains("juce::Colour(0x") || stripped.contains("juce::Colour (0x")
-                || stripped.contains("Colour::fromRGB") || stripped.contains("Colour::fromHSV")
-                || stripped.contains("juce::Colours::"))
-                ++found;
+            if (stripped.contains("juce::Colour(0x") || stripped.contains("juce::Colour (0x") ||
+                stripped.contains("Colour::fromRGB") || stripped.contains("Colour::fromHSV") ||
+                stripped.contains("juce::Colours::"))
+                offenders.add(file.getFileName() + ":" + juce::String{i + 1} + "  " + stripped.trim());
         }
-
-        int allowed = 0;
-        for (const auto& b : budgets)
-            if (name == b.file)
-                allowed = b.allowed;
-
-        INFO(name << " holds " << found << " colour literals, budget " << allowed
-                  << ". If you removed some, lower the budget in tests/test_theme.cpp.");
-        REQUIRE(found <= allowed);
     }
+
+    INFO("colour literals outside the theme:\n" << offenders.joinIntoString("\n"));
+    REQUIRE(offenders.isEmpty());
 }

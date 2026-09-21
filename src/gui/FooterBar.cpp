@@ -79,8 +79,7 @@ void FooterBar::timerCallback()
     const auto samples = processor.getLatencySamples();
     const auto rate = processor.getSampleRate();
 
-    if (std::abs(cpu - smoothedCpuPercent) > 0.05f || samples != latencySamples
-        || std::abs(rate - latencyRate) > 1.0)
+    if (std::abs(cpu - smoothedCpuPercent) > 0.05f || samples != latencySamples || std::abs(rate - latencyRate) > 1.0)
     {
         smoothedCpuPercent = cpu;
         latencySamples = samples;
@@ -91,7 +90,8 @@ void FooterBar::timerCallback()
 
 void FooterBar::resized()
 {
-    const float scale = juce::jlimit(0.75f, 2.0f, static_cast<float>(getHeight()) / static_cast<float>(Metrics::footerHeight));
+    const float scale =
+        juce::jlimit(0.75f, 2.0f, static_cast<float>(getHeight()) / static_cast<float>(Metrics::footerHeight));
 
     auto area = getLocalBounds().reduced(juce::roundToInt(static_cast<float>(Spacing::md) * scale),
                                          juce::roundToInt(static_cast<float>(Spacing::xs) * scale));
@@ -144,20 +144,19 @@ void FooterBar::paint(juce::Graphics& g)
 
     TextureCache::fillBrushed(g, getLocalBounds(), 0.035f);
 
-    const float scale = juce::jlimit(0.75f, 2.0f,
-                                     static_cast<float>(getHeight()) / static_cast<float>(Metrics::footerHeight));
+    const float scale =
+        juce::jlimit(0.75f, 2.0f, static_cast<float>(getHeight()) / static_cast<float>(Metrics::footerHeight));
 
-    if (! readoutArea.isEmpty())
+    if (!readoutArea.isEmpty())
     {
         // Tabular figures, so the percentage does not shuffle the latency text
         // sideways every time it changes.
         g.setFont(EmberFonts::get(EmberFonts::Role::footer, scale));
 
         const auto cpuText = juce::String(smoothedCpuPercent, 1) + " %";
-        const auto latencyText =
-            latencySamples > 0 && latencyRate > 0.0
-                ? juce::String(1000.0 * latencySamples / latencyRate, 1) + " ms"
-                : juce::String("0.0 ms");
+        const auto latencyText = latencySamples > 0 && latencyRate > 0.0
+                                     ? juce::String(1000.0 * latencySamples / latencyRate, 1) + " ms"
+                                     : juce::String("0.0 ms");
 
         auto row = readoutArea;
         auto cpuCell = row.removeFromTop(row.getHeight() / 2);
@@ -171,7 +170,7 @@ void FooterBar::paint(juce::Graphics& g)
         g.drawText(latencyText, row, juce::Justification::centredRight, false);
     }
 
-    if (! hintArea.isEmpty() && hint.isNotEmpty())
+    if (!hintArea.isEmpty() && hint.isNotEmpty())
     {
         g.setFont(EmberFonts::get(EmberFonts::Role::footer, scale));
         g.setColour(tk.textDim);

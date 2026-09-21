@@ -1051,7 +1051,11 @@ void GlobalBar::showOverflowMenu()
 
     for (const int percent : {75, 100, 125, 150, 200})
         zoom.addItem(juce::String(percent) + " %", true, false,
-                     [this, percent] { if (onZoomRequested) onZoomRequested(static_cast<float>(percent) * 0.01f); });
+                     [this, percent]
+                     {
+                         if (onZoomRequested)
+                             onZoomRequested(static_cast<float>(percent) * 0.01f);
+                     });
 
     menu.addSubMenu("Zoom", zoom);
 
@@ -1078,7 +1082,7 @@ void GlobalBar::showOverflowMenu()
     appearance.addItem("Reduce motion", true, EmberTheme::reduceMotion(),
                        [this]
                        {
-                           EmberTheme::setReduceMotion(! EmberTheme::reduceMotion());
+                           EmberTheme::setReduceMotion(!EmberTheme::reduceMotion());
                            if (onAppearanceChanged)
                                onAppearanceChanged();
                        });

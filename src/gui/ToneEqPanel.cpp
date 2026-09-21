@@ -188,10 +188,10 @@ bool ToneEqPanel::refreshCurve()
     const auto q = read(pid::toneMidQ(band), 0.7f);
     const auto heat = processor.getBandHeat(band);
 
-    const bool moved = gains != shownGain || freqs != shownFreq || ! juce::exactlyEqual(q, shownQ)
-                       || std::abs(heat - shownHeat) > 0.01f;
+    const bool moved = gains != shownGain || freqs != shownFreq || !juce::exactlyEqual(q, shownQ) ||
+                       std::abs(heat - shownHeat) > 0.01f;
 
-    if (! moved && ! curve.isEmpty())
+    if (!moved && !curve.isEmpty())
         return false;
 
     shownGain = gains;
@@ -232,8 +232,7 @@ void ToneEqPanel::timerCallback()
 
     processor.getBandSpanHz(band, bandLowHz, bandHighHz);
 
-    if (refreshCurve() || ! juce::exactlyEqual(previousLow, bandLowHz)
-        || ! juce::exactlyEqual(previousHigh, bandHighHz))
+    if (refreshCurve() || !juce::exactlyEqual(previousLow, bandLowHz) || !juce::exactlyEqual(previousHigh, bandHighHz))
         repaint();
 }
 
@@ -313,11 +312,11 @@ void ToneEqPanel::paint(juce::Graphics& g)
         g.strokePath(curve, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved));
 
         juce::Graphics::ScopedSaveState inBand{g};
-        g.reduceClipRegion(juce::Rectangle<float>(spanLeft, plot.getY(), juce::jmax(0.0f, spanRight - spanLeft),
-                                                  plot.getHeight())
-                               .toNearestInt());
+        g.reduceClipRegion(
+            juce::Rectangle<float>(spanLeft, plot.getY(), juce::jmax(0.0f, spanRight - spanLeft), plot.getHeight())
+                .toNearestInt());
 
-        if (shownHeat > 0.02f && ! EmberTheme::reduceMotion())
+        if (shownHeat > 0.02f && !EmberTheme::reduceMotion())
         {
             g.setColour(tk.tubeGlow.withAlpha(shownHeat * 0.45f));
             g.strokePath(curve, juce::PathStrokeType(4.5f, juce::PathStrokeType::curved));
@@ -335,7 +334,7 @@ void ToneEqPanel::paint(juce::Graphics& g)
         const bool active = node == hovered || node == dragging;
         const auto radius = active ? kHoveredNodeRadius : kNodeRadius;
 
-        if (active && ! EmberTheme::reduceMotion())
+        if (active && !EmberTheme::reduceMotion())
             GlowCache::draw(g, centre, radius * 2.6f, tk.tubeGlow, 0.45f);
 
         const auto disc = juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(centre);
@@ -393,14 +392,14 @@ void ToneEqPanel::paint(juce::Graphics& g)
         {
             const auto bounds = chipBounds(Chip::bypass);
 
-            if (! bounds.isEmpty())
+            if (!bounds.isEmpty())
             {
                 g.setColour(tk.bgDeep);
                 g.fillEllipse(bounds);
 
                 if (bypassed)
                 {
-                    if (! EmberTheme::reduceMotion())
+                    if (!EmberTheme::reduceMotion())
                         GlowCache::draw(g, bounds.getCentre(), bounds.getWidth() * 1.3f, tk.tubeGlow, 0.4f);
 
                     g.setColour(tk.ember);
@@ -426,9 +425,8 @@ void ToneEqPanel::paint(juce::Graphics& g)
         const auto index = static_cast<size_t>(shown);
 
         juce::String text = juce::String(shownGain[index], 1) + " dB";
-        text += "  " + (shownFreq[index] >= 1000.0f
-                            ? juce::String(shownFreq[index] / 1000.0f, 2) + " kHz"
-                            : juce::String(juce::roundToInt(shownFreq[index])) + " Hz");
+        text += "  " + (shownFreq[index] >= 1000.0f ? juce::String(shownFreq[index] / 1000.0f, 2) + " kHz"
+                                                    : juce::String(juce::roundToInt(shownFreq[index])) + " Hz");
 
         if (shown == Node::mid)
             text += "  Q " + juce::String(shownQ, 2);
@@ -437,7 +435,8 @@ void ToneEqPanel::paint(juce::Graphics& g)
         const auto width = juce::GlyphArrangement::getStringWidth(font, text) + 14.0f;
         const auto height = font.getHeight() + 8.0f;
 
-        auto pill = juce::Rectangle<float>(width, height).withCentre(positionOf(shown).translated(0.0f, -height - 6.0f));
+        auto pill =
+            juce::Rectangle<float>(width, height).withCentre(positionOf(shown).translated(0.0f, -height - 6.0f));
 
         // Keep it inside the plot: a pill that runs off the edge is the one
         // thing a value readout must never do.
@@ -454,7 +453,6 @@ void ToneEqPanel::paint(juce::Graphics& g)
         g.drawText(text, pill, juce::Justification::centred, false);
     }
 }
-
 
 //==============================================================================
 juce::Rectangle<float> ToneEqPanel::chipBounds(Chip chip) const

@@ -37,8 +37,8 @@ struct HalfBandDesign
     arithmetically, not from `directPath.size()`. The two agree for every design
     this call can return, but deriving it the same way means the split cannot
     drift even if a future JUCE changes the structure. */
-void packStructure(const juce::dsp::FilterDesign<float>::IIRPolyphaseAllpassStructure& s,
-                   std::vector<float>& out, int& numDirect)
+void packStructure(const juce::dsp::FilterDesign<float>::IIRPolyphaseAllpassStructure& s, std::vector<float>& out,
+                   int& numDirect)
 {
     out.clear();
 
@@ -154,7 +154,7 @@ inline void cascade(float* v, const float* alpha, const float* negAlpha, float* 
         const auto negA = Vec::fromRawArray(negAlpha + 4 * s);
         const auto st = Vec::fromRawArray(state + 4 * s);
 
-        const auto o = Vec::multiplyAdd(st, a, x);      // st + a * x
+        const auto o = Vec::multiplyAdd(st, a, x);                  // st + a * x
         Vec::multiplyAdd(x, negA, o).copyToRawArray(state + 4 * s); // x - a * o
         x = o;
     }
@@ -202,7 +202,7 @@ inline void cascadeMono(float* v, const float* alpha, float* state, int numSecti
 }
 
 /** One 2x upsampling stage: `n` samples in, `2 * n` out. */
-template <bool Stereo>
+template<bool Stereo>
 void stageUp(const float* const* in, float* const* out, int n, const float* alpha, const float* negAlpha,
              int numSections, float* state) noexcept
 {
@@ -230,7 +230,7 @@ void stageUp(const float* const* in, float* const* out, int n, const float* alph
 }
 
 /** One 2x downsampling stage: `2 * n` samples in, `n` out. */
-template <bool Stereo>
+template<bool Stereo>
 void stageDown(const float* const* in, float* const* out, int n, const float* alpha, const float* negAlpha,
                int numSections, float* state, float* delayState) noexcept
 {
@@ -332,8 +332,8 @@ void PolyphaseOversampler::reset() noexcept
     compPrevOut.fill(0.0f);
 }
 
-juce::dsp::AudioBlock<float> PolyphaseOversampler::processSamplesUp(
-    const juce::dsp::AudioBlock<const float>& input) noexcept
+juce::dsp::AudioBlock<float>
+PolyphaseOversampler::processSamplesUp(const juce::dsp::AudioBlock<const float>& input) noexcept
 {
     if (!ready || stages.empty())
         return {};
@@ -407,8 +407,8 @@ void PolyphaseOversampler::processSamplesDown(juce::dsp::AudioBlock<float>& outp
         }
 
         if (numCh == 2)
-            stageDown<true>(inPtrs, outPtrs, n, stage.coeffsDown.data(), stage.negCoeffsDown.data(),
-                            stage.sectionsDown, stage.stateDown.data(), stage.delayDown.data());
+            stageDown<true>(inPtrs, outPtrs, n, stage.coeffsDown.data(), stage.negCoeffsDown.data(), stage.sectionsDown,
+                            stage.stateDown.data(), stage.delayDown.data());
         else
             stageDown<false>(inPtrs, outPtrs, n, stage.coeffsDown.data(), stage.negCoeffsDown.data(),
                              stage.sectionsDown, stage.stateDown.data(), stage.delayDown.data());

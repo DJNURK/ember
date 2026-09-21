@@ -106,13 +106,13 @@ namespace Metrics
 {
 inline constexpr float panelRadius = 6.0f;
 inline constexpr float controlRadius = 4.0f;
-inline constexpr float bevel = 1.0f;       ///< top-edge highlight
-inline constexpr float hairline = 1.0f;    ///< separators
-inline constexpr float arcTrack = 3.0f;    ///< knob arc, unfilled
-inline constexpr float arcFill = 3.0f;     ///< knob arc, filled
-inline constexpr float arcGlow = 2.0f;     ///< the bloom under the fill
-inline constexpr int shadowRadius = 10;    ///< raised-panel drop shadow
-inline constexpr int shadowOffsetY = 2;    ///< light comes from above-left
+inline constexpr float bevel = 1.0f;    ///< top-edge highlight
+inline constexpr float hairline = 1.0f; ///< separators
+inline constexpr float arcTrack = 3.0f; ///< knob arc, unfilled
+inline constexpr float arcFill = 3.0f;  ///< knob arc, filled
+inline constexpr float arcGlow = 2.0f;  ///< the bloom under the fill
+inline constexpr int shadowRadius = 10; ///< raised-panel drop shadow
+inline constexpr int shadowOffsetY = 2; ///< light comes from above-left
 inline constexpr int headerHeight = 52;
 inline constexpr int footerHeight = 44;
 inline constexpr int modRailCollapsed = 36;
@@ -172,13 +172,12 @@ public:
         `intensity` scales alpha, not radius, so a brightening glow does not
         change layout. Radius picks the sprite; anything between sizes is
         scaled, which is cheap because it is a blit, not a blur. */
-    static void draw(juce::Graphics&, juce::Point<float> centre, float radius, juce::Colour tint,
-                     float intensity);
+    static void draw(juce::Graphics&, juce::Point<float> centre, float radius, juce::Colour tint, float intensity);
 
     /** A glow smeared along a rounded rectangle rather than a point — the band
         regions and module title bars use this. */
-    static void drawForRect(juce::Graphics&, juce::Rectangle<float> area, float cornerRadius,
-                            juce::Colour tint, float intensity);
+    static void drawForRect(juce::Graphics&, juce::Rectangle<float> area, float cornerRadius, juce::Colour tint,
+                            float intensity);
 };
 
 //==============================================================================

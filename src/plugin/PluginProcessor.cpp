@@ -527,7 +527,7 @@ void EmberAudioProcessor::publishCpuLoad(juce::int64 startTicks, int numSamples)
     const auto elapsed = juce::Time::highResolutionTicksToSeconds(juce::Time::getHighResolutionTicks() - startTicks);
     const auto available = static_cast<double>(numSamples) / rate;
 
-    if (available <= 0.0 || ! std::isfinite(elapsed))
+    if (available <= 0.0 || !std::isfinite(elapsed))
         return;
 
     const auto instant = static_cast<float>(100.0 * elapsed / available);
@@ -540,7 +540,7 @@ void EmberAudioProcessor::publishCpuLoad(juce::int64 startTicks, int numSamples)
     const float coefficient = instant > previous ? 0.08f : 0.02f;
     auto smoothed = previous + (instant - previous) * coefficient;
 
-    if (! std::isfinite(smoothed))
+    if (!std::isfinite(smoothed))
         smoothed = 0.0f;
 
     cpuLoadPercent.store(juce::jlimit(0.0f, 999.0f, smoothed), std::memory_order_relaxed);

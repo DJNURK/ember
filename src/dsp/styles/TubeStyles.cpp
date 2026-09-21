@@ -209,7 +209,7 @@ namespace
     one channel runs alone. The shelf filter is copied into a local because the
     audio pointers could alias the state array, which would otherwise force a
     reload of the filter state on every sample. */
-template <int NumCh>
+template<int NumCh>
 void warmTubeKernel(float* const* data, int numSamples, float drive, float shelfMix, float bias,
                     dsputil::SvfTPT* shelf) noexcept
 {
