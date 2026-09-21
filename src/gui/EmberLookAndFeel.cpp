@@ -537,50 +537,119 @@ void EmberLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int wid
     if (geo.outerRadius <= 1.0f)
         return;
 
+    const auto& tk = EmberTheme::tokens();
+
     const bool enabled = slider.isEnabled();
-    const bool active = enabled && (slider.isMouseOverOrDragging() || slider.hasKeyboardFocus(false));
-    const auto accent = enabled ? EmberStyleProps::accentColourFor(slider) : EmberColours::textDisabled;
+    const bool hovered = enabled && slider.isMouseOverOrDragging();
+    const bool active = hovered || (enabled && slider.hasKeyboardFocus(false));
+    const auto accent = enabled ? EmberStyleProps::accentColourFor(slider) : tk.textMuted;
 
-    // --- the cap the pointer sits on
     const auto body = geo.bodyBounds();
-    g.setGradientFill(surfaceGradient(body, EmberColours::panelRaised, 0.12f));
-    g.fillEllipse(body);
-    g.setColour(active ? accent.withAlpha(0.55f) : EmberColours::outline);
-    g.drawEllipse(body.reduced(0.5f), 1.0f);
 
-    // --- unfilled track
+    //--------------------------------------------------------------- the groove
+    // The track is recessed, not drawn on top: a dark stroke with a lighter
+    // hairline along its upper edge reads as a channel cut into the panel,
+    // which is what makes the value arc look like it sits *in* something.
     const juce::PathStrokeType trackStroke(geo.trackThickness, juce::PathStrokeType::curved,
                                            juce::PathStrokeType::rounded);
-    g.setColour(EmberColours::track);
-    g.strokePath(arcPath(geo.centre, geo.arcRadius, rotaryStartAngle, rotaryEndAngle), trackStroke);
+    const auto trackPath = arcPath(geo.centre, geo.arcRadius, rotaryStartAngle, rotaryEndAngle);
 
-    // --- a notch where a bipolar control's value arc grows from
+    g.setColour(tk.bgDeep);
+    g.strokePath(trackPath, trackStroke);
+
+    // The groove has to stay legible or the control loses its range: on a dark
+    // panel a pure shadow-coloured track simply disappears. A rim along the
+    // whole arc keeps the sweep readable while still reading as recessed.
+    g.setColour(tk.panelEdge.withAlpha(0.85f));
+    g.strokePath(trackPath, juce::PathStrokeType(juce::jmax(1.0f, geo.trackThickness * 0.30f),
+                                                 juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    g.setColour(tk.panelShadow.withAlpha(0.7f));
+    g.strokePath(arcPath(geo.centre, geo.arcRadius - geo.trackThickness * 0.40f, rotaryStartAngle, rotaryEndAngle),
+                 juce::PathStrokeType(0.8f, juce::PathStrokeType::curved));
+
+    //----------------------------------------------------------- the value arc
     const float anchorProportion = valueArcAnchor(slider);
     const float anchorAngle = rotaryAngle(anchorProportion, rotaryStartAngle, rotaryEndAngle);
 
     if (isBipolar(slider))
     {
+        // A bipolar control fills from its centre, so mark where zero is.
         const auto notch = geo.centre.getPointOnCircumference(geo.arcRadius, anchorAngle);
-        const float notchRadius = juce::jmax(1.0f, geo.trackThickness * 0.7f);
-        g.setColour(EmberColours::outlineStrong);
+        const float notchRadius = juce::jmax(1.0f, geo.trackThickness * 0.55f);
+        g.setColour(tk.textMuted);
         g.fillEllipse(juce::Rectangle<float>(notchRadius * 2.0f, notchRadius * 2.0f).withCentre(notch));
     }
 
-    // --- filled value arc
     const float valueAngle = rotaryAngle(sliderPosProportional, rotaryStartAngle, rotaryEndAngle);
 
-    if (std::abs(valueAngle - anchorAngle) > 1.0e-3f)
+    if (enabled && std::abs(valueAngle - anchorAngle) > 1.0e-3f)
     {
-        g.setColour(accent);
-        g.strokePath(
-            arcPath(geo.centre, geo.arcRadius, anchorAngle, valueAngle),
-            juce::PathStrokeType(geo.valueThickness, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        const auto valuePath = arcPath(geo.centre, geo.arcRadius, anchorAngle, valueAngle);
+
+        // The bloom under the fill. A wider translucent stroke of the same path
+        // is a real glow and costs one extra stroke - blurring per frame to get
+        // the same effect is what makes glowing interfaces expensive.
+        if (! EmberTheme::reduceMotion())
+        {
+            const float bloom = active ? 0.34f : 0.20f;
+            g.setColour(tk.tubeGlow.withAlpha(bloom));
+            g.strokePath(valuePath, juce::PathStrokeType(geo.valueThickness + Metrics::arcGlow * 2.0f,
+                                                        juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+
+        // Cooler where the arc starts, hotter where it ends, so a knob that is
+        // wound up looks hotter than one barely moved even at a glance.
+        const auto from = geo.centre.getPointOnCircumference(geo.arcRadius, anchorAngle);
+        const auto to = geo.centre.getPointOnCircumference(geo.arcRadius, valueAngle);
+        juce::ColourGradient arcFill(accent, from, accent.interpolatedWith(tk.emberHot, 0.55f), to, false);
+
+        g.setGradientFill(arcFill);
+        g.strokePath(valuePath, juce::PathStrokeType(geo.valueThickness, juce::PathStrokeType::curved,
+                                                     juce::PathStrokeType::rounded));
     }
 
-    // --- pointer
-    const auto inner = geo.centre.getPointOnCircumference(geo.bodyRadius * 0.34f, valueAngle);
-    const auto outer = geo.centre.getPointOnCircumference(geo.bodyRadius * 0.94f, valueAngle);
-    g.setColour(enabled ? EmberColours::textPrimary : EmberColours::textDisabled);
+    //-------------------------------------------------------------- the cap
+    // Seated in a shadow, lit from the top-left, with the brushed sheet clipped
+    // to it. The 6 % hover lift is the whole hover affordance - no outline, no
+    // colour change, just the metal catching more light.
+    g.setColour(tk.panelShadow.withAlpha(0.55f));
+    g.fillEllipse(body.translated(0.0f, 1.2f).expanded(0.8f));
+
+    const auto capBase = hovered ? tk.panelRaised.brighter(0.06f) : tk.panelRaised;
+    juce::ColourGradient cap(capBase.brighter(0.16f), body.getX() + body.getWidth() * 0.28f,
+                             body.getY() + body.getHeight() * 0.18f, capBase.darker(0.34f), body.getRight(),
+                             body.getBottom(), true);
+    g.setGradientFill(cap);
+    g.fillEllipse(body);
+
+    {
+        juce::Graphics::ScopedSaveState save{g};
+        juce::Path clip;
+        clip.addEllipse(body);
+        g.reduceClipRegion(clip);
+        TextureCache::fillBrushed(g, body.getSmallestIntegerContainer().expanded(1), 0.05f);
+    }
+
+    // Rim: bright along the top-left where the light falls, dark below.
+    g.setColour(tk.panelEdge.brighter(hovered ? 0.30f : 0.16f));
+    g.drawEllipse(body.reduced(0.5f), 1.0f);
+    g.setColour(tk.panelShadow.withAlpha(0.45f));
+    g.strokePath(arcPath(geo.centre, geo.bodyRadius - 0.5f, juce::MathConstants<float>::halfPi * 0.6f,
+                         juce::MathConstants<float>::pi * 1.1f),
+                 juce::PathStrokeType(1.0f));
+
+    //---------------------------------------------------------- the indicator
+    // One bright line, the only pure-white-ish mark on the control.
+    const auto inner = geo.centre.getPointOnCircumference(geo.bodyRadius * 0.30f, valueAngle);
+    const auto outer = geo.centre.getPointOnCircumference(geo.bodyRadius * 0.88f, valueAngle);
+
+    if (enabled && ! EmberTheme::reduceMotion())
+    {
+        g.setColour(tk.tubeGlow.withAlpha(active ? 0.30f : 0.16f));
+        g.drawLine(juce::Line<float>(inner, outer), geo.pointerThickness + 2.0f);
+    }
+
+    g.setColour(enabled ? tk.text : tk.textMuted);
     g.drawLine(juce::Line<float>(inner, outer), geo.pointerThickness);
 }
 
