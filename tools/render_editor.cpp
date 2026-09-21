@@ -50,8 +50,19 @@ int main(int argc, char** argv)
         std::printf("drive %.1f dB on every band\n", static_cast<double>(driveDb));
     }
 
-    // Push audio through first so the spectrum display and the meters have real
-    // data to draw, rather than photographing an idle plugin.
+
+    std::unique_ptr<juce::AudioProcessorEditor> editor(proc.createEditor());
+    if (editor == nullptr)
+    {
+        std::puts("createEditor() returned null");
+        return 1;
+    }
+    editor->setSize(width, height);
+
+    // Audio runs AFTER the editor exists. The spectrum analyser is only
+    // switched on while an editor is open - it is skipped otherwise, which is
+    // what keeps a headless instance cheap - so pushing audio first produced a
+    // perfectly empty display in every screenshot taken so far.
     {
         juce::AudioBuffer<float> buf(2, 512);
         juce::MidiBuffer midi;
@@ -65,16 +76,10 @@ int main(int argc, char** argv)
         }
     }
 
+
+
     for (int b = 0; b < 3; ++b)
         std::printf("band %d heat %.3f\n", b, static_cast<double>(proc.getBandHeat(b)));
-
-    std::unique_ptr<juce::AudioProcessorEditor> editor(proc.createEditor());
-    if (editor == nullptr)
-    {
-        std::puts("createEditor() returned null");
-        return 1;
-    }
-    editor->setSize(width, height);
 
     // Let the panels' timers run so spectra, meters and modulation readouts
     // populate. The plugin is built with JUCE_MODAL_LOOPS_PERMITTED=0, so a
