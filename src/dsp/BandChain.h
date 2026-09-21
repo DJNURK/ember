@@ -5,6 +5,7 @@
 #include "dsp/EmberTypes.h"
 #include "dsp/BandParams.h"
 #include "dsp/BandFx.h"
+#include "dsp/PolyphaseOversampler.h"
 #include "dsp/StyleCalibrator.h"
 #include "dsp/styles/SaturationStyle.h"
 
@@ -70,7 +71,17 @@ private:
     float styleFade{1.0f}; ///< 1 = fully on currentStyle
     float styleFadeStep{1.0f};
 
-    std::unique_ptr<juce::dsp::Oversampling<float>> oversampler;
+    /** Two oversampler implementations, one live at a time.
+
+        The realtime path uses `PolyphaseOversampler`, which is JUCE's polyphase
+        IIR design processed with both channels in the same inner loop; the
+        offline / HQ path keeps JUCE's own equiripple FIR, which only runs where
+        CPU does not matter and so is not worth reimplementing.
+        `usingPolyphase` says which one is active. */
+    PolyphaseOversampler polyphase;
+    std::unique_ptr<juce::dsp::Oversampling<float>> firOversampler;
+    bool usingPolyphase{false};
+    bool hasOversampling{false};
     /** The oversampler is built with integer-latency compensation, so this
         delay is always a whole number of samples and needs no interpolation. A
         Lagrange interpolator here costs four multiply-adds per sample per
