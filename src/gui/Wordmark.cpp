@@ -61,9 +61,9 @@ int Wordmark::preferredWidth(int forHeight) const
     const auto h = static_cast<float>(juce::jmax(1, forHeight));
 
     if (! wordPath.isEmpty())
-        return juce::roundToInt(h + h * 0.4f + wordPath.getBounds().getWidth());
+        return juce::roundToInt(h * 0.62f + h * 0.22f + wordPath.getBounds().getWidth());
 
-    return juce::roundToInt(h * 3.9f);
+    return juce::roundToInt(h * 3.0f);
 }
 
 void Wordmark::resized()
@@ -80,7 +80,7 @@ void Wordmark::rebuildPath()
     if (bounds.getHeight() < 6.0f || bounds.getWidth() < 12.0f)
         return;
 
-    const float glyphSize = bounds.getHeight() * 0.72f;
+    const float glyphSize = bounds.getHeight() * 0.62f;
     filamentArea = juce::Rectangle<float>(glyphSize, glyphSize).withCentre({bounds.getX() + glyphSize * 0.55f,
                                                                            bounds.getCentreY()});
 
@@ -97,7 +97,7 @@ void Wordmark::rebuildPath()
         return;
 
     const auto wordBounds = wordPath.getBounds();
-    const float targetHeight = bounds.getHeight() * 0.44f;
+    const float targetHeight = bounds.getHeight() * 0.38f;
 
     if (wordBounds.getHeight() > 0.1f)
     {
@@ -105,10 +105,28 @@ void Wordmark::rebuildPath()
         wordPath.applyTransform(juce::AffineTransform::scale(wordScale));
     }
 
-    const auto scaled = wordPath.getBounds();
-    wordPath.applyTransform(juce::AffineTransform::translation(filamentArea.getRight() + bounds.getHeight() * 0.22f
-                                                                   - scaled.getX(),
-                                                               bounds.getCentreY() - scaled.getCentreY()));
+    // Fit the word into whatever width is actually left beside the glyph.
+    // preferredWidth() has to answer before the path exists, so it can only
+    // estimate - and when the estimate is short the word gets clipped to
+    // "EMBE". Measuring here, where the real letterforms are known, is the
+    // only place this can be got right.
+    const float wordLeft = filamentArea.getRight() + bounds.getHeight() * 0.22f;
+    const float roomForWord = bounds.getRight() - wordLeft;
+
+    if (roomForWord < 4.0f)
+    {
+        wordPath.clear();
+        return;
+    }
+
+    auto scaled = wordPath.getBounds();
+
+    if (scaled.getWidth() > roomForWord)
+        wordPath.applyTransform(juce::AffineTransform::scale(roomForWord / scaled.getWidth()));
+
+    scaled = wordPath.getBounds();
+    wordPath.applyTransform(
+        juce::AffineTransform::translation(wordLeft - scaled.getX(), bounds.getCentreY() - scaled.getCentreY()));
 }
 
 void Wordmark::timerCallback()

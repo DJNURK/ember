@@ -7,8 +7,6 @@ namespace
 {
 // Layout proportions, expressed as fractions of the window so the interface
 // holds together from 800x480 up to 3000x2000.
-constexpr int kPresetBarHeight = 34;
-constexpr int kGlobalBarHeight = 74;
 // The band panel's content — style picker plus the saturation, stereo, feedback,
 // dynamics and tone groups — needs this much before it starts clipping. Measured
 // by rendering the editor offscreen, not guessed: at the previous 196 the style
@@ -118,9 +116,17 @@ void EmberAudioProcessorEditor::resized()
     const float scale = juce::jlimit(0.8f, 2.0f, static_cast<float>(getHeight()) / 640.0f);
     auto area = getLocalBounds().reduced(kEdge);
 
-    presetBar.setBounds(area.removeFromTop(juce::roundToInt(kPresetBarHeight * scale)));
-    area.removeFromTop(kEdge / 2);
-    globalBar.setBounds(area.removeFromTop(juce::roundToInt(kGlobalBarHeight * scale)));
+    // One header row, as the design specifies, rather than two stacked strips.
+    // The logo and preset name take the left; the global controls take the
+    // right and lean on GlobalBar's own overflow menu, which drops the least
+    // important control into "..." rather than off the edge - so a narrower
+    // slot costs reachability nothing.
+    auto header = area.removeFromTop(juce::roundToInt(static_cast<float>(gui::Metrics::headerHeight) * scale));
+    const int presetWidth = juce::jlimit(180, 460, juce::roundToInt(static_cast<float>(header.getWidth()) * 0.38f));
+
+    presetBar.setBounds(header.removeFromLeft(presetWidth));
+    header.removeFromLeft(kEdge / 2);
+    globalBar.setBounds(header);
     area.removeFromTop(kEdge / 2);
 
     footer.setBounds(area.removeFromBottom(gui::FooterBar::preferredHeight(scale)));

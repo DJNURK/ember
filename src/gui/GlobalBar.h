@@ -313,7 +313,15 @@ private:
     /** `base` px at the strip's own scale, clamped to a sane range. */
     int scaled(float base, int minimum, int maximum) const;
 
-    bool shows(Optional item) const noexcept { return optionalVisible[static_cast<size_t>(item)]; }
+    bool shows(Optional item) const noexcept
+    {
+        // Latency lives in the footer now. Showing it here too spends header
+        // width on a duplicate of something already on screen.
+        if (item == Optional::latency)
+            return false;
+
+        return optionalVisible[static_cast<size_t>(item)];
+    }
 
     //==========================================================================
     EmberAudioProcessor& processor;

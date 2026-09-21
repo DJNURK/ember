@@ -1474,7 +1474,11 @@ void PresetBar::resized()
     // The logo takes the left end, but only where there is room for it to be
     // legible - below that the preset name matters more than the branding.
     const int logoWidth = wordmark.preferredWidth(area.getHeight());
-    const bool showLogo = area.getWidth() > logoWidth * 3;
+
+    // The preset name needs room to be read; the logo yields to it. "Three
+    // times the logo" was far too cautious and hid the logo at every real
+    // header width - it only has to leave the name a usable share.
+    const bool showLogo = area.getWidth() > logoWidth + 170;
 
     wordmark.setVisible(showLogo);
 
