@@ -58,7 +58,13 @@ to `drawText`, only to grid and separator strokes.
 
 | Token | Hex | Use |
 |---|---|---|
-| `cold` | `#5A7FA8` | modulation sources, connections, mod arcs |
+| `cold` | `#5D82AA` | modulation sources, connections, mod arcs |
+
+> The brief specifies `#5A7FA8`. That measures **4.36:1** on `panel` and so
+> fails the brief's own §6 requirement that every colour clear 4.5:1 for text.
+> Lifted 1 % in lightness — same hue, same saturation — to 4.54:1. The
+> contrast test would otherwise have to be weakened to accept it, and a
+> failing accessibility gate is worse than a 1 % colour shift.
 
 ### Alarm
 
@@ -127,13 +133,16 @@ while dragging.
 Labels sit **below** knobs. The live value appears in a floating pill **above**
 the knob while dragging, and only while dragging.
 
-> **Open question — fonts are not yet in the repo.** `resources/fonts/` exists
-> but is empty, and the plugin currently draws with `juce::Font` defaults.
-> Inter and Barlow Condensed are SIL OFL and freely redistributable, but
-> fetching them means downloading binaries, which needs a decision from the
-> repo owner. Until that lands, `EmberFonts` resolves the two roles to the
-> best available system faces and the rest of the type scale is unaffected —
-> sizes, tracking, casing and tabular figures are all set regardless.
+Both families ship in `resources/fonts/` and are embedded through
+`juce_add_binary_data`, licences included as the OFL requires: Inter 4.1
+Medium/SemiBold and Barlow Condensed Medium/SemiBold, 1.0 MB in total.
+`EmberFonts::usingEmbeddedFaces()` reports whether they loaded, and a test
+fails if they did not — a silent fallback to system faces would quietly undo
+the reason for embedding them.
+
+Tabular figures are real, not aspirational: JUCE 8 exposes OpenType features,
+so value and readout roles enable `tnum`, and `test_theme.cpp` proves it by
+measuring that "111111" and "888888" render to the same width.
 
 ---
 

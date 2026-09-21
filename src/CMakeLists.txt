@@ -23,6 +23,7 @@ target_sources(ember_dsp PRIVATE
     plugin/PresetManager.cpp
     plugin/PluginProcessor.cpp
     plugin/PluginEditor.cpp
+    gui/EmberTheme.cpp
     gui/EmberLookAndFeel.cpp
     gui/Widgets.cpp
     gui/SpectrumDisplay.cpp

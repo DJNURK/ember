@@ -140,7 +140,9 @@ struct EmberFonts
         body,        ///< running text, menu items
         label,       ///< control captions
         value,       ///< numeric readouts
-        micro        ///< meter scales, footnotes
+        micro,       ///< meter scales, footnotes
+        logo,        ///< the EMBER wordmark in the header
+        footer       ///< the footer's readouts and tooltip line
     };
 
     /** The height the scale is authored against. */
@@ -164,6 +166,27 @@ struct EmberFonts
 
     /** A plain font of an exact size, for the rare case you have measured it. */
     static juce::Font sized(float pointHeight, bool bold = false);
+
+    /** The condensed display face, for panel titles and section headers. */
+    static juce::Font condensed(float pointHeight, bool bold = false);
+
+    /** True when all four embedded faces loaded. False means the UI has fallen
+        back to system faces and is no longer identical across platforms. */
+    static bool usingEmbeddedFaces();
+
+    /** Which embedded face to draw with. */
+    enum class Family
+    {
+        interMedium,
+        interSemiBold,
+        barlowMedium,
+        barlowSemiBold
+    };
+
+    static juce::Typeface::Ptr embeddedFace(Family);
+
+private:
+    static juce::Font withTabularFigures(juce::Font);
 };
 
 //==============================================================================

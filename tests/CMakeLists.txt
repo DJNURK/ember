@@ -9,9 +9,13 @@ add_executable(ember_tests
     test_presets.cpp
     test_processor.cpp
     test_robustness.cpp
-    test_modulation_stress.cpp)
+    test_modulation_stress.cpp
+    test_theme.cpp)
 
 target_include_directories(ember_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+# test_theme greps the GUI sources for stray colour literals, so it needs to
+# know where they live.
+target_compile_definitions(ember_tests PRIVATE EMBER_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_link_libraries(ember_tests PRIVATE
     ember_dsp
     Catch2::Catch2WithMain

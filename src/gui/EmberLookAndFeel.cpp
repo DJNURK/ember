@@ -1,4 +1,6 @@
 #include "gui/EmberLookAndFeel.h"
+#include <BinaryData.h>
+#include <algorithm>
 
 #include <cmath>
 
@@ -144,6 +146,68 @@ ToggleLook EmberStyleProps::toggleLookFor(const juce::Button& button)
 }
 
 //==============================================================================
+namespace
+{
+/** The four embedded faces, loaded once.
+
+    Ember ships its own type so it renders identically on Windows, macOS and
+    Linux rather than inheriting whatever the host calls a UI font. If loading
+    fails the roles fall back to system faces and `usingEmbeddedFaces()` reports
+    false, so a screenshot test can say why it does not match. */
+juce::Typeface::Ptr loadFace(const char* data, int size)
+{
+    return juce::Typeface::createSystemTypefaceFor(data, static_cast<size_t>(size));
+}
+} // namespace
+
+juce::Typeface::Ptr EmberFonts::embeddedFace(Family family)
+{
+    struct Faces
+    {
+        juce::Typeface::Ptr interMedium{loadFace(BinaryData::InterMedium_ttf, BinaryData::InterMedium_ttfSize)};
+        juce::Typeface::Ptr interSemiBold{loadFace(BinaryData::InterSemiBold_ttf, BinaryData::InterSemiBold_ttfSize)};
+        juce::Typeface::Ptr barlowMedium{
+            loadFace(BinaryData::BarlowCondensedMedium_ttf, BinaryData::BarlowCondensedMedium_ttfSize)};
+        juce::Typeface::Ptr barlowSemiBold{
+            loadFace(BinaryData::BarlowCondensedSemiBold_ttf, BinaryData::BarlowCondensedSemiBold_ttfSize)};
+    };
+
+    static const Faces faces;
+
+    switch (family)
+    {
+    case Family::interMedium:
+        return faces.interMedium;
+    case Family::interSemiBold:
+        return faces.interSemiBold;
+    case Family::barlowMedium:
+        return faces.barlowMedium;
+    case Family::barlowSemiBold:
+        return faces.barlowSemiBold;
+    }
+
+    return faces.interMedium;
+}
+
+/** Enables tabular figures where the face offers them.
+
+    Without `tnum` a value re-flows while it is being dragged, because "1" is
+    narrower than "8". That reads as the layout twitching, and it is the most
+    noticeable typographic defect in an interface full of live numbers. */
+juce::Font EmberFonts::withTabularFigures(juce::Font f)
+{
+    if (auto tf = f.getTypefacePtr())
+    {
+        const auto supported = tf->getSupportedFeatures();
+        const juce::FontFeatureTag tnum{"tnum"};
+
+        if (std::find(supported.begin(), supported.end(), tnum) != supported.end())
+            f.setFeatureSetting({tnum, juce::FontFeatureSetting::featureEnabled});
+    }
+
+    return f;
+}
+
 float EmberFonts::scaleFor(float editorHeight) noexcept
 {
     return juce::jlimit(0.72f, 2.0f, editorHeight / kReferenceHeight);
@@ -174,7 +238,13 @@ float EmberFonts::sizeFor(Role role, float uiScale) noexcept
         base = 12.5f;
         break;
     case Role::micro:
-        base = 9.5f;
+        base = 10.0f;
+        break;
+    case Role::logo:
+        base = 22.0f;
+        break;
+    case Role::footer:
+        base = 11.0f;
         break;
     }
 
@@ -190,6 +260,7 @@ juce::Font EmberFonts::get(Role role, float uiScale)
     case Role::display:
     case Role::title:
     case Role::section:
+    case Role::logo:
         bold = true;
         break;
 
@@ -197,7 +268,26 @@ juce::Font EmberFonts::get(Role role, float uiScale)
     case Role::label:
     case Role::value:
     case Role::micro:
+    case Role::footer:
         bold = false;
+        break;
+    }
+
+    switch (role)
+    {
+    case Role::display:
+    case Role::title:
+    case Role::section:
+    case Role::logo:
+        // The condensed face carries the hardware-panel feel; body text stays
+        // on the grotesk so it does not turn into a stylistic exercise.
+        return condensed(sizeFor(role, uiScale), bold);
+
+    case Role::body:
+    case Role::label:
+    case Role::value:
+    case Role::micro:
+    case Role::footer:
         break;
     }
 
@@ -211,12 +301,34 @@ juce::Font EmberFonts::forHeight(float componentHeight, float proportion, bool b
 
 juce::Font EmberFonts::sized(float pointHeight, bool bold)
 {
-    auto options = juce::FontOptions().withHeight(juce::jmax(6.0f, pointHeight));
+    // The design floor is 10 px: below that the condensed face loses its
+    // counters and the whole UI starts to read as smudged.
+    auto options = juce::FontOptions().withHeight(juce::jmax(10.0f, pointHeight));
 
-    if (bold)
+    if (auto face = embeddedFace(bold ? Family::interSemiBold : Family::interMedium))
+        options = options.withTypeface(face);
+    else if (bold)
+        options = options.withStyle("Bold");
+
+    return withTabularFigures(juce::Font(options));
+}
+
+juce::Font EmberFonts::condensed(float pointHeight, bool bold)
+{
+    auto options = juce::FontOptions().withHeight(juce::jmax(10.0f, pointHeight));
+
+    if (auto face = embeddedFace(bold ? Family::barlowSemiBold : Family::barlowMedium))
+        options = options.withTypeface(face);
+    else if (bold)
         options = options.withStyle("Bold");
 
     return juce::Font(options);
+}
+
+bool EmberFonts::usingEmbeddedFaces()
+{
+    return embeddedFace(Family::interMedium) != nullptr && embeddedFace(Family::interSemiBold) != nullptr
+           && embeddedFace(Family::barlowMedium) != nullptr && embeddedFace(Family::barlowSemiBold) != nullptr;
 }
 
 //==============================================================================
