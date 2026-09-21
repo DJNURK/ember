@@ -1,4 +1,5 @@
 #include "gui/PresetBrowser.h"
+#include "gui/EmberTheme.h"
 
 namespace ember::gui
 {
@@ -719,7 +720,7 @@ void PresetBrowser::paint(juce::Graphics& g)
     const auto clipped = g.getClipBounds().toFloat();
 
     if (!panelArea.reduced(corner + 1.0f).contains(clipped))
-        juce::DropShadow(juce::Colours::black.withAlpha(0.55f), juce::roundToInt(20.0f * uiScale),
+        juce::DropShadow(EmberTheme::tokens().panelShadow.withAlpha(0.55f), juce::roundToInt(20.0f * uiScale),
                          {0, juce::roundToInt(6.0f * uiScale)})
             .drawForRectangle(g, panelArea.toNearestInt());
 

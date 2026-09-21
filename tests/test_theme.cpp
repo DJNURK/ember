@@ -152,7 +152,7 @@ TEST_CASE("no role falls below the 10 px legibility floor", "[theme]")
     }
 }
 
-TEST_CASE("no new colour literals enter the GUI", "[theme]")
+TEST_CASE("colour literals live only in EmberTheme.cpp", "[theme]")
 {
     // A ratchet, not a wish. Files still carrying pre-redesign literals are
     // listed here with their current count; the check fails if any count goes
@@ -167,11 +167,7 @@ TEST_CASE("no new colour literals enter the GUI", "[theme]")
         int allowed;
     };
 
-    const Budget budgets[] = {
-        {"EmberLookAndFeel.cpp", 14},
-        {"PresetBrowser.cpp", 3},
-        {"Widgets.cpp", 1},
-    };
+    const Budget budgets[] = {};
 
     const juce::File guiDir{juce::String{EMBER_SOURCE_DIR} + "/src/gui"};
     REQUIRE(guiDir.isDirectory());
@@ -187,10 +183,18 @@ TEST_CASE("no new colour literals enter the GUI", "[theme]")
         int found = 0;
 
         for (const auto& line : juce::StringArray::fromLines(file.loadFileAsString()))
-            if (line.contains("juce::Colour(0x") || line.contains("juce::Colour (0x")
-                || line.contains("Colour::fromRGB") || line.contains("Colour::fromHSV")
-                || line.contains("juce::Colours::"))
+        {
+            // transparentBlack is not a colour decision - it is JUCE's way of
+            // saying "draw nothing", used to switch off a stock component's
+            // background or outline. Counting it would force every such line
+            // through the palette to express an absence.
+            const auto stripped = line.replace("juce::Colours::transparentBlack", "");
+
+            if (stripped.contains("juce::Colour(0x") || stripped.contains("juce::Colour (0x")
+                || stripped.contains("Colour::fromRGB") || stripped.contains("Colour::fromHSV")
+                || stripped.contains("juce::Colours::"))
                 ++found;
+        }
 
         int allowed = 0;
         for (const auto& b : budgets)

@@ -1,4 +1,5 @@
 #include "gui/EmberLookAndFeel.h"
+#include "gui/EmberTheme.h"
 #include <BinaryData.h>
 #include <algorithm>
 
@@ -7,41 +8,63 @@
 namespace ember::gui
 {
 //==============================================================================
-// Palette. Near-black desaturated surfaces, one warm accent, and a band ramp
-// that runs along flame temperature: deep ember red at the bottom, blue-white
-// flame tip at the top.
+// Palette.
+//
+// EmberColours is now a view onto EmberTheme's tokens rather than a second
+// palette. Keeping the old names means the redesign does not have to touch 298
+// call sites to change how the plugin looks, and it leaves exactly one place
+// where a colour is decided.
+//
+// These are static const, so they capture the default variant at load time. The
+// "Cool Ember" variant therefore reaches a component only once that component
+// has been rebuilt to read EmberTheme::tokens() directly - which is the order
+// the rebuild proceeds in anyway.
 //==============================================================================
-const juce::Colour EmberColours::backgroundDeep{0xff0a0a0c};
-const juce::Colour EmberColours::background{0xff121215};
-const juce::Colour EmberColours::panelSunken{0xff0e0e11};
-const juce::Colour EmberColours::panel{0xff17171b};
-const juce::Colour EmberColours::panelRaised{0xff1f1f24};
+namespace
+{
+const ThemeTokens& tk()
+{
+    return EmberTheme::tokens();
+}
+} // namespace
 
-const juce::Colour EmberColours::outline{0xff2b2b32};
-const juce::Colour EmberColours::outlineStrong{0xff3c3c46};
-const juce::Colour EmberColours::track{0xff3a3a45};
+const juce::Colour EmberColours::backgroundDeep{tk().bgDeep};
+const juce::Colour EmberColours::background{tk().panel};
+const juce::Colour EmberColours::panelSunken{tk().bgDeep.brighter(0.02f)};
+const juce::Colour EmberColours::panel{tk().panel};
+const juce::Colour EmberColours::panelRaised{tk().panelRaised};
 
-const juce::Colour EmberColours::textPrimary{0xffe9e7e3};
-const juce::Colour EmberColours::textSecondary{0xff9a9aa5};
-const juce::Colour EmberColours::textDisabled{0xff585862};
+const juce::Colour EmberColours::outline{tk().panelEdge};
+const juce::Colour EmberColours::outlineStrong{tk().panelEdge.brighter(0.18f)};
+const juce::Colour EmberColours::track{tk().panelEdge.brighter(0.10f)};
 
-const juce::Colour EmberColours::accent{0xffff8a3d};
-const juce::Colour EmberColours::accentDim{0xffb05f2c};
-const juce::Colour EmberColours::accentGlow{0x33ff8a3d};
-const juce::Colour EmberColours::warning{0xffff4f45};
+const juce::Colour EmberColours::textPrimary{tk().text};
+const juce::Colour EmberColours::textSecondary{tk().textDim};
+const juce::Colour EmberColours::textDisabled{tk().textMuted};
+
+const juce::Colour EmberColours::accent{tk().ember};
+const juce::Colour EmberColours::accentDim{tk().emberDeep};
+const juce::Colour EmberColours::accentGlow{tk().ember.withAlpha(0.20f)};
+const juce::Colour EmberColours::warning{tk().danger};
 
 namespace
 {
-/** The band ramp. Six hues, each clearly separable at a glance, all sitting on
-    the same warm axis apart from the deliberately cool top band. */
-const juce::Colour kBandRamp[EmberColours::kNumBandColours] = {
-    juce::Colour(0xffb8442f), // 1 — deep ember red
-    juce::Colour(0xffdd6a33), // 2 — orange
-    juce::Colour(0xfff59333), // 3 — amber, sibling of the accent
-    juce::Colour(0xffe6bc4a), // 4 — gold
-    juce::Colour(0xffe2dcc4), // 5 — pale ash white
-    juce::Colour(0xff86b3d2)  // 6 — blue flame tip
-};
+/** Band tint by position.
+
+    The old ramp gave each band its own hue and ran deep red to blue-white. That
+    is gone: a blue-white band would now read as "modulation", and hue is
+    reserved for heat. Bands instead sit at even steps along the ember ramp, so
+    the set stays unmistakably warm and a band is told apart by its number and
+    its position on screen.
+
+    Once heat is plumbed through, a band's live tint comes from its own heat and
+    this becomes only the resting colour. */
+juce::Colour bandRampColour(int index)
+{
+    constexpr int last = EmberColours::kNumBandColours - 1;
+    const auto position = static_cast<float>(juce::jlimit(0, last, index)) / static_cast<float>(last);
+    return EmberTheme::tokens().heatTint(position);
+}
 
 /** Component property keys. Function-local statics so there is no
     static-initialisation order dependency between translation units. */
@@ -105,7 +128,7 @@ juce::TextLayout layoutTooltipText(const juce::String& text, const juce::Font& f
 //==============================================================================
 juce::Colour EmberColours::band(int bandIndex) noexcept
 {
-    return kBandRamp[static_cast<size_t>(juce::jlimit(0, kNumBandColours - 1, bandIndex))];
+    return bandRampColour(bandIndex);
 }
 
 juce::Colour EmberColours::bandDim(int bandIndex) noexcept
