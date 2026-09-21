@@ -1,4 +1,5 @@
 #include "gui/BandPanel.h"
+#include "gui/EmberTheme.h"
 
 #include "dsp/styles/SaturationStyle.h"
 #include "plugin/ParameterIDs.h"
@@ -375,6 +376,18 @@ struct BandPanel::BandControls
             component->setVisible(shouldBeVisible);
     }
 
+    /** Compact modules keep only Drive.
+
+        An unselected module is a few dozen pixels wide once six bands are up;
+        everything else would be illegible rather than merely small, and the
+        point of showing it at all is "which bands are doing something". Drive
+        plus the heat bar answers that. */
+    void setCompact()
+    {
+        for (auto* component : allComponents)
+            component->setVisible(component == &drive);
+    }
+
     void setPollingEnabled(bool shouldPoll)
     {
         for (auto* knob : allKnobs)
@@ -499,18 +512,33 @@ BandPanel::BandControls& BandPanel::controlsFor(int bandIndex)
 
 void BandPanel::showControlsFor(int bandIndex)
 {
+    // Every active band is on screen now - the panel is a strip of modules, not
+    // a single editor with five hidden twins. The selected one shows its full
+    // control set; the rest keep Drive and their heat bar.
     for (int band = 0; band < kMaxBands; ++band)
     {
         if (auto* controls = bandControls[idx(band)].get())
         {
-            const bool selected = (band == bandIndex);
-            controls->setControlsVisible(selected);
-            controls->setPollingEnabled(selected);
+            const bool active = band < activeBandCount();
+
+            if (! active)
+            {
+                controls->setControlsVisible(false);
+                controls->setPollingEnabled(false);
+            }
+            else if (band == bandIndex)
+            {
+                controls->setControlsVisible(true);
+                controls->setPollingEnabled(true);
+            }
+            else
+            {
+                controls->setCompact();
+                controls->setPollingEnabled(true);
+            }
         }
     }
 
-    // Creates the set on first use, after the loop above, so the new set is
-    // shown rather than hidden with the rest.
     auto& selectedControls = controlsFor(bandIndex);
     selectedControls.setControlsVisible(true);
     selectedControls.setPollingEnabled(true);
@@ -632,38 +660,71 @@ float BandPanel::uiScale() const
 //==============================================================================
 void BandPanel::resized()
 {
-    auto& controls = controlsFor(currentBand);
     const float scale = uiScale();
+    const int active = activeBandCount();
 
-    auto area = getLocalBounds().reduced(juce::jmax(6, juce::roundToInt(11.0f * scale)));
+    for (auto& b : moduleBounds)
+        b = {};
 
-    if (area.getWidth() < 40 || area.getHeight() < 40)
+    auto strip = getLocalBounds().reduced(juce::jmax(4, juce::roundToInt(6.0f * scale)));
+
+    if (strip.getWidth() < 40 || strip.getHeight() < 40 || active <= 0)
         return;
 
-    const int gap = juce::jmax(6, juce::roundToInt(10.0f * scale));
-    const int spacing = juce::jmax(2, juce::roundToInt(4.0f * scale));
+    const int moduleGap = juce::jmax(4, juce::roundToInt(static_cast<float>(Spacing::sm) * scale));
 
-    const int sectionHeight = SectionHeader::preferredHeight(scale);
+    // The selected module is 1.6x the width of an unselected one. Weights
+    // rather than fixed widths, so six bands at the minimum size degrade
+    // evenly instead of the last one falling off the end.
+    constexpr float kSelectedWeight = 1.6f;
+    const float totalWeight = static_cast<float>(active - 1) + kSelectedWeight;
+    const int available = strip.getWidth() - moduleGap * juce::jmax(0, active - 1);
+
+    if (available < active * 24)
+        return;
+
+    int x = strip.getX();
+
+    for (int band = 0; band < active; ++band)
+    {
+        const bool selected = band == currentBand;
+        const float weight = selected ? kSelectedWeight : 1.0f;
+        const int width = (band == active - 1) ? (strip.getRight() - x)
+                                               : juce::roundToInt(static_cast<float>(available) * weight / totalWeight);
+
+        moduleBounds[idx(band)] = {x, strip.getY(), width, strip.getHeight()};
+        x += width + moduleGap;
+    }
+
+    // ---- the selected module gets the full editor -------------------------
+    auto& controls = controlsFor(currentBand);
+    auto area = moduleBounds[idx(currentBand)].reduced(juce::jmax(4, juce::roundToInt(
+                                                           static_cast<float>(Spacing::md) * scale)));
+
+    const int gap = juce::jmax(6, juce::roundToInt(10.0f * scale));
+    juce::ignoreUnused(SectionHeader::preferredHeight(scale));
     const int comboHeight = juce::jlimit(22, 44, juce::roundToInt(29.0f * scale));
 
-    // ---- height budget ----------------------------------------------------
-    // The knob groups are budgeted FIRST, because they are what the panel is
+    // The knob groups are budgeted FIRST, because they are what the module is
     // for and `layoutGroups` places nothing at all below kMinimumGroupsHeight.
-    // Capping the header at a third of the area and the style row at a half
-    // compounded instead of cooperating: at the 800x480 minimum window the two
-    // strips took 96 of 135 px, the groups were left 33 and every knob in the
-    // band was dropped on the floor. Neither cap binds at a normal size, so
-    // this only changes what a short panel does.
-    int headerHeight = juce::jlimit(30, 68, juce::roundToInt(40.0f * scale));
-    int styleRowHeight = sectionHeight + spacing + comboHeight;
+    // Capping the header and the style row independently compounded instead of
+    // cooperating: at the minimum window the two strips took 96 of 135 px and
+    // every knob was dropped on the floor.
+    // A module is roughly 226 px tall. A 40 px header plus a style row with its
+    // own section title spent 105 of that on chrome and left 93 for the knobs,
+    // below the two-row minimum, so every module fell back to one squeezed row
+    // of five groups with truncated labels. The design calls this "a thin
+    // engraved title bar", not two stacked strips: the STYLE caption goes, and
+    // the dropdown carries its own meaning.
+    styleHeader.setVisible(false);
+
+    int headerHeight = juce::jlimit(26, 52, juce::roundToInt(32.0f * scale));
+    int styleRowHeight = comboHeight;
 
     int deficit = kMinimumGroupsHeight + 2 * gap + headerHeight + styleRowHeight - area.getHeight();
 
     if (deficit > 0)
     {
-        // The header is a readout and the style row a control, so the header
-        // gives first — down to the shortest that still draws its two lines —
-        // and only then does the style row give up its own title strip.
         const int fromHeader = juce::jlimit(0, deficit, headerHeight - kMinimumHeaderHeight);
         headerHeight -= fromHeader;
         deficit -= fromHeader;
@@ -672,21 +733,65 @@ void BandPanel::resized()
         styleRowHeight -= fromStyleRow;
     }
 
-    // ---- header ----------------------------------------------------------
     headerArea = area.removeFromTop(juce::jmin(headerHeight, area.getHeight()));
     layoutHeader(headerArea, controls);
     area.removeFromTop(juce::jmin(gap, area.getHeight()));
 
-    // ---- style -----------------------------------------------------------
     auto styleRow = area.removeFromTop(juce::jmin(styleRowHeight, area.getHeight()));
-    styleHeader.setBounds(styleRow.removeFromTop(juce::jmin(sectionHeight, styleRow.getHeight())));
-    styleRow.removeFromTop(juce::jmin(spacing, styleRow.getHeight()));
     controls.styleBox.setBounds(styleRow);
 
     area.removeFromTop(juce::jmin(gap, area.getHeight()));
+    layoutKnobGrid(area, controls);
 
-    // ---- the knob groups --------------------------------------------------
-    layoutGroups(area, controls);
+    // ---- everything else is compact ---------------------------------------
+    // Visibility is settled here rather than only in setBand: setBand can run
+    // before the band-count parameter has been read, and anything it hid then
+    // would stay hidden through every later layout.
+    showControlsFor(currentBand);
+
+    for (int band = 0; band < active; ++band)
+        if (band != currentBand)
+            layoutCompactModule(moduleBounds[idx(band)], controlsFor(band));
+}
+
+void BandPanel::layoutCompactModule(juce::Rectangle<int> slot, BandControls& controls)
+{
+    const float scale = uiScale();
+    auto area = slot.reduced(juce::jmax(3, juce::roundToInt(static_cast<float>(Spacing::sm) * scale)));
+
+    if (area.getWidth() < 20 || area.getHeight() < 40)
+        return;
+
+    // Title strip at the top and the heat bar at the bottom are painted, not
+    // laid out; the knob takes what is left, square and centred.
+    const int titleHeight = juce::jmax(14, juce::roundToInt(22.0f * scale));
+    const int heatHeight = juce::jmax(4, juce::roundToInt(6.0f * scale));
+
+    area.removeFromTop(titleHeight);
+    area.removeFromBottom(heatHeight + juce::jmax(2, juce::roundToInt(4.0f * scale)));
+
+    const int size = juce::jmin(area.getWidth(), area.getHeight());
+
+    if (size < 16)
+        return;
+
+    controls.drive.setBounds(juce::Rectangle<int>(size, size).withCentre(area.getCentre()));
+}
+
+void BandPanel::mouseDown(const juce::MouseEvent& event)
+{
+    const int active = activeBandCount();
+
+    for (int band = 0; band < active; ++band)
+    {
+        if (band != currentBand && moduleBounds[idx(band)].contains(event.getPosition()))
+        {
+            if (onBandClicked != nullptr)
+                onBandClicked(band);
+
+            return;
+        }
+    }
 }
 
 void BandPanel::layoutHeader(juce::Rectangle<int> area, BandControls& controls)
@@ -767,6 +872,73 @@ void BandPanel::cacheHeaderFonts()
 }
 
 //==============================================================================
+void BandPanel::layoutKnobGrid(juce::Rectangle<int> area, BandControls& controls)
+{
+    // The design's grid, not the old five-group row:
+    //   row 1, large : DRIVE, MIX, LEVEL
+    //   row 2, small : FEEDBACK, FREQ, DYNAMICS, LOW, MID, HIGH, PAN, WIDTH
+    //
+    // The group system spent about 24 px per row on section headers, which a
+    // module-sized slot cannot afford - with roughly 115 px of knob height it
+    // could never satisfy a two-row minimum and always fell back to one
+    // squeezed row. Dropping the headers is what makes two rows fit at all;
+    // every knob carries its own label anyway, so nothing is lost but the
+    // captions that were truncating to "A..." and "Fr...".
+    for (auto& group : groups)
+    {
+        group.well = {};
+        group.header.setVisible(false);
+    }
+
+    feedbackLinkA = {};
+    feedbackLinkB = {};
+
+    if (area.getWidth() < 40 || area.getHeight() < 40)
+        return;
+
+    const float scale = uiScale();
+    const int gap = juce::jmax(3, juce::roundToInt(6.0f * scale));
+
+    // The large row takes the height it can up to a comfortable knob, and the
+    // small row gets what is left.
+    int largeHeight = juce::jlimit(36, 92, juce::roundToInt(static_cast<float>(area.getHeight()) * 0.56f));
+
+    // The small row must survive. Taking 56 % for the large row left it under
+    // the 16 px `place` refuses to draw into at the 860x510 minimum, and eight
+    // controls simply vanished - unreachable, not merely small, which is a
+    // layout break rather than graceful degradation. The large row gives way
+    // instead.
+    constexpr int kMinimumSmallRow = 26;
+
+    if (area.getHeight() - largeHeight - gap < kMinimumSmallRow)
+        largeHeight = juce::jmax(30, area.getHeight() - gap - kMinimumSmallRow);
+
+    auto largeRow = area.removeFromTop(juce::jmin(largeHeight, area.getHeight()));
+    area.removeFromTop(juce::jmin(gap, area.getHeight()));
+    auto smallRow = area;
+
+    const auto place = [gap](juce::Rectangle<int> row, std::initializer_list<juce::Component*> items)
+    {
+        const auto count = static_cast<int>(items.size());
+
+        if (count <= 0 || row.getWidth() < count * 12 || row.getHeight() < 16)
+            return;
+
+        const int each = (row.getWidth() - gap * (count - 1)) / count;
+        int x = row.getX();
+
+        for (auto* item : items)
+        {
+            item->setBounds(x, row.getY(), each, row.getHeight());
+            x += each + gap;
+        }
+    };
+
+    place(largeRow, {&controls.drive, &controls.mix, &controls.level});
+    place(smallRow, {&controls.feedbackAmount, &controls.feedbackFrequency, &controls.dynamics, &controls.toneLow,
+                     &controls.toneMid, &controls.toneHigh, &controls.pan, &controls.width});
+}
+
 void BandPanel::layoutGroups(juce::Rectangle<int> area, BandControls& controls)
 {
     for (auto& group : groups)
@@ -800,7 +972,12 @@ void BandPanel::layoutGroups(juce::Rectangle<int> area, BandControls& controls)
         return total;
     };
 
-    const float minimumSlot = 62.0f * scale;
+    // 62 px per weight unit was tuned when the selected band had the whole
+    // panel width. In the strip it never does - the expanded module is about
+    // 45 % of the width with three bands up - and 62 let five groups squeeze
+    // into a slot where every knob label truncated to "P...". Folding to two
+    // rows is what the design asks for at this width anyway.
+    const float minimumSlot = 80.0f * scale;
     const float availableWidth = static_cast<float>(area.getWidth());
 
     // Folding costs height: two rows need twice the height of one and three
@@ -810,16 +987,30 @@ void BandPanel::layoutGroups(juce::Rectangle<int> area, BandControls& controls)
     // nothing was laid out at all (the 800x480 case). Height vetoes the taller
     // arrangements, so a short panel keeps the single row and squeezes its
     // slots rather than losing the controls.
-    const int twoRowMinimumHeight = juce::roundToInt(180.0f * scale);
-    const int threeRowMinimumHeight = juce::roundToInt(270.0f * scale);
+    // These were set when the band panel was full width and had the height to
+    // match. In the strip a module is about 226 px tall, of which its header
+    // and style row take 105, so a 180 px two-row minimum could never be met
+    // and every module was forced back to one squeezed row of five groups.
+    // Two rows of compact knobs genuinely fit in 130.
+    const int twoRowMinimumHeight = juce::roundToInt(130.0f * scale);
+    const int threeRowMinimumHeight = juce::roundToInt(200.0f * scale);
 
-    if (availableWidth >= minimumSlot * rowWeight(rowOfFive, 5) || area.getHeight() < twoRowMinimumHeight)
+    // An absolute floor as well as the scaled one. The scaled test alone is
+    // only as trustworthy as uiScale, and when that comes back small the
+    // threshold collapses and five groups squeeze into a module-width slot
+    // with every label truncated to "W...". Five groups need real estate in
+    // pixels, whatever the scale factor believes.
+    const float fiveGroupMinimumWidth = juce::jmax(620.0f, minimumSlot * rowWeight(rowOfFive, 5));
+
+    if (availableWidth >= fiveGroupMinimumWidth || area.getHeight() < twoRowMinimumHeight)
     {
         layoutRow(area, rowOfFive, 5, controls);
         return;
     }
 
-    if (availableWidth >= minimumSlot * rowWeight(twoRowBottom, 3) || area.getHeight() < threeRowMinimumHeight)
+    const float threeGroupMinimumWidth = juce::jmax(330.0f, minimumSlot * rowWeight(twoRowBottom, 3));
+
+    if (availableWidth >= threeGroupMinimumWidth || area.getHeight() < threeRowMinimumHeight)
     {
         const int rowHeight = juce::jmax(0, (area.getHeight() - gap) / 2);
         auto top = area.removeFromTop(rowHeight);
@@ -956,13 +1147,96 @@ void BandPanel::layoutGroup(int groupIndex, juce::Rectangle<int> bounds, BandCon
 }
 
 //==============================================================================
+void BandPanel::paintModuleChrome(juce::Graphics& g, int band, juce::Rectangle<int> slot, bool selected)
+{
+    if (slot.isEmpty())
+        return;
+
+    const auto& tk = EmberTheme::tokens();
+    const float scale = uiScale();
+    const float corner = juce::jlimit(4.0f, 16.0f, 11.0f * scale);
+    const auto area = slot.toFloat();
+    const float heat = juce::jlimit(0.0f, 1.0f, processor.getBandHeat(band));
+
+    EmberLookAndFeel::drawPanel(g, area, corner, selected);
+
+    // A module warms with its band. Selected modules read brighter at the same
+    // heat, so selection and activity stay separable - one is where you are
+    // working, the other is what the audio is doing.
+    const auto tint = tk.heatTint(heat);
+    const int titleHeight = juce::jmax(14, juce::roundToInt(22.0f * scale));
+    const auto titleBar = area.withHeight(static_cast<float>(titleHeight));
+
+    if (heat > 0.01f)
+    {
+        g.setGradientFill(juce::ColourGradient(tint.withAlpha(heat * (selected ? 0.30f : 0.20f)), titleBar.getCentreX(),
+                                               titleBar.getY(), tint.withAlpha(0.0f), titleBar.getCentreX(),
+                                               titleBar.getBottom(), false));
+        g.fillRoundedRectangle(titleBar, corner);
+    }
+
+    if (selected)
+    {
+        // A thin ember underline is the whole selection marker. An outline
+        // around the module would fight the heat tint for the same edge.
+        const float underline = juce::jmax(1.5f, 2.0f * scale);
+        g.setColour(tk.ember);
+        g.fillRect(area.withTop(titleBar.getBottom() - underline).withHeight(underline).reduced(corner * 0.5f, 0.0f));
+    }
+
+    // Compact modules carry their own number, style name and heat bar, because
+    // the full header only exists on the selected one.
+    if (! selected)
+    {
+        auto inner = area.reduced(static_cast<float>(Spacing::sm) * scale);
+        auto title = inner.withHeight(static_cast<float>(titleHeight));
+
+        g.setFont(EmberFonts::get(EmberFonts::Role::section, scale));
+        g.setColour(heat > 0.02f ? tint : tk.textDim);
+        g.drawText(juce::String(band + 1), title, juce::Justification::centredLeft, false);
+
+        if (auto* controls = bandControls[idx(band)].get())
+        {
+            const auto name = controls->styleBox.getText();
+
+            if (name.isNotEmpty() && title.getWidth() > 60.0f * scale)
+            {
+                g.setFont(EmberFonts::get(EmberFonts::Role::micro, scale));
+                g.setColour(tk.textDim);
+                g.drawText(name, title.withTrimmedLeft(title.getHeight()), juce::Justification::centredLeft, true);
+            }
+        }
+
+        // The heat bar: the one thing that has to be readable at 40 px wide.
+        const float barHeight = juce::jmax(4.0f, 6.0f * scale);
+        const auto barArea = inner.withTop(inner.getBottom() - barHeight);
+
+        g.setColour(tk.bgDeep);
+        g.fillRoundedRectangle(barArea, barHeight * 0.5f);
+
+        if (heat > 0.01f)
+        {
+            const auto filled = barArea.withWidth(barArea.getWidth() * heat);
+            g.setColour(tint);
+            g.fillRoundedRectangle(filled, barHeight * 0.5f);
+
+            if (! EmberTheme::reduceMotion())
+                GlowCache::drawForRect(g, filled, barHeight * 0.5f, tk.tubeGlow, heat * 0.5f);
+        }
+    }
+}
+
 void BandPanel::paint(juce::Graphics& g)
 {
     const float scale = uiScale();
     const auto colour = EmberColours::band(currentBand);
     const float corner = juce::jlimit(4.0f, 16.0f, 11.0f * scale);
 
-    EmberLookAndFeel::drawPanel(g, getLocalBounds().toFloat(), corner, false);
+    // The strip itself is the chassis; each module is a plate bolted to it.
+    const int active = activeBandCount();
+
+    for (int band = 0; band < active; ++band)
+        paintModuleChrome(g, band, moduleBounds[idx(band)], band == currentBand);
 
     if (!headerArea.isEmpty())
     {

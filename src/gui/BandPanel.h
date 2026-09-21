@@ -65,6 +65,10 @@ public:
     // does not know the modulation engine exists. The editor forwards these to
     // the modulation panel, which owns the graph.
 
+    /** A module was clicked. The editor owns selection, so the strip only
+        reports the click rather than selecting anything itself. */
+    std::function<void(int bandIndex)> onBandClicked;
+
     /** A modulation source was dropped on one of this band's knobs. */
     std::function<void(const juce::String& targetParameterID, int sourceFlatIndex)> onModulationDropped;
 
@@ -114,6 +118,18 @@ private:
     //==========================================================================
     void timerCallback() override;
 
+    /** Slot each band's module occupies. Computed in resized(), used by paint()
+        and by hit-testing, so chrome and clicks can never disagree. */
+    std::array<juce::Rectangle<int>, static_cast<size_t>(kMaxBands)> moduleBounds{};
+
+    /** Lays one unselected module out: title strip, Drive, heat bar. */
+    void layoutCompactModule(juce::Rectangle<int> slot, BandControls& controls);
+
+    /** Draws a module's chrome: raised panel, title bar warmed by heat. */
+    void paintModuleChrome(juce::Graphics&, int band, juce::Rectangle<int> slot, bool selected);
+
+    void mouseDown(const juce::MouseEvent&) override;
+
     BandControls& controlsFor(int bandIndex);
     void showControlsFor(int bandIndex);
 
@@ -132,6 +148,7 @@ private:
     void cacheHeaderFonts();
 
     void layoutHeader(juce::Rectangle<int> area, BandControls& controls);
+    void layoutKnobGrid(juce::Rectangle<int> area, BandControls& controls);
     void layoutGroups(juce::Rectangle<int> area, BandControls& controls);
     void layoutRow(juce::Rectangle<int> row, const int* groupIndices, int numGroups, BandControls& controls);
     void layoutGroup(int groupIndex, juce::Rectangle<int> bounds, BandControls& controls);
