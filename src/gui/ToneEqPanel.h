@@ -108,6 +108,24 @@ private:
     /** The band's own span, so the curve can fade outside it. */
     float bandLowHz{20.0f}, bandHighHz{20000.0f};
 
+    /** Small painted controls in the plot's top corners. They are hit regions
+        rather than child components: three more children inside a 220x90 panel
+        would each need a border and a label to be recognisable, and the panel
+        does not have the room to spend. */
+    enum class Chip
+    {
+        prePost = 0,
+        bypass,
+        flat,
+        count
+    };
+
+    juce::Rectangle<float> chipBounds(Chip) const;
+    Chip chipAt(juce::Point<float>) const;
+    void clickChip(Chip);
+
+    Chip hoveredChip{Chip::count};
+
     Node hovered{Node::count};
     Node dragging{Node::count};
     bool compact{false};

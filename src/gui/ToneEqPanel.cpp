@@ -355,6 +355,69 @@ void ToneEqPanel::paint(juce::Graphics& g)
         g.drawEllipse(disc.reduced(0.5f), 1.0f);
     }
 
+    // ---- the corner chips --------------------------------------------------
+    {
+        const auto read = [this](const juce::String& id)
+        {
+            auto* v = processor.getAPVTS().getRawParameterValue(id);
+            return v != nullptr && v->load(std::memory_order_relaxed) > 0.5f;
+        };
+
+        const bool pre = read(pid::tonePre(band));
+        const bool bypassed = read(pid::toneBypass(band));
+
+        const auto drawChip = [&](Chip chip, const juce::String& label, bool lit)
+        {
+            const auto bounds = chipBounds(chip);
+
+            if (bounds.isEmpty())
+                return;
+
+            const bool over = chip == hoveredChip;
+
+            g.setColour(lit ? tk.ember.withAlpha(0.22f) : tk.bgDeep.withAlpha(0.7f));
+            g.fillRoundedRectangle(bounds, bounds.getHeight() * 0.35f);
+
+            g.setColour(lit ? tk.ember : tk.panelEdge.brighter(over ? 0.3f : 0.0f));
+            g.drawRoundedRectangle(bounds.reduced(0.5f), bounds.getHeight() * 0.35f, 1.0f);
+
+            g.setFont(EmberFonts::get(EmberFonts::Role::micro));
+            g.setColour(lit ? tk.text : tk.textDim);
+            g.drawText(label, bounds, juce::Justification::centred, false);
+        };
+
+        drawChip(Chip::prePost, pre ? "PRE" : "POST", pre);
+        drawChip(Chip::flat, "FLAT", false);
+        // The bypass chip is a lamp: lit means the tone stage is off, which is
+        // the state worth noticing.
+        {
+            const auto bounds = chipBounds(Chip::bypass);
+
+            if (! bounds.isEmpty())
+            {
+                g.setColour(tk.bgDeep);
+                g.fillEllipse(bounds);
+
+                if (bypassed)
+                {
+                    if (! EmberTheme::reduceMotion())
+                        GlowCache::draw(g, bounds.getCentre(), bounds.getWidth() * 1.3f, tk.tubeGlow, 0.4f);
+
+                    g.setColour(tk.ember);
+                    g.fillEllipse(bounds.reduced(bounds.getWidth() * 0.28f));
+                }
+                else
+                {
+                    g.setColour(tk.textMuted.withAlpha(0.6f));
+                    g.fillEllipse(bounds.reduced(bounds.getWidth() * 0.34f));
+                }
+
+                g.setColour(tk.panelEdge.brighter(hoveredChip == Chip::bypass ? 0.3f : 0.0f));
+                g.drawEllipse(bounds.reduced(0.5f), 1.0f);
+            }
+        }
+    }
+
     // ---- the value pill ----------------------------------------------------
     const auto shown = dragging != Node::count ? dragging : hovered;
 
@@ -392,13 +455,108 @@ void ToneEqPanel::paint(juce::Graphics& g)
     }
 }
 
+
+//==============================================================================
+juce::Rectangle<float> ToneEqPanel::chipBounds(Chip chip) const
+{
+    if (compact || plot.getWidth() < 150.0f || plot.getHeight() < 50.0f)
+        return {};
+
+    const float height = juce::jlimit(11.0f, 16.0f, plot.getHeight() * 0.17f);
+    const float pad = 3.0f;
+
+    // Measured, not guessed. Sizing these by eye truncated "FLAT" to "FLA" at
+    // the default window size - a label that does not fit is worse than no
+    // label, because it looks like a different word.
+    const auto font = EmberFonts::get(EmberFonts::Role::micro);
+    const auto widthFor = [&font, height](const juce::String& text)
+    { return juce::jmax(height, juce::GlyphArrangement::getStringWidth(font, text) + 10.0f); };
+
+    // PRE/POST is sized for the longer of its two states, so the chip does not
+    // resize as it toggles.
+    const auto prePostWidth = widthFor("POST");
+    const auto flatWidth = widthFor("FLAT");
+
+    switch (chip)
+    {
+    case Chip::prePost:
+        return {plot.getX() + pad, plot.getY() + pad, prePostWidth, height};
+    case Chip::bypass:
+        return {plot.getRight() - pad - height, plot.getY() + pad, height, height};
+    case Chip::flat:
+        return {plot.getRight() - pad * 2.0f - height - flatWidth, plot.getY() + pad, flatWidth, height};
+    case Chip::count:
+        break;
+    }
+
+    return {};
+}
+
+ToneEqPanel::Chip ToneEqPanel::chipAt(juce::Point<float> position) const
+{
+    for (int i = 0; i < static_cast<int>(Chip::count); ++i)
+    {
+        const auto chip = static_cast<Chip>(i);
+
+        if (chipBounds(chip).contains(position))
+            return chip;
+    }
+
+    return Chip::count;
+}
+
+void ToneEqPanel::clickChip(Chip chip)
+{
+    auto& state = processor.getAPVTS();
+
+    const auto toggle = [&state](const juce::String& id)
+    {
+        if (auto* p = state.getParameter(id))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost(p->getValue() > 0.5f ? 0.0f : 1.0f);
+            p->endChangeGesture();
+        }
+    };
+
+    switch (chip)
+    {
+    case Chip::prePost:
+        toggle(pid::tonePre(band));
+        break;
+
+    case Chip::bypass:
+        toggle(pid::toneBypass(band));
+        break;
+
+    case Chip::flat:
+        // Flat resets gains only. The node positions are where the user put
+        // them, and throwing those away as well would make this destructive
+        // rather than useful.
+        for (int i = 0; i < kNumNodes; ++i)
+            setParam(gainParam(static_cast<Node>(i)), 0.0f, true);
+        break;
+
+    case Chip::count:
+        break;
+    }
+}
+
 //==============================================================================
 void ToneEqPanel::mouseMove(const juce::MouseEvent& event)
 {
     if (compact)
         return;
 
-    const auto node = nodeAt(event.position);
+    const auto chip = chipAt(event.position);
+
+    if (chip != hoveredChip)
+    {
+        hoveredChip = chip;
+        repaint();
+    }
+
+    const auto node = chip == Chip::count ? nodeAt(event.position) : Node::count;
 
     if (node != hovered)
     {
@@ -422,6 +580,13 @@ void ToneEqPanel::mouseDown(const juce::MouseEvent& event)
 {
     if (compact)
         return;
+
+    if (const auto chip = chipAt(event.position); chip != Chip::count)
+    {
+        clickChip(chip);
+        repaint();
+        return;
+    }
 
     dragging = nodeAt(event.position);
 
