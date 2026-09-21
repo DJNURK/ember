@@ -57,10 +57,9 @@ constexpr float kPeakReleaseSeconds = 0.100f;
 constexpr float kPeakWeight = 0.5f;
 
 // --------------------------------------------------------------- tone stack
-constexpr float kToneLowHz = 150.0f;
-constexpr float kToneMidHz = 1000.0f;
-constexpr float kToneHighHz = 4000.0f;
-constexpr float kToneMidQ = 0.7f;
+// The tone bands' frequencies and the mid's Q are now per-band parameters;
+// their former fixed values live on as ToneStack::Shape's defaults, so a preset
+// written before they existed loads with exactly the old response.
 constexpr float kToneShelfQ = 0.7071068f; // Butterworth shelf slope
 
 /** One-pole "retain" coefficient for a time constant in seconds:
@@ -594,7 +593,7 @@ void ToneStack::setGainsDb(float lowDb, float midDb, float highDb) noexcept
     {
         lastLow = lowDb;
         const auto c =
-            ArrayCoeffs::makeLowShelf(sampleRate, kToneLowHz, kToneShelfQ, juce::Decibels::decibelsToGain(lowDb));
+            ArrayCoeffs::makeLowShelf(sampleRate, shape.lowHz, kToneShelfQ, juce::Decibels::decibelsToGain(lowDb));
         for (auto& perChannel : filters)
             *perChannel[0].coefficients = c;
     }
@@ -603,7 +602,7 @@ void ToneStack::setGainsDb(float lowDb, float midDb, float highDb) noexcept
     {
         lastMid = midDb;
         const auto c =
-            ArrayCoeffs::makePeakFilter(sampleRate, kToneMidHz, kToneMidQ, juce::Decibels::decibelsToGain(midDb));
+            ArrayCoeffs::makePeakFilter(sampleRate, shape.midHz, shape.midQ, juce::Decibels::decibelsToGain(midDb));
         for (auto& perChannel : filters)
             *perChannel[1].coefficients = c;
     }
@@ -612,10 +611,89 @@ void ToneStack::setGainsDb(float lowDb, float midDb, float highDb) noexcept
     {
         lastHigh = highDb;
         const auto c =
-            ArrayCoeffs::makeHighShelf(sampleRate, kToneHighHz, kToneShelfQ, juce::Decibels::decibelsToGain(highDb));
+            ArrayCoeffs::makeHighShelf(sampleRate, shape.highHz, kToneShelfQ, juce::Decibels::decibelsToGain(highDb));
         for (auto& perChannel : filters)
             *perChannel[2].coefficients = c;
     }
+}
+
+void ToneStack::setShape(const Shape& newShape) noexcept
+{
+    using ArrayCoeffs = juce::dsp::IIR::ArrayCoefficients<float>;
+
+    // Frequencies are clamped below Nyquist: a node dragged to the top of a
+    // band's range at 44.1 kHz would otherwise ask for a shelf above half the
+    // sample rate, which produces coefficients that are not merely wrong but
+    // unstable.
+    const auto limit = static_cast<float>(sampleRate * 0.49);
+
+    Shape clamped;
+    clamped.lowHz = juce::jlimit(20.0f, limit, newShape.lowHz);
+    clamped.midHz = juce::jlimit(20.0f, limit, newShape.midHz);
+    clamped.midQ = juce::jlimit(0.1f, 8.0f, newShape.midQ);
+    clamped.highHz = juce::jlimit(20.0f, limit, newShape.highHz);
+
+    if (juce::exactlyEqual(clamped.lowHz, shape.lowHz) && juce::exactlyEqual(clamped.midHz, shape.midHz)
+        && juce::exactlyEqual(clamped.midQ, shape.midQ) && juce::exactlyEqual(clamped.highHz, shape.highHz))
+        return;
+
+    shape = clamped;
+
+    // A shape change invalidates all three, so rebuild rather than relying on
+    // setGainsDb's "only if the gain moved" shortcut - which would leave the
+    // filters on the old frequencies until the user also turned a gain knob.
+    const auto low = ArrayCoeffs::makeLowShelf(sampleRate, shape.lowHz, kToneShelfQ,
+                                               juce::Decibels::decibelsToGain(lastLow));
+    const auto mid = ArrayCoeffs::makePeakFilter(sampleRate, shape.midHz, shape.midQ,
+                                                 juce::Decibels::decibelsToGain(lastMid));
+    const auto high = ArrayCoeffs::makeHighShelf(sampleRate, shape.highHz, kToneShelfQ,
+                                                 juce::Decibels::decibelsToGain(lastHigh));
+
+    for (auto& perChannel : filters)
+    {
+        *perChannel[0].coefficients = low;
+        *perChannel[1].coefficients = mid;
+        *perChannel[2].coefficients = high;
+    }
+}
+
+float ToneStack::magnitudeDbAt(float frequencyHz) const noexcept
+{
+    using ArrayCoeffs = juce::dsp::IIR::ArrayCoefficients<float>;
+
+    if (sampleRate <= 0.0 || frequencyHz <= 0.0f)
+        return 0.0f;
+
+    // Rebuilt from the same design calls the processing path uses, so the drawn
+    // curve cannot drift from the filters. Reading the live filters' own
+    // coefficients would be cheaper but they are mutated from the audio thread.
+    const auto low =
+        ArrayCoeffs::makeLowShelf(sampleRate, shape.lowHz, kToneShelfQ, juce::Decibels::decibelsToGain(lastLow));
+    const auto mid =
+        ArrayCoeffs::makePeakFilter(sampleRate, shape.midHz, shape.midQ, juce::Decibels::decibelsToGain(lastMid));
+    const auto high =
+        ArrayCoeffs::makeHighShelf(sampleRate, shape.highHz, kToneShelfQ, juce::Decibels::decibelsToGain(lastHigh));
+
+    const auto magnitude = [this, frequencyHz](const std::array<float, 6>& c)
+    {
+        // c is {b0, b1, b2, a0, a1, a2} with a0 normalised to 1 by JUCE.
+        const auto w = juce::MathConstants<double>::twoPi * frequencyHz / sampleRate;
+        const std::complex<double> z{std::cos(-w), std::sin(-w)};
+        const auto z2 = z * z;
+
+        const auto numerator = static_cast<double>(c[0]) + static_cast<double>(c[1]) * z
+                               + static_cast<double>(c[2]) * z2;
+        const auto denominator = static_cast<double>(c[3]) + static_cast<double>(c[4]) * z
+                                 + static_cast<double>(c[5]) * z2;
+
+        const auto d = std::abs(denominator);
+
+        return d > 1.0e-12 ? std::abs(numerator) / d : 1.0;
+    };
+
+    const auto total = magnitude(low) * magnitude(mid) * magnitude(high);
+
+    return static_cast<float>(juce::Decibels::gainToDecibels(juce::jmax(1.0e-6, total)));
 }
 
 void ToneStack::process(float* const* channels, int numChannels, int numSamples) noexcept
