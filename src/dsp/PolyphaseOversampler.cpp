@@ -33,10 +33,10 @@ struct HalfBandDesign
     every direct-path section, then every delayed-path section EXCEPT the first,
     which is the branch's bare unit delay and is applied by the loop itself.
 
-    `numDirect` is derived from the total the way JUCE derives it — arithmetically,
-    not from `directPath.size()`. The two agree for every design this call can
-    return, but deriving it the same way means the split cannot drift even if a
-    future JUCE changes the structure. */
+    `numDirect` is derived from the total the way JUCE derives it —
+    arithmetically, not from `directPath.size()`. The two agree for every design
+    this call can return, but deriving it the same way means the split cannot
+    drift even if a future JUCE changes the structure. */
 void packStructure(const juce::dsp::FilterDesign<float>::IIRPolyphaseAllpassStructure& s,
                    std::vector<float>& out, int& numDirect)
 {
@@ -79,8 +79,7 @@ HalfBandDesign buildDesign(int numStages)
     // equivalent high-order IIR, which is a page of polynomial algebra that
     // would be a liability to transcribe: any drift would misalign the dry path
     // against the wet one and comb the top octave. `initProcessing(1)` is what
-    // computes the fractional part, and sizes the throwaway's buffers for a
-    // single sample.
+    // computes the fractional part, and sizes the throwaway for a single sample.
     juce::dsp::Oversampling<float> reference(1, static_cast<size_t>(numStages),
                                              juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true, true);
     reference.initProcessing(1);
@@ -100,172 +99,160 @@ const HalfBandDesign& getDesign(int numStages)
     return designs[static_cast<size_t>(juce::jlimit(1, kMaxStages, numStages) - 1)];
 }
 
-//==============================================================================
-// The kernels. `NumCh` is a template parameter so the per-channel loops unroll
-// completely and the two channels' chains end up interleaved in the schedule,
-// which is the whole point of the exercise.
-//==============================================================================
+/** Lay one packed cascade pair out four lanes wide:
+    [ch0 direct, ch0 delayed, ch1 direct, ch1 delayed] per section.
 
-/** One 2x upsampling stage: `n` input samples in, `2 * n` out.
-    State is laid out section-major: `state[NumCh * section + channel]`. */
-template <int NumCh>
-void stageUp(const float* const* in, float* const* out, int n, const float* coeffs, int numSections, int numDirect,
+    The delayed cascade is never longer than the direct one and is at most one
+    section shorter; the gap is filled with alpha = 1, which is an exact
+    identity for a section whose state is zero — out = 1 * in + 0 = in, and the
+    new state is in - 1 * in = 0, so it stays zero forever. */
+void buildLanes(const std::vector<float>& coeffs, int numDirect, float* lanes, int& numSections) noexcept
+{
+    const int numDelayed = static_cast<int>(coeffs.size()) - numDirect;
+    numSections = juce::jmin(PolyphaseOversampler::kMaxSections, juce::jmax(numDirect, numDelayed));
+    jassert(numSections == juce::jmax(numDirect, numDelayed));
+
+    for (int s = 0; s < numSections; ++s)
+    {
+        const float direct = s < numDirect ? coeffs[static_cast<size_t>(s)] : 1.0f;
+        const float delayed = s < numDelayed ? coeffs[static_cast<size_t>(numDirect + s)] : 1.0f;
+
+        lanes[4 * s + 0] = direct;
+        lanes[4 * s + 1] = delayed;
+        lanes[4 * s + 2] = direct;
+        lanes[4 * s + 3] = delayed;
+    }
+}
+
+/** Push four lanes through the cascade, in place.
+
+    `v`, `alpha` and `state` are all 16-byte aligned, and `alpha + 4 * s` and
+    `state + 4 * s` stay aligned because the stride is a whole register. */
+inline void cascade(float* v, const float* alpha, float* state, int numSections) noexcept
+{
+#if JUCE_USE_SIMD
+    using Vec = juce::dsp::SIMDRegister<float>;
+
+    auto x = Vec::fromRawArray(v);
+
+    for (int s = 0; s < numSections; ++s)
+    {
+        const auto a = Vec::fromRawArray(alpha + 4 * s);
+        auto st = Vec::fromRawArray(state + 4 * s);
+        const auto o = a * x + st;
+        st = x - a * o;
+        st.copyToRawArray(state + 4 * s);
+        x = o;
+    }
+
+    x.copyToRawArray(v);
+#else
+    // Four independent chains, scalar. Slower than the register form, but the
+    // same arithmetic and the same dependency structure, so still a long way
+    // ahead of running one channel at a time.
+    for (int s = 0; s < numSections; ++s)
+    {
+        for (int l = 0; l < 4; ++l)
+        {
+            const float a = alpha[4 * s + l];
+            const float o = a * v[l] + state[4 * s + l];
+            state[4 * s + l] = v[l] - a * o;
+            v[l] = o;
+        }
+    }
+#endif
+}
+
+/** The two lanes a mono instance needs, scalar.
+
+    Mono could just as well run the four-lane form with the upper pair carrying
+    zeros, and at the same cost. It does not, because the vector multiply-add
+    rounds differently from the scalar one, and keeping mono on the scalar
+    expression keeps it bit-identical to what JUCE produces. Lanes 2 and 3 of
+    the shared state are simply never touched, so mono and stereo blocks cannot
+    disturb each other. */
+inline void cascadeMono(float* v, const float* alpha, float* state, int numSections) noexcept
+{
+    for (int s = 0; s < numSections; ++s)
+    {
+        for (int l = 0; l < 2; ++l)
+        {
+            const float a = alpha[4 * s + l];
+            const float o = a * v[l] + state[4 * s + l];
+            state[4 * s + l] = v[l] - a * o;
+            v[l] = o;
+        }
+    }
+}
+
+/** One 2x upsampling stage: `n` samples in, `2 * n` out. */
+template <bool Stereo>
+void stageUp(const float* const* in, float* const* out, int n, const float* alpha, int numSections,
              float* state) noexcept
 {
-    const int numDelayed = numSections - numDirect;
-    const int common = std::min(numDirect, numDelayed);
-
     for (int i = 0; i < n; ++i)
     {
-        float a[NumCh], b[NumCh];
+        const float x0 = in[0][i];
+        const float x1 = Stereo ? in[1][i] : 0.0f;
 
-        for (int k = 0; k < NumCh; ++k)
+        alignas(16) float v[4] = {x0, x0, x1, x1};
+
+        if constexpr (Stereo)
+            cascade(v, alpha, state, numSections);
+        else
+            cascadeMono(v, alpha, state, numSections);
+
+        out[0][2 * i] = v[0];
+        out[0][2 * i + 1] = v[1];
+
+        if constexpr (Stereo)
         {
-            a[k] = in[k][i];
-            b[k] = a[k];
-        }
-
-        // Both cascades, both channels, one section at a time: 2 * NumCh
-        // independent dependency chains sharing one chain's worth of latency.
-        for (int s = 0; s < common; ++s)
-        {
-            const float ad = coeffs[s];
-            const float ae = coeffs[numDirect + s];
-            float* sd = state + NumCh * s;
-            float* se = state + NumCh * (numDirect + s);
-
-            for (int k = 0; k < NumCh; ++k)
-            {
-                const float od = ad * a[k] + sd[k];
-                const float oe = ae * b[k] + se[k];
-                sd[k] = a[k] - ad * od;
-                se[k] = b[k] - ae * oe;
-                a[k] = od;
-                b[k] = oe;
-            }
-        }
-
-        // Whichever cascade is longer finishes on its own. The two differ by at
-        // most one section.
-        for (int s = common; s < numDirect; ++s)
-        {
-            const float ad = coeffs[s];
-            float* sd = state + NumCh * s;
-
-            for (int k = 0; k < NumCh; ++k)
-            {
-                const float od = ad * a[k] + sd[k];
-                sd[k] = a[k] - ad * od;
-                a[k] = od;
-            }
-        }
-
-        for (int s = common; s < numDelayed; ++s)
-        {
-            const float ae = coeffs[numDirect + s];
-            float* se = state + NumCh * (numDirect + s);
-
-            for (int k = 0; k < NumCh; ++k)
-            {
-                const float oe = ae * b[k] + se[k];
-                se[k] = b[k] - ae * oe;
-                b[k] = oe;
-            }
-        }
-
-        for (int k = 0; k < NumCh; ++k)
-        {
-            out[k][2 * i] = a[k];
-            out[k][2 * i + 1] = b[k];
+            out[1][2 * i] = v[2];
+            out[1][2 * i + 1] = v[3];
         }
     }
 }
 
-/** One 2x downsampling stage: `2 * n` samples in `in`, `n` out. */
-template <int NumCh>
-void stageDown(const float* const* in, float* const* out, int n, const float* coeffs, int numSections, int numDirect,
-               float* state, float* delayState) noexcept
+/** One 2x downsampling stage: `2 * n` samples in, `n` out. */
+template <bool Stereo>
+void stageDown(const float* const* in, float* const* out, int n, const float* alpha, int numSections, float* state,
+               float* delayState) noexcept
 {
-    const int numDelayed = numSections - numDirect;
-    const int common = std::min(numDirect, numDelayed);
-
-    float held[NumCh];
-    for (int k = 0; k < NumCh; ++k)
-        held[k] = delayState[k];
+    float held0 = delayState[0];
+    float held1 = delayState[1];
 
     for (int i = 0; i < n; ++i)
     {
-        float a[NumCh], b[NumCh];
+        alignas(16) float v[4] = {in[0][2 * i], in[0][2 * i + 1], Stereo ? in[1][2 * i] : 0.0f,
+                                  Stereo ? in[1][2 * i + 1] : 0.0f};
 
-        for (int k = 0; k < NumCh; ++k)
-        {
-            a[k] = in[k][2 * i];
-            b[k] = in[k][2 * i + 1];
-        }
-
-        for (int s = 0; s < common; ++s)
-        {
-            const float ad = coeffs[s];
-            const float ae = coeffs[numDirect + s];
-            float* sd = state + NumCh * s;
-            float* se = state + NumCh * (numDirect + s);
-
-            for (int k = 0; k < NumCh; ++k)
-            {
-                const float od = ad * a[k] + sd[k];
-                const float oe = ae * b[k] + se[k];
-                sd[k] = a[k] - ad * od;
-                se[k] = b[k] - ae * oe;
-                a[k] = od;
-                b[k] = oe;
-            }
-        }
-
-        for (int s = common; s < numDirect; ++s)
-        {
-            const float ad = coeffs[s];
-            float* sd = state + NumCh * s;
-
-            for (int k = 0; k < NumCh; ++k)
-            {
-                const float od = ad * a[k] + sd[k];
-                sd[k] = a[k] - ad * od;
-                a[k] = od;
-            }
-        }
-
-        for (int s = common; s < numDelayed; ++s)
-        {
-            const float ae = coeffs[numDirect + s];
-            float* se = state + NumCh * (numDirect + s);
-
-            for (int k = 0; k < NumCh; ++k)
-            {
-                const float oe = ae * b[k] + se[k];
-                se[k] = b[k] - ae * oe;
-                b[k] = oe;
-            }
-        }
+        if constexpr (Stereo)
+            cascade(v, alpha, state, numSections);
+        else
+            cascadeMono(v, alpha, state, numSections);
 
         // The delayed branch's bare unit delay, then the half-band sum.
-        for (int k = 0; k < NumCh; ++k)
+        out[0][i] = (held0 + v[0]) * 0.5f;
+        held0 = v[1];
+
+        if constexpr (Stereo)
         {
-            out[k][i] = (held[k] + a[k]) * 0.5f;
-            held[k] = b[k];
+            out[1][i] = (held1 + v[2]) * 0.5f;
+            held1 = v[3];
         }
     }
 
-    for (int k = 0; k < NumCh; ++k)
-        delayState[k] = held[k];
+    delayState[0] = held0;
+    delayState[1] = held1;
 }
 
-/** Matches `juce::util::snapToZero`, which JUCE applies to the allpass state
-    after every block so a decaying tail cannot leave the filters running on
-    denormals for the rest of the session. */
-void snapStateToZero(std::vector<float>& state) noexcept
+/** Matches `juce::dsp::util::snapToZero`, which JUCE applies to the allpass
+    state after every block so a decaying tail cannot leave the filters running
+    on denormals for the rest of the session. */
+void snapStateToZero(float* state, int numSections) noexcept
 {
-    for (auto& v : state)
-        juce::dsp::util::snapToZero(v);
+    for (int i = 0; i < 4 * numSections; ++i)
+        juce::dsp::util::snapToZero(state[i]);
 }
 } // namespace
 
@@ -280,6 +267,7 @@ void PolyphaseOversampler::prepare(int numChannels, int numStages, int maxBlockS
     factor = 1;
     totalLatency = 0.0f;
     fractionalDelay = 0.0f;
+    compAlpha = 0.0f;
     ready = false;
 
     if (numStages <= 0)
@@ -295,13 +283,8 @@ void PolyphaseOversampler::prepare(int numChannels, int numStages, int maxBlockS
         auto& stage = stages[static_cast<size_t>(n)];
         const auto& d = design.stages[static_cast<size_t>(n)];
 
-        stage.coeffsUp = d.up;
-        stage.coeffsDown = d.down;
-        stage.directUp = d.directUp;
-        stage.directDown = d.directDown;
-
-        stage.stateUp.assign(stage.coeffsUp.size() * static_cast<size_t>(channels), 0.0f);
-        stage.stateDown.assign(stage.coeffsDown.size() * static_cast<size_t>(channels), 0.0f);
+        buildLanes(d.up, d.directUp, stage.coeffsUp.data(), stage.sectionsUp);
+        buildLanes(d.down, d.directDown, stage.coeffsDown.data(), stage.sectionsDown);
 
         rateMultiplier *= 2;
         stage.buffer.setSize(channels, maxBlock * rateMultiplier, false, false, true);
@@ -323,8 +306,8 @@ void PolyphaseOversampler::reset() noexcept
 {
     for (auto& s : stages)
     {
-        std::fill(s.stateUp.begin(), s.stateUp.end(), 0.0f);
-        std::fill(s.stateDown.begin(), s.stateDown.end(), 0.0f);
+        s.stateUp.fill(0.0f);
+        s.stateDown.fill(0.0f);
         s.delayDown.fill(0.0f);
         s.buffer.clear();
     }
@@ -351,23 +334,20 @@ juce::dsp::AudioBlock<float> PolyphaseOversampler::processSamplesUp(
     for (int ch = 0; ch < numCh; ++ch)
         inPtrs[ch] = input.getChannelPointer(static_cast<size_t>(ch));
 
-    for (size_t s = 0; s < stages.size(); ++s)
+    for (auto& stage : stages)
     {
-        auto& stage = stages[s];
-
         for (int ch = 0; ch < numCh; ++ch)
             outPtrs[ch] = stage.buffer.getWritePointer(ch);
 
-        const int sections = static_cast<int>(stage.coeffsUp.size());
-
         if (numCh == 2)
-            stageUp<2>(inPtrs, outPtrs, n, stage.coeffsUp.data(), sections, stage.directUp, stage.stateUp.data());
+            stageUp<true>(inPtrs, outPtrs, n, stage.coeffsUp.data(), stage.sectionsUp, stage.stateUp.data());
         else
-            stageUp<1>(inPtrs, outPtrs, n, stage.coeffsUp.data(), sections, stage.directUp, stage.stateUp.data());
+            stageUp<false>(inPtrs, outPtrs, n, stage.coeffsUp.data(), stage.sectionsUp, stage.stateUp.data());
 
-        snapStateToZero(stage.stateUp);
+        snapStateToZero(stage.stateUp.data(), stage.sectionsUp);
 
         n *= 2;
+
         for (int ch = 0; ch < numCh; ++ch)
             inPtrs[ch] = outPtrs[ch];
     }
@@ -392,7 +372,7 @@ void PolyphaseOversampler::processSamplesDown(juce::dsp::AudioBlock<float>& outp
     float* outPtrs[2] = {nullptr, nullptr};
 
     // Stage s reads its own 2x buffer and writes into stage s-1's; the first
-    // stage writes into the caller's block.
+    // stage writes into the caller's block. `n` is the stage's OUTPUT count.
     int n = baseSamples;
     for (size_t s = 0; s + 1 < stages.size(); ++s)
         n *= 2;
@@ -408,16 +388,14 @@ void PolyphaseOversampler::processSamplesDown(juce::dsp::AudioBlock<float>& outp
                                 : output.getChannelPointer(static_cast<size_t>(ch));
         }
 
-        const int sections = static_cast<int>(stage.coeffsDown.size());
-
         if (numCh == 2)
-            stageDown<2>(inPtrs, outPtrs, n, stage.coeffsDown.data(), sections, stage.directDown,
-                         stage.stateDown.data(), stage.delayDown.data());
+            stageDown<true>(inPtrs, outPtrs, n, stage.coeffsDown.data(), stage.sectionsDown, stage.stateDown.data(),
+                            stage.delayDown.data());
         else
-            stageDown<1>(inPtrs, outPtrs, n, stage.coeffsDown.data(), sections, stage.directDown,
-                         stage.stateDown.data(), stage.delayDown.data());
+            stageDown<false>(inPtrs, outPtrs, n, stage.coeffsDown.data(), stage.sectionsDown, stage.stateDown.data(),
+                             stage.delayDown.data());
 
-        snapStateToZero(stage.stateDown);
+        snapStateToZero(stage.stateDown.data(), stage.sectionsDown);
 
         n /= 2;
     }

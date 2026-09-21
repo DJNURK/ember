@@ -11,35 +11,50 @@ namespace ember
     Functionally a drop-in replacement for `juce::dsp::Oversampling<float>`
     constructed with `filterHalfBandPolyphaseIIR`, maximum quality and integer
     latency: the filters are designed by the same `juce::dsp::FilterDesign` call
-    with the same arguments, the allpass recursion is written out in the same
-    order, and the same Thiran delay makes the total latency a whole number of
-    samples. What changes is only the shape of the loop.
+    with the same arguments, the allpass recursion is the same expression in the
+    same order, and the same fractional delay makes the total latency a whole
+    number of samples. What changes is only the shape of the loop.
 
     Why it is worth having at all
     -----------------------------
-    A polyphase half-band stage is two cascades of first-order allpass sections,
-    one per polyphase branch. Each section is
+    A half-band stage is two cascades of first-order allpass sections, one per
+    polyphase branch. Each section is
 
         out = a * in + v;   v = in - a * out;
 
     and the next section's input is this section's output, so a cascade is a
-    chain of dependent multiply-adds. The kernel is therefore bound by FMA
-    LATENCY, not by arithmetic throughput: on an M2 a five-section cascade is
-    about twenty cycles deep but only needs about five cycles of issue.
-
+    chain of dependent multiply-adds — three or four of them for these designs.
+    The kernel is bound by multiply-add LATENCY, not by arithmetic throughput.
     JUCE runs one channel to completion before starting the next, which leaves
-    the direct and the delayed cascade — two independent chains — as the only
-    parallelism the core can find, and the other two thirds of the FP pipes
-    idle. Interleaving the channels into the same inner loop puts FOUR
-    independent chains in flight for the same chain depth, so the same
-    wall-clock latency covers twice the work. Measured on the six-band / 4x
-    benchmark that is worth about a quarter of the whole engine.
+    the direct and the delayed cascade as the only two independent chains the
+    core can find, and most of the FP pipes idle.
 
-    Going wider than four does NOT follow: with four chains the kernel is
-    already back to issue-limited, so replacing them with one four-lane SIMD
-    register buys nothing (measured, see docs/STATUS.md). More would need more
-    independent streams, i.e. batching the bands, which the per-band structure
-    of the chain does not offer.
+    Here the two cascades and the two channels are FOUR LANES of one register:
+
+        [ ch0 direct, ch0 delayed, ch1 direct, ch1 delayed ]
+
+    so a stereo frame costs one cascade's worth of latency instead of four. The
+    two cascades differ by at most one section; the shorter one is padded with
+    alpha = 1, which is an exact identity for a section whose state starts at
+    zero (out = in, and the state stays exactly zero), so the padding changes no
+    bit of the result.
+
+    Mono runs the same four lanes with the upper pair fed zeros. That costs a
+    mono instance nothing over a stereo one — the register is the same width
+    either way — and it means one state layout serves both, so a block that
+    arrives with fewer channels than the last one cannot scramble the state.
+
+    How much of this is the SIMD, honestly
+    --------------------------------------
+    Almost none of it. Writing the same four lanes as four scalar chains in one
+    loop measured 4.50% of a core on the six-band / 4x benchmark against the
+    register form's 4.42%, and 17.3% against 16.9% at 16x — the vector registers
+    are worth about 1.5%, the chains in flight are worth the rest. That is what
+    a latency-bound kernel looks like: once four chains are interleaved the core
+    is issue-limited again, and a wider register has nothing left to fill.
+    The register form is kept because it is also the simpler code — one padded
+    loop instead of a common run plus two remainders — and because it holds up
+    better where the work grows, at 16x and at 96 kHz.
 
     Restrictions relative to `juce::dsp::Oversampling`: float only, one or two
     channels, polyphase IIR only, maximum quality only, integer latency always.
@@ -67,24 +82,27 @@ public:
 
     int getFactor() const noexcept { return factor; }
 
-    /** Upsamples in to the internal buffer and returns a view of it.
+    /** Upsamples `input` into the internal buffer and returns a view of it.
         Realtime-safe. */
     juce::dsp::AudioBlock<float> processSamplesUp(const juce::dsp::AudioBlock<const float>& input) noexcept;
 
     /** Downsamples the internal buffer back into `output`. Realtime-safe. */
     void processSamplesDown(juce::dsp::AudioBlock<float>& output) noexcept;
 
+    /** Sections per cascade after padding. The widest of these designs is four;
+        the ceiling is generous so the storage can be fixed-size and aligned. */
+    static constexpr int kMaxSections = 8;
+
 private:
     struct Stage
     {
-        /** Allpass coefficients, direct-path sections first then delayed-path,
-            exactly as `juce::dsp::Oversampling` packs them. */
-        std::vector<float> coeffsUp, coeffsDown;
-        int directUp{0}, directDown{0};
+        /** Four lanes per section, in the order described above. */
+        alignas(16) std::array<float, 4 * kMaxSections> coeffsUp{}, coeffsDown{};
+        alignas(16) std::array<float, 4 * kMaxSections> stateUp{}, stateDown{};
+        int sectionsUp{0}, sectionsDown{0};
 
-        /** One value per section per channel, section-major so both channels'
-            state for a section is one contiguous pair. */
-        std::vector<float> stateUp, stateDown;
+        /** The delayed branch's bare unit delay, per channel, used on the way
+            back down. */
         std::array<float, 2> delayDown{};
 
         juce::AudioBuffer<float> buffer; ///< this stage's output, at 2x its input rate
