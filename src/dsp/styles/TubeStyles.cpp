@@ -206,9 +206,9 @@ namespace
     The chain is a shelf lowpass feeding two saturators in series, the second of
     which is a `fastTanh` and so ends in a division: about as deep a dependency
     per sample as anything in the plugin, and nothing else to fill it with while
-    one channel runs alone. The filter is copied into a local because the audio
-    pointers could alias the state array, which would otherwise force a reload
-    of the resonator state on every sample. */
+    one channel runs alone. The shelf filter is copied into a local because the
+    audio pointers could alias the state array, which would otherwise force a
+    reload of the filter state on every sample. */
 template <int NumCh>
 void warmTubeKernel(float* const* data, int numSamples, float drive, float shelfMix, float bias,
                     dsputil::SvfTPT* shelf) noexcept
