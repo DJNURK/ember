@@ -77,6 +77,15 @@ public:
         60 Hz tick, so this stays a pure read. */
     float getBandHeat(int band) const noexcept;
 
+    /** What the plugin is costing, as a percentage of the time available.
+
+        100 % means a block took exactly as long as the audio it produced - the
+        point at which the host starts dropping out. Measured with JUCE's high
+        resolution tick counter, which is a vDSO read rather than a syscall on
+        every platform Ember ships to, and smoothed on the audio thread so the
+        GUI reads a number instead of a blur. */
+    float getCpuLoadPercent() const noexcept { return cpuLoadPercent.load(std::memory_order_relaxed); }
+
     /** Which band the GUI has selected. Persisted with the plugin state. */
     int getSelectedBand() const noexcept { return selectedBand.load(std::memory_order_relaxed); }
     void setSelectedBand(int band) noexcept;
@@ -207,6 +216,10 @@ private:
 
     int controlCounter{0};
     std::array<float, kMaxBands> bandRms{};
+
+    /** Published by processBlock for the footer's readout. */
+    std::atomic<float> cpuLoadPercent{0.0f};
+    void publishCpuLoad(juce::int64 startTicks, int numSamples) noexcept;
 
     double lastSampleRate{44100.0};
     int lastBlockSize{512};

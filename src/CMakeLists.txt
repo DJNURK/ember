@@ -29,6 +29,7 @@ target_sources(ember_dsp PRIVATE
     gui/SpectrumDisplay.cpp
     gui/BandPanel.cpp
     gui/GlobalBar.cpp
+    gui/FooterBar.cpp
     gui/ModPanel.cpp
     gui/PresetBrowser.cpp)
 

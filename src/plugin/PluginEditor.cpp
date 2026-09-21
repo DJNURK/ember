@@ -21,7 +21,7 @@ constexpr int kEdge = 8;
 
 EmberAudioProcessorEditor::EmberAudioProcessorEditor(EmberAudioProcessor& p)
     : juce::AudioProcessorEditor(&p), processorRef(p), presetBar(p), globalBar(p), spectrum(p), bandPanel(p),
-      modPanel(p)
+      modPanel(p), footer(p)
 {
     setLookAndFeel(&lookAndFeel);
 
@@ -30,6 +30,10 @@ EmberAudioProcessorEditor::EmberAudioProcessorEditor(EmberAudioProcessor& p)
     addAndMakeVisible(spectrum);
     addAndMakeVisible(bandPanel);
     addAndMakeVisible(modPanel);
+    addAndMakeVisible(footer);
+
+    // The footer owns Input / Output / Mix / Auto-Gain now.
+    globalBar.setIoSectionVisible(false);
 
     wirePanels();
 
@@ -118,6 +122,9 @@ void EmberAudioProcessorEditor::resized()
     area.removeFromTop(kEdge / 2);
     globalBar.setBounds(area.removeFromTop(juce::roundToInt(kGlobalBarHeight * scale)));
     area.removeFromTop(kEdge / 2);
+
+    footer.setBounds(area.removeFromBottom(gui::FooterBar::preferredHeight(scale)));
+    area.removeFromBottom(kEdge / 2);
 
     // The three middle regions split what is left in the design's 38 : 34 : 18
     // ratio rather than each taking a fixed height. The band strip is now a row

@@ -271,6 +271,13 @@ private:
     //==========================================================================
     /** One optional element of the row, in priority order: the first to be
         dropped into the overflow menu is last. */
+    /** Hands Input / Output / Mix / Auto-Gain to the footer, which is where the
+        redesign puts them. The controls are hidden and skipped in layout rather
+        than drawn twice. */
+public:
+    void setIoSectionVisible(bool shouldBeVisible);
+
+private:
     enum class Optional
     {
         latency = 0,
@@ -310,6 +317,8 @@ private:
 
     //==========================================================================
     EmberAudioProcessor& processor;
+
+    bool showIoSection{true};
 
     LabelledKnob inputKnob, outputKnob, mixKnob;
     EmberToggle autoGainToggle{{}, ToggleLook::pill};

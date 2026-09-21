@@ -7,6 +7,7 @@
 #include "gui/BandPanel.h"
 #include "gui/GlobalBar.h"
 #include "gui/ModPanel.h"
+#include "gui/FooterBar.h"
 #include "gui/PresetBrowser.h"
 
 namespace ember
@@ -49,6 +50,7 @@ private:
     gui::SpectrumDisplay spectrum;
     gui::BandPanel bandPanel;
     gui::ModPanel modPanel;
+    gui::FooterBar footer;
 
     // One tooltip window for the whole editor; every control's getTooltip()
     // feeds it.

@@ -757,6 +757,21 @@ void GlobalBar::lookAndFeelChanged()
 }
 
 //==============================================================================
+void GlobalBar::setIoSectionVisible(bool shouldBeVisible)
+{
+    if (showIoSection == shouldBeVisible)
+        return;
+
+    showIoSection = shouldBeVisible;
+
+    const std::initializer_list<juce::Component*> io{&inputKnob, &outputKnob, &mixKnob, &autoGainToggle};
+
+    for (auto* component : io)
+        component->setVisible(shouldBeVisible);
+
+    resized();
+}
+
 void GlobalBar::timerCallback()
 {
     refreshFromProcessor();
@@ -1246,6 +1261,11 @@ void GlobalBar::resized()
     // Levels: the knobs normally take the full height and caption themselves.
     // In a short strip they drop their own caption, so the row supplies one —
     // three unlabelled knobs would be a puzzle.
+    //
+    // The redesign moves Input / Output / Mix / Auto-Gain to the footer, where
+    // they sit beside the CPU and latency readouts. When the footer owns them
+    // this block is skipped entirely rather than drawing a second copy.
+    if (showIoSection)
     {
         auto cell = nextLeft(levelsW, true);
         const bool knobsNeedCaption = cell.getHeight() < 52;

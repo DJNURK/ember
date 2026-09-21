@@ -422,6 +422,8 @@ void EmberAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
 {
     juce::ScopedNoDenormals noDenormals;
 
+    const auto blockStartTicks = juce::Time::getHighResolutionTicks();
+
     // Index by the buffer's OWN channel count, never by the bus layout's.
     // getArrayOfWritePointers() has exactly buffer.getNumChannels() entries, so
     // building a view with getTotalNumOutputChannels() reads past the end of
@@ -499,6 +501,37 @@ void EmberAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         for (int i = 0; i < numSamples; ++i)
             d[i] = dsputil::sanitise(d[i]);
     }
+
+    publishCpuLoad(blockStartTicks, numSamples);
+}
+
+void EmberAudioProcessor::publishCpuLoad(juce::int64 startTicks, int numSamples) noexcept
+{
+    const auto rate = getSampleRate();
+
+    if (rate <= 0.0 || numSamples <= 0)
+        return;
+
+    const auto elapsed = juce::Time::highResolutionTicksToSeconds(juce::Time::getHighResolutionTicks() - startTicks);
+    const auto available = static_cast<double>(numSamples) / rate;
+
+    if (available <= 0.0 || ! std::isfinite(elapsed))
+        return;
+
+    const auto instant = static_cast<float>(100.0 * elapsed / available);
+
+    // One-pole at roughly a second. A per-block figure swings by several
+    // percent block to block and is unreadable; the peak still gets through
+    // because the coefficient is asymmetric - it rises four times faster than
+    // it falls, so a spike shows up rather than being averaged away.
+    const auto previous = cpuLoadPercent.load(std::memory_order_relaxed);
+    const float coefficient = instant > previous ? 0.08f : 0.02f;
+    auto smoothed = previous + (instant - previous) * coefficient;
+
+    if (! std::isfinite(smoothed))
+        smoothed = 0.0f;
+
+    cpuLoadPercent.store(juce::jlimit(0.0f, 999.0f, smoothed), std::memory_order_relaxed);
 }
 
 void EmberAudioProcessor::processBlock(juce::AudioBuffer<double>& buffer, juce::MidiBuffer&)
