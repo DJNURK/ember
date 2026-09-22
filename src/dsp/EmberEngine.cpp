@@ -203,6 +203,29 @@ void EmberEngine::setParameters(const GlobalParams& global, const BandParams* ba
     for (int b = 0; b < n; ++b)
     {
         bandParams[static_cast<size_t>(b)] = bandsIn[b];
+
+        // The band's own frequency range, so its tone stage can keep its nodes
+        // inside it however the parameters were written. Told before the
+        // parameters, because setParameters clamps against it.
+        {
+            const int edges = juce::jmax(0, activeNumBands - 1);
+            float low = 20.0f;
+            float high = 20000.0f;
+
+            if (b > 0 && b - 1 < edges)
+                low = global.crossoverHz[static_cast<size_t>(b - 1)];
+
+            if (b < edges)
+                high = global.crossoverHz[static_cast<size_t>(b)];
+
+            bands[static_cast<size_t>(b)].setBandSpanHz(low, high);
+        }
+
+        bands[static_cast<size_t>(b)].setDitherMode(global.dither);
+
+        {
+        }
+
         bands[static_cast<size_t>(b)].setParameters(bandsIn[b]);
 
         // Solo mutes every non-soloed band; without any solo, all bands pass.

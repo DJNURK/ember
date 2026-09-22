@@ -330,5 +330,6 @@ delay-compensated dry copy.
 | **MIDI CC** | 0 to 127 | Which continuous controller the source follows when Type is CC. Ignored for the other three types. Wheel already covers CC 1 without setting this. |
 | **MIDI Smooth** | 0 to 500 ms | One-pole smoothing on the source's output. MIDI arrives in 7-bit steps, which step audibly on a destination like Drive without this. for a mod wheel driving something slow, lower it when the response feels late. |
 | **Macro** | 0 to 100 % | A smoothed knob that exists only to be a modulation source, so one gesture can move as many destinations as you like at whatever amounts and curves you set. together. Build the sound at both extremes, then drive the macro between them. |
+| **XY Axis** | X or Y | Which of the XY pad's two dimensions the modulation source emits. A pad has two axes but a modulation source carries one value, so this chooses between them. routing; leave it on X otherwise. Both axes are always live in the pad, so switching this changes which one is sent without losing the other's position. |
 
 <!-- END GENERATED PARAMETER REFERENCE -->

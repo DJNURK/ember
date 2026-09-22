@@ -81,6 +81,8 @@ void EmberAudioProcessor::buildParameterCache()
     autoGainCache = cache(pid::autoGain);
     numBandsCache = cache(pid::numBands);
     stereoModeCache = cache(pid::stereoMode);
+    ditherCache = cache(pid::ditherMode);
+    xyAxisCache = cache(pid::xyAxis);
 
     for (int i = 0; i < kMaxCrossovers; ++i)
         crossoverCache[static_cast<size_t>(i)] = cache(pid::crossover(i));
@@ -250,6 +252,7 @@ void EmberAudioProcessor::pushSourceParameters() noexcept
     XyControllerParams xy;
     xy.x = juce::jlimit(0.0f, 1.0f, xyXCache.raw() * 0.01f);
     xy.y = juce::jlimit(0.0f, 1.0f, xyYCache.raw() * 0.01f);
+    xy.axis = static_cast<XyAxis>(juce::jlimit(0, 1, static_cast<int>(std::lround(xyAxisCache.raw()))));
     modulation.setXyParameters(xy);
 
     for (int i = 0; i < kNumMidiSources; ++i)
@@ -391,6 +394,7 @@ void EmberAudioProcessor::resolveParameters(int numSamples) noexcept
     globalParams.numBands = juce::jlimit(kMinBands, kMaxBands, static_cast<int>(std::lround(value(numBandsCache))));
     globalParams.stereoMode =
         static_cast<StereoMode>(juce::jlimit(0, 1, static_cast<int>(std::lround(stereoModeCache.raw()))));
+    globalParams.dither = static_cast<DitherMode>(juce::jlimit(0, 2, static_cast<int>(std::lround(ditherCache.raw()))));
 
     for (int i = 0; i < kMaxCrossovers; ++i)
         globalParams.crossoverHz[i] = value(crossoverCache[static_cast<size_t>(i)]);

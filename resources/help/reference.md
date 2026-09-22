@@ -552,3 +552,15 @@ move as many destinations as you like at whatever amounts and curves you set.
 together. Build the sound at both extremes, then drive the macro between them.
 
 *Show me:* modulation#4
+
+## xyAxis
+**XY Axis** — X or Y
+
+Which of the XY pad's two dimensions the modulation source emits. A pad has two
+axes but a modulation source carries one value, so this chooses between them.
+
+*When to use it:* set it to Y when you want the vertical axis driving a
+routing; leave it on X otherwise. Both axes are always live in the pad, so
+switching this changes which one is sent without losing the other's position.
+
+*Show me:* modulation#2

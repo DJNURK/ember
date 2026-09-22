@@ -54,5 +54,12 @@ struct GlobalParams
     OversamplingFactor oversampling{OversamplingFactor::x2};
     CrossoverMode crossoverMode{CrossoverMode::MinimumPhaseLR4};
     StereoMode stereoMode{StereoMode::Stereo};
+
+    /** Dither for the Bitcrush style's quantiser.
+
+        This parameter existed, saved and restored, and was read by nothing:
+        Bitcrush always used its own triangular default. It is wired up now,
+        which makes it the control it always claimed to be. */
+    DitherMode dither{DitherMode::Triangular};
 };
 } // namespace ember

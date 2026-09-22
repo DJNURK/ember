@@ -213,6 +213,7 @@ private:
     std::array<BandCache, kMaxBands> bandCache{};
     std::array<CachedParam, kMaxCrossovers> crossoverCache{};
     CachedParam inGainCache, outGainCache, globalMixCache, autoGainCache, numBandsCache, stereoModeCache;
+    CachedParam ditherCache, xyAxisCache;
     std::array<LfoCache, kNumXLFOs> lfoCache{};
     std::array<EgCache, kNumEnvGenerators> egCache{};
     std::array<EfCache, kNumEnvFollowers> efCache{};

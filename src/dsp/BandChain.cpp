@@ -1,4 +1,5 @@
 #include "dsp/BandChain.h"
+#include "dsp/styles/DestroyStyles.h"
 #include "dsp/DspUtils.h"
 
 namespace ember
@@ -138,7 +139,10 @@ void BandChain::setParameters(const BandParams& p) noexcept
 
     feedback.setParameters(juce::jlimit(0.0f, 1.0f, p.feedback01), juce::jlimit(20.0f, 2000.0f, p.feedbackFreq));
     dynamics.setAmount(juce::jlimit(-1.0f, 1.0f, p.dynamics));
-    tone.setShape({p.toneLowHz, p.toneMidHz, p.toneMidQ, p.toneHighHz});
+    // Nodes are held inside the band they belong to, whatever wrote them.
+    const auto clampToBand = [this](float hz) { return juce::jlimit(spanLowHz, spanHighHz, hz); };
+
+    tone.setShape({clampToBand(p.toneLowHz), clampToBand(p.toneMidHz), p.toneMidQ, clampToBand(p.toneHighHz)});
 
     // A bypassed tone stage is flat rather than skipped, so switching it off
     // does not change the band's latency or leave its IIR state stale for when
@@ -372,6 +376,21 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
 
         publishHeat(inIn, inOut, outOut);
     }
+}
+
+void BandChain::setDitherMode(DitherMode mode) noexcept
+{
+    // Only Bitcrush quantises, so only Bitcrush has a dither to set. Every
+    // style is constructed up front, so this reaches the object whether or not
+    // the band is currently using it.
+    if (auto* bitcrush = dynamic_cast<BitcrushStyle*>(styles[static_cast<size_t>(StyleID::Bitcrush)].get()))
+        bitcrush->setDitherMode(mode);
+}
+
+void BandChain::setBandSpanHz(float lowHz, float highHz) noexcept
+{
+    spanLowHz = juce::jmin(lowHz, highHz);
+    spanHighHz = juce::jmax(lowHz, highHz);
 }
 
 void BandChain::publishHeat(float inIn, float inOut, float outOut) noexcept

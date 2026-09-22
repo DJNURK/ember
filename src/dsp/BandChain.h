@@ -55,6 +55,20 @@ public:
     /** Control-rate parameter update. Realtime-safe. */
     void setParameters(const BandParams& p) noexcept;
 
+    /** The frequency range this band covers, so the tone stage can keep its
+        nodes inside it.
+
+        The GUI clamps a dragged node to the band, but automation and modulation
+        write the parameter directly and were not clamped at all - a node could
+        sit two bands away, shaping a range this stage does not touch and
+        drawing a curve the plugin does not produce. Clamping here covers every
+        route to the parameter rather than just the mouse. */
+    void setBandSpanHz(float lowHz, float highHz) noexcept;
+
+    /** Dither for the Bitcrush style's quantiser. Realtime-safe: it writes a
+        mode on one style object and touches nothing else. */
+    void setDitherMode(DitherMode) noexcept;
+
     /** In place, at the host sample rate. Realtime-safe. */
     void process(juce::AudioBuffer<float>& buffer, int numSamples) noexcept;
 
@@ -81,6 +95,7 @@ private:
     void publishHeat(float inIn, float inOut, float outOut) noexcept;
 
     std::atomic<float> heatRatio{0.0f};
+    float spanLowHz{20.0f}, spanHighHz{20000.0f};
 
     std::array<std::unique_ptr<SaturationStyle>, static_cast<size_t>(kNumStyles)> styles;
     SaturationStyle* currentStyle{nullptr};
