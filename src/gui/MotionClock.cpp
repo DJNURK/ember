@@ -37,9 +37,9 @@ void MotionClock::remove(int listenerId)
         return;
     }
 
-    listeners.erase(std::remove_if(listeners.begin(), listeners.end(),
-                                   [listenerId](const Entry& e) { return e.id == listenerId; }),
-                    listeners.end());
+    listeners.erase(
+        std::remove_if(listeners.begin(), listeners.end(), [listenerId](const Entry& e) { return e.id == listenerId; }),
+        listeners.end());
 }
 
 void MotionClock::tick()
@@ -106,7 +106,7 @@ MotionClock::Registration::~Registration()
 //==============================================================================
 bool Animated::advance(float secondsElapsed) noexcept
 {
-    if (! isMoving())
+    if (!isMoving())
         return false;
 
     // Reduce motion is not "faster", it is "immediate": someone who turns it on

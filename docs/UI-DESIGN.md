@@ -383,3 +383,46 @@ leaving meters and values live.
   never used for text.
 - Minimum 10 px type at every zoom level.
 - Dark only. There is no light theme — it is a tube unit.
+
+
+---
+
+## 10. What shipped, and what did not
+
+Written after the build rather than before it, because a design document that
+only records intentions is half a document.
+
+### Built as specified
+
+Tokens and the strict no-literals rule, embedded type with real tabular
+figures, the machined control library, heat from a measured distortion
+residual, the band strip, the single header row, the footer, the EQ node
+editor and its display overlay, the analyser settings, zoom, the Cool Ember
+variant, reduce-motion, and one VBlank clock for everything that moves.
+
+### Deviations, and why
+
+- **`cold` is #5D82AA, not #5A7FA8.** The specified value measures 4.36:1 on
+  `panel` and fails the specification's own 4.5:1 contrast requirement. Lifted
+  1 % in lightness, same hue and saturation, to 4.54:1.
+- **The minimum size is 860×510, not 860×520.** A locked 1180:700 aspect
+  cannot produce 860×520; width is binding.
+- **The tone stage gained six parameters per band, not one.** The brief calls
+  `tonePosition` "the one permitted DSP change" while also asking for
+  horizontal drag to move frequency and Alt-drag to change Q. Those need
+  parameters that did not exist. Gain-only nodes would have been a hollow
+  version of the feature described, so the feature text won.
+- **Analyser resolution changes bin aggregation, not FFT size.** The FFT size
+  is fixed in the engine, and making it variable would mean reallocating the
+  analyser's buffers from a menu click while the audio thread reads them.
+
+### Not built
+
+- **Row 2 of an expanded module drops its knob captions at 1180×700**, showing
+  values only. They return at 1920×1140. The alternative was a third row, which
+  the height budget cannot pay for.
+- **The band strip has no "+" ghost module.** Band count lives in the header,
+  and adding a band from the display's right-click menu covers the same intent.
+- **CPU is 4.25 % at six bands against a 3 % target.** Met at three bands
+  (2.15 %). Closing the remaining 1.4× would need the style shapers vectorised
+  across bands, which is not possible while each band runs a different style.

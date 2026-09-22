@@ -114,10 +114,7 @@ public:
     explicit Animated(float initial) : current(initial), target(initial) {}
 
     /** @param durationSeconds  clamped to the design's 250 ms ceiling. */
-    void setDuration(float durationSeconds) noexcept
-    {
-        duration = juce::jlimit(0.0f, 0.25f, durationSeconds);
-    }
+    void setDuration(float durationSeconds) noexcept { duration = juce::jlimit(0.0f, 0.25f, durationSeconds); }
 
     void setTarget(float newTarget) noexcept { target = newTarget; }
 
