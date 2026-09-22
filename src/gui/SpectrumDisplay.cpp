@@ -214,9 +214,20 @@ void SpectrumDisplay::resized()
 
 void SpectrumDisplay::rebuildColumns()
 {
-    // One screen column per pixel: the curve then has exactly as much detail as
-    // the display can show, at any window size.
-    const int columns = juce::jlimit(2, 8192, juce::roundToInt(plotArea.getWidth()));
+    // One screen column per pixel at High: the curve then has exactly as much
+    // detail as the display can show, at any window size. Low and Medium
+    // aggregate more bins per column, which is what makes a busy signal read
+    // as a shape rather than as a hedge.
+    //
+    // Resolution is a display choice, not an FFT size: kSpectrumFFTSize is
+    // fixed in the engine, and making it variable would mean reallocating the
+    // analyser's buffers from a menu click while the audio thread is reading
+    // them. Aggregating more bins per column gives the same visible result
+    // with none of that risk.
+    constexpr float columnsPerPixel[] = {0.25f, 0.5f, 1.0f};
+    const auto resolution = juce::jlimit(0, 2, processor.getAnalyserSettings().resolution);
+
+    const int columns = juce::jlimit(2, 8192, juce::roundToInt(plotArea.getWidth() * columnsPerPixel[resolution]));
     const float floorDb = minDecibels - kCurveFloorMargin;
 
     resampleCurve(inputCurve, columns, floorDb);
@@ -418,15 +429,25 @@ bool SpectrumDisplay::refreshSpectrum()
 
     float largestMove = 0.0f;
 
+    // Tilt lifts the top end so that programme material - which falls off with
+    // frequency - reads as roughly flat. Referenced at 1 kHz, so the middle of
+    // the display does not move as the tilt changes and only the ends rotate
+    // around it.
+    const float tiltDbPerOctave = processor.getAnalyserSettings().tiltDbPerOctave();
+
     for (int column = 0; column < columns; ++column)
     {
         const float left = plotArea.getX() + static_cast<float>(column) * columnWidth;
+        const float centreHz = frequencyForX(left + columnWidth * 0.5f);
         const float firstBin = frequencyForX(left) * binsPerHz;
         const float lastBin = frequencyForX(left + columnWidth) * binsPerHz;
 
+        const float tilt =
+            tiltDbPerOctave > 0.0f && centreHz > 0.0f ? tiltDbPerOctave * std::log2(centreHz / 1000.0f) : 0.0f;
+
         const auto index = static_cast<size_t>(column);
-        const float inputTarget = juce::jmax(floorDb, aggregateBins(frame.inputDb, firstBin, lastBin));
-        const float outputTarget = juce::jmax(floorDb, aggregateBins(frame.outputDb, firstBin, lastBin));
+        const float inputTarget = juce::jmax(floorDb, aggregateBins(frame.inputDb, firstBin, lastBin) + tilt);
+        const float outputTarget = juce::jmax(floorDb, aggregateBins(frame.outputDb, firstBin, lastBin) + tilt);
 
         largestMove = juce::jmax(largestMove, advance(inputCurve[index], inputTarget));
         largestMove = juce::jmax(largestMove, advance(outputCurve[index], outputTarget));
@@ -1407,6 +1428,7 @@ void SpectrumDisplay::showAnalyserMenu()
                   auto s = processor.getAnalyserSettings();
                   s.resolution = v;
                   processor.setAnalyserSettings(s);
+                  rebuildColumns();
               });
 
     addChoice(menu, "Averaging", {"Fast", "Medium", "Slow"}, settings.averaging,
