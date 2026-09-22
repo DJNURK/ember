@@ -9,6 +9,7 @@
 #include "dsp/EmberTypes.h"
 #include "gui/EmberLookAndFeel.h"
 #include "gui/Widgets.h"
+#include "gui/MotionClock.h"
 #include "plugin/PluginProcessor.h"
 
 /**
@@ -61,6 +62,11 @@ public:
         band's node on the main display, so the two halves of the EQ editor are
         visibly the same thing. -1 clears it. */
     void setHighlightedBand(int bandIndex);
+
+    /** Hands the strip the editor's clock so module widths can animate rather
+        than snap. Without one the widths jump, which is correct but reads as a
+        relayout rather than as a module opening. */
+    void setMotionClock(MotionClock&);
 
     /** The band currently being edited, zero-based. */
     int getBand() const noexcept { return currentBand; }
@@ -127,6 +133,10 @@ private:
         and by hit-testing, so chrome and clicks can never disagree. */
     std::array<juce::Rectangle<int>, static_cast<size_t>(kMaxBands)> moduleBounds{};
     int highlightedBand{-1};
+
+    /** Each module's width weight, 1.0 collapsed and 1.6 selected. */
+    std::array<Animated, static_cast<size_t>(kMaxBands)> moduleWeight;
+    MotionClock::Registration motionRegistration;
 
     /** Lays one unselected module out: title strip, Drive, heat bar. */
     void layoutCompactModule(juce::Rectangle<int> slot, BandControls& controls);

@@ -519,6 +519,31 @@ BandPanel::BandControls& BandPanel::controlsFor(int bandIndex)
     return *slot;
 }
 
+void BandPanel::setMotionClock(MotionClock& clock)
+{
+    for (auto& weight : moduleWeight)
+    {
+        weight.setDuration(0.18f); // the design's 180 ms
+        weight.snapToTarget();
+    }
+
+    motionRegistration = clock.add(
+        [this](float seconds)
+        {
+            bool moved = false;
+
+            for (int band = 0; band < kMaxBands; ++band)
+                moved = moduleWeight[idx(band)].advance(seconds) || moved;
+
+            // Only the layout changes, so resize rather than repaint: the
+            // modules' own contents have not changed, and repainting them all
+            // every frame of a 180 ms slide is what makes an animation
+            // expensive.
+            if (moved)
+                resized();
+        });
+}
+
 void BandPanel::setHighlightedBand(int bandIndex)
 {
     const int clamped = bandIndex >= 0 && bandIndex < kMaxBands ? bandIndex : -1;
@@ -697,7 +722,17 @@ void BandPanel::resized()
     // rather than fixed widths, so six bands at the minimum size degrade
     // evenly instead of the last one falling off the end.
     constexpr float kSelectedWeight = 1.6f;
-    const float totalWeight = static_cast<float>(active - 1) + kSelectedWeight;
+
+    for (int band = 0; band < kMaxBands; ++band)
+        moduleWeight[idx(band)].setTarget(band == currentBand ? kSelectedWeight : 1.0f);
+
+    float totalWeight = 0.0f;
+
+    for (int band = 0; band < active; ++band)
+        totalWeight += moduleWeight[idx(band)].getValue();
+
+    if (totalWeight < 0.1f)
+        return;
     const int available = strip.getWidth() - moduleGap * juce::jmax(0, active - 1);
 
     if (available < active * 24)
@@ -707,8 +742,7 @@ void BandPanel::resized()
 
     for (int band = 0; band < active; ++band)
     {
-        const bool selected = band == currentBand;
-        const float weight = selected ? kSelectedWeight : 1.0f;
+        const float weight = moduleWeight[idx(band)].getValue();
         const int width = (band == active - 1) ? (strip.getRight() - x)
                                                : juce::roundToInt(static_cast<float>(available) * weight / totalWeight);
 

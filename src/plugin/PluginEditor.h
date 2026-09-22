@@ -8,6 +8,7 @@
 #include "gui/GlobalBar.h"
 #include "gui/ModPanel.h"
 #include "gui/FooterBar.h"
+#include "gui/MotionClock.h"
 #include "gui/PresetBrowser.h"
 
 namespace ember
@@ -44,6 +45,10 @@ private:
 
     EmberAudioProcessor& processorRef;
     gui::EmberLookAndFeel lookAndFeel;
+
+    /** One clock for everything that moves. Declared before the panels so it
+        outlives their registrations. */
+    gui::MotionClock motion{*this};
 
     gui::PresetBar presetBar;
     gui::GlobalBar globalBar;

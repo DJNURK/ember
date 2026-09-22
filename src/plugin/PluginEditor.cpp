@@ -30,6 +30,8 @@ EmberAudioProcessorEditor::EmberAudioProcessorEditor(EmberAudioProcessor& p)
     addAndMakeVisible(modPanel);
     addAndMakeVisible(footer);
 
+    bandPanel.setMotionClock(motion);
+
     // The footer owns Input / Output / Mix / Auto-Gain now.
     globalBar.setIoSectionVisible(false);
 
