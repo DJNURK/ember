@@ -629,10 +629,34 @@ void ToneEqPanel::mouseDrag(const juce::MouseEvent& event)
 
     setParam(gainParam(dragging), decibelsForY(event.position.y), false);
 
-    // The node stays inside its own band: moving a low shelf up into the next
-    // band's territory would draw a curve this stage cannot produce there.
+    // The node stays inside its own band where it can: moving a low shelf up
+    // into the next band's territory draws a curve this stage does not produce
+    // there.
+    //
+    // "Where it can", because each node has its own range - the high shelf only
+    // goes down to 1 kHz - and a band can sit entirely outside it. Band 1 runs
+    // 20 to 120 Hz by default, so clamping a high-shelf drag into the band and
+    // writing it saturated the parameter to 1 kHz every time: the node could
+    // not be moved at all. Where the two do not overlap, the parameter's own
+    // range wins and the band is not enforced.
     const auto requested = frequencyForX(event.position.x);
-    setParam(freqParam(dragging), juce::jlimit(bandLowHz, bandHighHz, requested), false);
+    auto low = bandLowHz;
+    auto high = bandHighHz;
+
+    if (auto* p = freqParam(dragging))
+    {
+        const auto& range = p->getNormalisableRange();
+        low = juce::jmax(low, range.start);
+        high = juce::jmin(high, range.end);
+
+        if (low >= high)
+        {
+            low = range.start;
+            high = range.end;
+        }
+    }
+
+    setParam(freqParam(dragging), juce::jlimit(low, high, requested), false);
 }
 
 void ToneEqPanel::mouseUp(const juce::MouseEvent&)

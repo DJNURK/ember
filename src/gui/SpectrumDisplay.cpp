@@ -1291,9 +1291,12 @@ float SpectrumDisplay::clampCrossover(int index, float hz) const
         high = juce::jmin(high, crossoverHz[static_cast<size_t>(index + 1)] / kMinCrossoverRatio);
 
     // Neighbours squeezed together from automation: sit exactly between them
-    // rather than asserting on an inverted range.
+    // rather than asserting on an inverted range. Still inside the display's
+    // own range - the midpoint of an inverted pair lands outside it (two edges
+    // pinned at 20 kHz put it at 22.4 kHz), which is a frequency the axis
+    // cannot draw and the parameter cannot hold.
     if (low > high)
-        return std::sqrt(low * high);
+        return juce::jlimit(minFrequency, maxFrequency, std::sqrt(low * high));
 
     return juce::jlimit(low, high, hz);
 }
@@ -1330,6 +1333,26 @@ float SpectrumDisplay::modulatedFrequencyFor(int index, float baseHz) const
     const float normalised = juce::jlimit(0.0f, 1.0f, parameter->convertTo0to1(baseHz) + offset);
 
     return juce::jlimit(minFrequency, maxFrequency, parameter->convertFrom0to1(normalised));
+}
+
+void SpectrumDisplay::setCrossoverUnclamped(int index, float hz)
+{
+    if (index < 0 || index >= kMaxCrossovers)
+        return;
+
+    auto* parameter = crossoverParams[static_cast<size_t>(index)];
+
+    if (parameter == nullptr)
+        return;
+
+    const float target = juce::jlimit(minFrequency, maxFrequency, hz);
+    const float normalised = juce::jlimit(0.0f, 1.0f, parameter->convertTo0to1(target));
+
+    if (std::abs(normalised - parameter->getValue()) > 1.0e-6f)
+        parameter->setValueNotifyingHost(normalised);
+
+    crossoverHz[static_cast<size_t>(index)] = target;
+    modulatedHz[static_cast<size_t>(index)] = modulatedFrequencyFor(index, target);
 }
 
 void SpectrumDisplay::setCrossover(int index, float hz)
@@ -1738,10 +1761,18 @@ void SpectrumDisplay::showDisplayMenu(juce::Point<float> position)
                      // puts five of six edges above 10 kHz and is useless.
                      const int edges = juce::jmax(1, numBands - 1);
 
+                     // Written without the neighbour clamp. Each edge was
+                     // otherwise clamped against the one above it as it stood
+                     // BEFORE the distribution, so a layout squeezed to the
+                     // bottom stayed squeezed: edge 0 could not pass the old
+                     // edge 1, which had not moved yet. The target layout is
+                     // valid by construction - six bands across 20 Hz to 20 kHz
+                     // puts a factor of 3.16 between edges, well over the
+                     // third-of-an-octave minimum.
                      for (int i = 0; i < edges; ++i)
                      {
                          const auto t = static_cast<float>(i + 1) / static_cast<float>(edges + 1);
-                         setCrossover(i, minFrequency * std::pow(maxFrequency / minFrequency, t));
+                         setCrossoverUnclamped(i, minFrequency * std::pow(maxFrequency / minFrequency, t));
                      }
                  });
 

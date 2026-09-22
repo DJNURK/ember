@@ -63,6 +63,17 @@ checking the fix against real content.
 - **A release cannot ship with the wrong version on it.** The tag-versus-build
   check was a warning, and v1.0.1 duly published binaries reporting 1.0.0. It
   fails the build now.
+- **Tone nodes can be dragged in every band.** The drag was clamped to the
+  band, but each node has its own range — the high shelf stops at 1 kHz — and a
+  band can sit entirely outside it. Band 1 runs to 120 Hz by default, so a high
+  shelf dragged anywhere in it saturated back to 1 kHz: the node could not be
+  moved at all. Where band and range do not overlap, the range wins.
+- **"Distribute bands evenly" distributes them.** Each edge was clamped against
+  the one above it as it stood before the command ran, so a layout squeezed to
+  the bottom of the spectrum stayed squeezed.
+- **The display cannot hold a frequency it cannot draw.** With two edges pinned
+  at 20 kHz the fallback midpoint was 22.4 kHz, outside both the axis and the
+  parameter.
 - **The help says what the plugin does.** The Dither, Crossover Frequency, XY X
   and XY Y articles all still described the behaviour this release changed —
   including one that told the user Dither was not connected to anything.
