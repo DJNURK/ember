@@ -93,8 +93,32 @@ changes loudness.
 - **Dynamics** (−100…+100 %) — one knob, two behaviours. Positive compresses with
   a program-dependent attack and release. Negative expands and gates. Zero is a
   true bypass.
-- **Tone: Low / Mid / High** (±12 dB) — post-saturation shaping at fixed musical
-  frequencies.
+### Tone — the band's EQ
+
+The three tone controls are a curve you drag, not three knobs. The panel inside
+the selected module draws the band's response over a ±12 dB grid with three
+nodes on it:
+
+| Gesture | Effect |
+|---|---|
+| Drag a node up / down | Gain, ±12 dB |
+| Drag a node left / right | Frequency, within the band's own range |
+| Alt-drag or scroll the mid node | Q, 0.2 to 6 |
+| Double-click a node | Reset that node |
+| **PRE / POST** | Whether tone runs before or after the saturator |
+| **FLAT** | Zero the three gains, leaving the node positions alone |
+| Lamp, top right | Tone bypass — lit means the stage is off |
+
+The curve fades outside the band's own frequency range, because that is the
+only range it affects, and the nodes are clamped to it for the same reason.
+
+**Pre versus post matters more than it sounds.** Post-EQ shapes what came out
+of the saturator. Pre-EQ changes what goes in, and therefore which harmonics
+the saturator generates at all — boosting 3 kHz before a tube stage is a
+different instrument from boosting it afterwards.
+
+Unselected modules show a small sparkline of the same curve, so the strip tells
+you at a glance which bands have shaping on them.
 
 ---
 
@@ -152,7 +176,64 @@ share, or version-control.
 
 ---
 
-## 9. Practical notes
+## 9. The display
+
+The main display shows the analyser, the EQ, or both — the selector sits in its
+top-right corner.
+
+| Gesture | Effect |
+|---|---|
+| Drag a crossover handle | Move that band edge |
+| **Alt**-drag a handle | Snap to musical points: 60, 120, 250, 500 Hz, 1, 2, 4, 8 kHz |
+| **Cmd/Ctrl**-drag a handle | Move every crossover by the same interval |
+| **Shift**-drag a handle | Fine control |
+| Drag an EQ node | The same node as in the module, mirrored live |
+| Hover an EQ node | Lights the band module it belongs to |
+| Click a band region | Select that band |
+| Right-click | Add a band here, distribute evenly, reset crossovers |
+
+A note name and frequency follow the pointer along the bottom — `A2 · 110 Hz` —
+because deciding where a crossover goes is usually a musical question.
+
+The **combined response** is the thicker line: every band's tone curve weighted
+by how much signal that band is actually carrying. A band with nothing in it
+does not bend the line, however its curve is set.
+
+The gear opens the analyser's own settings: resolution, averaging, tilt, freeze
+and peak hold. They are stored with the session but are not automatable — they
+change what you see, not what you hear.
+
+### Heat
+
+The interface warms up with the plugin. Each band measures how much of its
+output is no longer a scaled copy of its input, and that drives the band's tint
+on the display, its module's title bar, the glow behind its Drive knob and the
+filament in the logo.
+
+It measures **distortion, not loudness**. Ember gain-matches its styles, so a
+band being hammered and a band sitting clean read the same on a meter; heat is
+what tells them apart.
+
+---
+
+## 10. Keyboard and mouse
+
+| Gesture | Effect |
+|---|---|
+| Double-click any control | Reset to default |
+| **Shift**-drag | Fine control |
+| Scroll over a control | Step its value |
+| Right-click a control | MIDI learn, remove modulation |
+| Drag a modulation source onto a control | Create a routing |
+| **Alt**-drag a modulated control | Edit the modulation amount |
+
+Modulation is drawn in cool blue everywhere, and audio in warm orange. On a
+control that is moving, the colour tells you whether you moved it or something
+else did.
+
+---
+
+## 11. Practical notes
 
 **Latency.** Oversampling and linear-phase mode both add latency, and Ember
 reports it so your host compensates. If you are monitoring through Ember while
