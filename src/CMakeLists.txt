@@ -34,6 +34,7 @@ target_sources(ember_dsp PRIVATE
     gui/Wordmark.cpp
     gui/ToneEqPanel.cpp
     gui/MotionClock.cpp
+    gui/tutorial/TourEngine.cpp
     gui/ModPanel.cpp
     gui/PresetBrowser.cpp)
 

@@ -80,18 +80,54 @@ inline juce::String bandControl(int b, const juce::String& control)
     return band(b) + "." + control;
 }
 
-inline juce::String bandDrive(int b) { return bandControl(b, "drive"); }
-inline juce::String bandMix(int b) { return bandControl(b, "mix"); }
-inline juce::String bandLevel(int b) { return bandControl(b, "level"); }
-inline juce::String bandPan(int b) { return bandControl(b, "pan"); }
-inline juce::String bandWidth(int b) { return bandControl(b, "width"); }
-inline juce::String bandStyle(int b) { return bandControl(b, "style"); }
-inline juce::String bandFeedback(int b) { return bandControl(b, "feedback"); }
-inline juce::String bandFeedbackFreq(int b) { return bandControl(b, "feedbackfreq"); }
-inline juce::String bandDynamics(int b) { return bandControl(b, "dynamics"); }
-inline juce::String bandTone(int b) { return bandControl(b, "tone"); }
-inline juce::String bandBypass(int b) { return bandControl(b, "bypass"); }
-inline juce::String bandSolo(int b) { return bandControl(b, "solo"); }
+inline juce::String bandDrive(int b)
+{
+    return bandControl(b, "drive");
+}
+inline juce::String bandMix(int b)
+{
+    return bandControl(b, "mix");
+}
+inline juce::String bandLevel(int b)
+{
+    return bandControl(b, "level");
+}
+inline juce::String bandPan(int b)
+{
+    return bandControl(b, "pan");
+}
+inline juce::String bandWidth(int b)
+{
+    return bandControl(b, "width");
+}
+inline juce::String bandStyle(int b)
+{
+    return bandControl(b, "style");
+}
+inline juce::String bandFeedback(int b)
+{
+    return bandControl(b, "feedback");
+}
+inline juce::String bandFeedbackFreq(int b)
+{
+    return bandControl(b, "feedbackfreq");
+}
+inline juce::String bandDynamics(int b)
+{
+    return bandControl(b, "dynamics");
+}
+inline juce::String bandTone(int b)
+{
+    return bandControl(b, "tone");
+}
+inline juce::String bandBypass(int b)
+{
+    return bandControl(b, "bypass");
+}
+inline juce::String bandSolo(int b)
+{
+    return bandControl(b, "solo");
+}
 
 //==============================================================================
 // Modulation
