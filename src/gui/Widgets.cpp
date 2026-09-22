@@ -1,4 +1,5 @@
 #include "gui/Widgets.h"
+#include "gui/EmberTheme.h"
 
 #include <cmath>
 
@@ -177,7 +178,12 @@ void ModulatableKnob::paint(juce::Graphics& g)
     const auto rotary = getRotaryParameters();
     const float startAngle = rotary.startAngleRadians;
     const float endAngle = rotary.endAngleRadians;
-    const auto accent = EmberStyleProps::accentColourFor(*this);
+    // The modulation ring is cool while the value arc beneath it is warm. That
+    // is the redesign's one colour rule - warm is audio, cool is control - and
+    // it is what lets you tell, on a knob that is moving, whether you moved it
+    // or something else did.
+    const auto modColour = EmberTheme::tokens().cold;
+
     const juce::PathStrokeType ringStroke(geo.modRingThickness, juce::PathStrokeType::curved,
                                           juce::PathStrokeType::rounded);
 
@@ -185,7 +191,7 @@ void ModulatableKnob::paint(juce::Graphics& g)
     {
         // The full ring says "this destination is assigned" even when every
         // source happens to be sitting still.
-        g.setColour(accent.withAlpha(0.16f));
+        g.setColour(modColour.withAlpha(0.20f));
         g.strokePath(EmberLookAndFeel::arcPath(geo.centre, geo.modRingRadius, startAngle, endAngle), ringStroke);
 
         const float valueProportion = static_cast<float>(valueToProportionOfLength(getValue()));
@@ -194,7 +200,7 @@ void ModulatableKnob::paint(juce::Graphics& g)
 
         if (high - low > 1.0e-3f)
         {
-            g.setColour(accent.withAlpha(0.6f));
+            g.setColour(modColour.withAlpha(0.7f));
             g.strokePath(EmberLookAndFeel::arcPath(geo.centre, geo.modRingRadius,
                                                    EmberLookAndFeel::rotaryAngle(low, startAngle, endAngle),
                                                    EmberLookAndFeel::rotaryAngle(high, startAngle, endAngle)),
@@ -206,7 +212,7 @@ void ModulatableKnob::paint(juce::Graphics& g)
             geo.modRingRadius, EmberLookAndFeel::rotaryAngle(live, startAngle, endAngle));
         const float markerRadius = juce::jmax(1.6f, geo.modRingThickness * 0.85f);
 
-        g.setColour(accent);
+        g.setColour(modColour);
         g.fillEllipse(juce::Rectangle<float>(markerRadius * 2.0f, markerRadius * 2.0f).withCentre(marker));
     }
 
@@ -222,9 +228,11 @@ void ModulatableKnob::paint(juce::Graphics& g)
 
     if (dragHighlight)
     {
-        g.setColour(accent.withAlpha(0.18f));
+        // A valid drop target, highlighted cool: what is being dropped is a
+        // modulation source, so the invitation is a control-coloured one.
+        g.setColour(modColour.withAlpha(0.22f));
         g.fillEllipse(outerCircle);
-        g.setColour(accent);
+        g.setColour(modColour);
         g.drawEllipse(outerCircle.reduced(1.0f), 2.0f);
     }
 }

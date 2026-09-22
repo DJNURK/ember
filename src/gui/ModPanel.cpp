@@ -1,4 +1,5 @@
 #include "gui/ModPanel.h"
+#include "gui/EmberTheme.h"
 
 #include "dsp/modulation/ModSources.h"
 #include "dsp/modulation/ModTypes.h"
@@ -11,6 +12,23 @@
 
 namespace ember::gui
 {
+namespace
+{
+/** Modulation is drawn cool, everything audio is drawn warm.
+
+    That split is the whole colour semantic of the redesign: a glance at any
+    part of the interface should say whether you are looking at signal or at
+    control. The modulation panel was using the audio accent throughout, which
+    made a routing look like a band.
+
+    A function rather than a constant so it follows the live theme, including
+    the Cool Ember variant. */
+juce::Colour modAccent()
+{
+    return EmberTheme::tokens().cold;
+}
+} // namespace
+
 namespace
 {
 //==============================================================================
@@ -122,7 +140,7 @@ juce::Image createSourceDragImage(int flatIndex)
 
     g.setColour(EmberColours::backgroundDeep().withAlpha(0.95f));
     g.fillRoundedRectangle(area, 5.0f);
-    g.setColour(EmberColours::accent());
+    g.setColour(modAccent());
     g.drawRoundedRectangle(area, 5.0f, 1.5f);
 
     // The same grip mark the tile shows, so the badge reads as "this is the
@@ -134,7 +152,7 @@ juce::Image createSourceDragImage(int flatIndex)
         {
             const float x = area.getX() + 9.0f + static_cast<float>(column) * 5.0f;
             const float y = area.getCentreY() + (static_cast<float>(row) - 1.0f) * 5.0f;
-            g.setColour(EmberColours::accent().withAlpha(0.85f));
+            g.setColour(modAccent().withAlpha(0.85f));
             g.fillEllipse(x - dot, y - dot, dot * 2.0f, dot * 2.0f);
         }
     }
@@ -202,7 +220,7 @@ public:
         const float spacingX = radius * 3.2f;
         const float spacingY = radius * 3.2f;
 
-        g.setColour(hovering ? EmberColours::accent() : EmberColours::textDisabled());
+        g.setColour(hovering ? modAccent() : EmberColours::textDisabled());
 
         for (int column = 0; column < 2; ++column)
         {
@@ -307,7 +325,7 @@ public:
         g.setColour(selected ? EmberColours::panelRaised() : EmberColours::panel());
         g.fillRoundedRectangle(area, corner);
 
-        g.setColour(selected ? EmberColours::accent() : EmberColours::outline());
+        g.setColour(selected ? modAccent() : EmberColours::outline());
         g.drawRoundedRectangle(area.reduced(0.5f), corner, selected ? 1.4f : 1.0f);
 
         auto body = area.reduced(3.0f);
@@ -337,7 +355,7 @@ public:
         g.setColour(EmberColours::track());
         g.fillRoundedRectangle(bar, barHeight * 0.5f);
 
-        const auto accent = selected ? EmberColours::accent() : EmberColours::accent().withAlpha(0.62f);
+        const auto accent = selected ? modAccent() : modAccent().withAlpha(0.62f);
         const float clamped = juce::jlimit(info.bipolar ? -1.0f : 0.0f, 1.0f, value);
 
         auto filled = bar;
@@ -458,10 +476,10 @@ public:
         fill.lineTo(plot.getRight(), zeroY);
         fill.closeSubPath();
 
-        g.setColour(EmberColours::accent().withAlpha(0.14f));
+        g.setColour(modAccent().withAlpha(0.14f));
         g.fillPath(fill);
 
-        g.setColour(EmberColours::accent());
+        g.setColour(modAccent());
         g.strokePath(curve, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
         const auto labelRow = area.reduced(6.0f, 3.0f).removeFromTop(juce::jmin(14.0f, area.getHeight() * 0.3f));
@@ -695,17 +713,17 @@ public:
         fill.lineTo(plot.getRight(), plot.getCentreY());
         fill.closeSubPath();
 
-        g.setColour(EmberColours::accent().withAlpha(0.13f));
+        g.setColour(modAccent().withAlpha(0.13f));
         g.fillPath(fill);
 
-        g.setColour(EmberColours::accent());
+        g.setColour(modAccent());
         g.strokePath(curve, juce::PathStrokeType(1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
         // ---- live output, as a line across the field
         const float liveY = plot.getCentreY() - juce::jlimit(-1.0f, 1.0f, liveValue) * plot.getHeight() * 0.5f;
         g.setColour(EmberColours::accentGlow().withAlpha(0.5f));
         g.fillRect(juce::Rectangle<float>(plot.getX(), liveY - 0.5f, plot.getWidth(), 1.0f));
-        g.setColour(EmberColours::accent());
+        g.setColour(modAccent());
         g.fillEllipse(juce::Rectangle<float>(6.0f, 6.0f).withCentre({plot.getRight(), liveY}));
 
         // ---- breakpoints
@@ -716,9 +734,9 @@ public:
             const bool active = (i == dragPoint) || (i == hoverPoint);
             const float radius = active ? 5.4f : 4.0f;
 
-            g.setColour(active ? EmberColours::accent() : EmberColours::panelRaised());
+            g.setColour(active ? modAccent() : EmberColours::panelRaised());
             g.fillEllipse(juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(centre));
-            g.setColour(active ? EmberColours::textPrimary() : EmberColours::accent());
+            g.setColour(active ? EmberColours::textPrimary() : modAccent());
             g.drawEllipse(juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(centre), 1.3f);
         }
 
@@ -736,7 +754,7 @@ public:
 
             g.setColour(EmberColours::backgroundDeep().withAlpha(0.88f));
             g.fillRoundedRectangle(box, 3.0f);
-            g.setColour(EmberColours::accent());
+            g.setColour(modAccent());
             g.setFont(font);
             g.drawText(label, box, juce::Justification::centred, false);
         }
@@ -1179,7 +1197,7 @@ public:
 
         const auto puck = puckCentre(plot);
 
-        g.setColour(EmberColours::accent().withAlpha(0.35f));
+        g.setColour(modAccent().withAlpha(0.35f));
         g.fillRect(juce::Rectangle<float>(puck.x - 0.5f, plot.getY(), 1.0f, plot.getHeight()));
         g.fillRect(juce::Rectangle<float>(plot.getX(), puck.y - 0.5f, plot.getWidth(), 1.0f));
 
@@ -1187,7 +1205,7 @@ public:
 
         g.setColour(EmberColours::accentGlow().withAlpha(0.35f));
         g.fillEllipse(juce::Rectangle<float>(radius * 3.4f, radius * 3.4f).withCentre(puck));
-        g.setColour(EmberColours::accent());
+        g.setColour(modAccent());
         g.fillEllipse(juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(puck));
         g.setColour(EmberColours::backgroundDeep());
         g.drawEllipse(juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(puck), 1.2f);
@@ -1444,7 +1462,7 @@ public:
         if (hovering)
         {
             const auto underline = getLocalBounds().toFloat().removeFromBottom(1.0f).reduced(1.0f, 0.0f);
-            g.setColour(EmberColours::accent().withAlpha(0.7f));
+            g.setColour(modAccent().withAlpha(0.7f));
             g.fillRect(underline);
 
             juce::Path arrow;
@@ -1453,7 +1471,7 @@ public:
             arrow.lineTo(box.getCentreX(), box.getBottom());
             arrow.lineTo(box.getRight(), box.getY());
 
-            g.setColour(EmberColours::accent());
+            g.setColour(modAccent());
             g.strokePath(arrow, juce::PathStrokeType(1.2f));
         }
     }
@@ -1654,7 +1672,7 @@ public:
             chevron.lineTo(centre.x + size, centre.y - size * 0.5f);
         }
 
-        g.setColour(EmberColours::accent());
+        g.setColour(modAccent());
         g.strokePath(chevron, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
         content.removeFromLeft(4);
@@ -1691,7 +1709,7 @@ public:
             const float alpha =
                 juce::jlimit(0.0f, 1.0f, static_cast<float>(messageTicks) / static_cast<float>(kMessageFadeTicks));
             g.setFont(EmberFonts::forHeight(height, 0.42f, false));
-            g.setColour((messageIsWarning ? EmberColours::warning() : EmberColours::accent()).withAlpha(alpha));
+            g.setColour((messageIsWarning ? EmberColours::warning() : modAccent()).withAlpha(alpha));
             g.drawFittedText(message, content, juce::Justification::centredRight, 1, 0.8f);
         }
     }
@@ -2456,7 +2474,7 @@ private:
 
             if (flashAmount > 0.0f)
             {
-                g.setColour(EmberColours::accent().withAlpha(flashAmount * 0.22f));
+                g.setColour(modAccent().withAlpha(flashAmount * 0.22f));
                 g.fillRect(area);
             }
 
