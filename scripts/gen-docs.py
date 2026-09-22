@@ -57,6 +57,8 @@ def parse(text: str) -> list[Article]:
     articles: list[Article] = []
     current: Article | None = None
 
+    in_when = False
+
     for raw in text.splitlines():
         line = raw.strip()
 
@@ -64,6 +66,7 @@ def parse(text: str) -> list[Article]:
             if current is not None and current.prose:
                 articles.append(current)
             current = Article(line[3:].strip())
+            in_when = False
             continue
 
         if current is None:
@@ -79,13 +82,27 @@ def parse(text: str) -> list[Article]:
 
         if line.startswith("*When to use it:*"):
             current.when = line[len("*When to use it:*"):].strip()
+            in_when = True
             continue
 
         if line.startswith("*Show me:*"):
+            in_when = False
             continue
 
-        if line:
-            current.body.append(line)
+        # A wrapped "When to use it" paragraph continues until a blank line.
+        # Taking only its first physical line dropped the rest of the sentence
+        # AND appended it to the body, so every one of the 54 rows in the
+        # generated table ended mid-clause with an orphan fragment glued to the
+        # prose above it.
+        if not line:
+            in_when = False
+            continue
+
+        if in_when:
+            current.when += " " + line
+            continue
+
+        current.body.append(line)
 
     if current is not None and current.prose:
         articles.append(current)

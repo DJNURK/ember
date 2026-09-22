@@ -37,6 +37,7 @@ enum class ModSourceField : int
     Release,   ///< EG / follower release (+/- 3 octaves)
     Threshold, ///< EG transient threshold (additive)
     Value,     ///< macro / XY / MIDI output value (additive)
+    ValueY,    ///< the XY pad's second coordinate (additive)
     Count
 };
 

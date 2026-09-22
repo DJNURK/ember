@@ -382,12 +382,13 @@ float ModulationEngine::tickSource(const EvaluationPlan& plan, int flatIndex, in
     case ModSourceType::XYController:
     {
         XyControllerParams p = baseParams.xy;
-        const float valueOffset = fieldOffset(plan, flatIndex, ModSourceField::Value);
 
-        if (p.axis == XyAxis::Y)
-            p.y += valueOffset;
-        else
-            p.x += valueOffset;
+        // Both coordinates move with their own parameter's modulation; `axis`
+        // decides which of them the source emits. Routing the offset to
+        // whichever axis was selected instead meant "XY Y" was owned by nothing
+        // and modulating "XY X" silently drove Y.
+        p.x += fieldOffset(plan, flatIndex, ModSourceField::Value);
+        p.y += fieldOffset(plan, flatIndex, ModSourceField::ValueY);
 
         p.smoothingMs += 500.0f * fieldOffset(plan, flatIndex, ModSourceField::Smoothing);
 

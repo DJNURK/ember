@@ -1316,6 +1316,17 @@ float SpectrumDisplay::modulatedFrequencyFor(int index, float baseHz) const
     if (std::abs(offset) <= 1.0e-4f)
         return baseHz;
 
+    // The ghost's whole job is to say where the edge REALLY is, so it has to
+    // come from the engine rather than be recomputed here. Applying the offset
+    // to the parameter and stopping there missed the third-of-an-octave spacing
+    // the engine enforces on top, so the marker could sit a third of an octave
+    // from the filter it was pointing at - and two ghosts could be drawn in the
+    // opposite order to the edges they describe.
+    const float applied = processor.getAppliedCrossoverHz(index);
+
+    if (applied > 0.0f)
+        return juce::jlimit(minFrequency, maxFrequency, applied);
+
     const float normalised = juce::jlimit(0.0f, 1.0f, parameter->convertTo0to1(baseHz) + offset);
 
     return juce::jlimit(minFrequency, maxFrequency, parameter->convertFrom0to1(normalised));

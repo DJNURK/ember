@@ -65,8 +65,8 @@ costs CPU, so add one only when you can name what it is for.
 **Crossover Frequency** — 20 Hz to 20 kHz
 
 The edge between band N and band N+1; defaults 120, 600, 2500, 6000, 12000 Hz.
-Dragging on the display keeps edges a third of an octave apart; the engine's own
-backstop is looser, so automation can push them closer.
+Edges are kept a third of an octave apart however they are moved — by hand, by
+automation or by modulation — so a band can never be squeezed down to nothing.
 
 *When to use it:* place edges where the source changes character — under the
 body of a kick, above the fundamental of a bass. Judge the result unsoloed.
@@ -124,12 +124,16 @@ its own, so you monitor cheaply and bounce at quality.
 **Dither** — Off, Rectangular or Triangular
 
 Selects the noise the Bitcrush style's quantiser adds to decorrelate its
-quantisation error. Triangular (TPDF) is the default and the usual choice.
-Note that this control is not currently connected to the DSP: the Bitcrush
-style always uses its own triangular default whatever this is set to.
+quantisation error. Triangular (TPDF) is the default and the usual choice: it
+turns the harsh, signal-locked distortion of a bare quantiser into an even hiss
+that sits under the music. Rectangular is quieter but leaves the noise floor
+moving with the signal. Off is the raw quantiser, which on low bit depths is a
+sound in its own right rather than a fault.
 
-*When to use it:* nothing to reach for yet. The setting saves and restores with
-your session, so it is safe to leave alone.
+*When to use it:* leave it on Triangular unless you want the artefacts. Turn it
+Off when you are after the gritty, pumping edge of an early sampler, and reach
+for Rectangular when Triangular's hiss is audible in the quiet parts but you
+still want the error broken up.
 
 ## bandNDrive
 **Drive** — 0 to 40 dB
@@ -497,8 +501,9 @@ follower that sits near 0 all the time needs gain, not a faster attack.
 ## xyX
 **XY X** — 0 to 100 %
 
-Horizontal position of the XY pad, smoothed before it is used. This is the axis
-the XY modulation source emits.
+Horizontal position of the XY pad, smoothed before it is used. Whether the
+modulation source emits this axis or the vertical one is set by XY Axis;
+either way both coordinates stay live and both can be modulated.
 
 *When to use it:* as a performance control for anything you want to sweep by
 hand and automate later — two or three connections at different amounts off one
@@ -507,12 +512,14 @@ gesture.
 ## xyY
 **XY Y** — 0 to 100 %
 
-Vertical position of the XY pad, smoothed alongside X. Note that the XY
-modulation source currently emits the X axis only, so this value is stored and
-recalled but does not drive modulation on its own.
+Vertical position of the XY pad, smoothed alongside X. Set XY Axis to Y and the
+modulation source emits this coordinate instead of the horizontal one. It is a
+modulation destination in its own right, so a second modulator can drive the
+pad's vertical position while you move the horizontal one by hand.
 
-*When to use it:* it is still a modulation destination like any other continuous
-parameter. To modulate from a second hand-controlled value today, use a Macro.
+*When to use it:* whenever a gesture wants two dimensions — one axis sent to the
+routing, the other holding a position you set. Pair it with XY Axis; on its own
+this parameter only moves the pad.
 
 ## midiNType
 **MIDI Type** — Velocity, CC, Mod Wheel or Note Number

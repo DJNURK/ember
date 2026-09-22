@@ -34,6 +34,7 @@ std::vector<Article> Reference::parse(const juce::String& markdown)
 {
     std::vector<Article> result;
     Article current;
+    bool inWhenToUse = false;
 
     const auto flush = [&result, &current]
     {
@@ -51,6 +52,7 @@ std::vector<Article> Reference::parse(const juce::String& markdown)
         {
             flush();
             current.kind = line.substring(3).trim();
+            inWhenToUse = false;
             continue;
         }
 
@@ -80,17 +82,34 @@ std::vector<Article> Reference::parse(const juce::String& markdown)
         if (line.startsWith("*When to use it:*"))
         {
             current.whenToUse = line.fromFirstOccurrenceOf("*When to use it:*", false, false).trim();
+            inWhenToUse = true;
             continue;
         }
 
         if (line.startsWith("*Show me:*"))
         {
             current.showMe = line.fromFirstOccurrenceOf("*Show me:*", false, false).trim();
+            inWhenToUse = false;
             continue;
         }
 
-        if (line.isNotEmpty())
-            current.body += (current.body.isEmpty() ? "" : " ") + line;
+        // A wrapped "When to use it" paragraph runs until a blank line. Keeping
+        // only its first physical line truncated the advice mid-sentence and
+        // spliced the tail onto the body prose, in every article whose advice
+        // did not fit on one line - which was most of them.
+        if (line.isEmpty())
+        {
+            inWhenToUse = false;
+            continue;
+        }
+
+        if (inWhenToUse)
+        {
+            current.whenToUse += " " + line;
+            continue;
+        }
+
+        current.body += (current.body.isEmpty() ? "" : " ") + line;
     }
 
     flush();

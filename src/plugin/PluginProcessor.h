@@ -97,6 +97,10 @@ public:
         over one another; this sorts before reading edges off. */
     void getBandSpanHz(int band, float& lowHz, float& highHz) const noexcept;
 
+    /** Edge `edge` as the filters are running it: modulation applied, spacing
+        enforced, sample rate respected. Safe from the message thread. */
+    [[nodiscard]] float getAppliedCrossoverHz(int edge) const noexcept;
+
     /** How the analyser draws itself.
 
         View settings, not parameters: they change nothing about the audio, so

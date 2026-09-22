@@ -191,6 +191,16 @@ void EmberEngine::setParameters(const GlobalParams& global, const BandParams* ba
 
     globalParams = global;
 
+    // Publish the layout the filters are actually using, for the editor. The
+    // crossover clamps what it is given, so these are the real edges rather
+    // than the requested ones, and they are atomics because the reader is the
+    // message thread.
+    publishedNumBands.store(activeNumBands, std::memory_order_relaxed);
+
+    for (int i = 0; i < kMaxCrossovers; ++i)
+        publishedEdges[static_cast<size_t>(i)].store(activeCrossover->getCrossoverFrequency(i),
+                                                     std::memory_order_relaxed);
+
     smoothedInputGain.setTargetValue(juce::Decibels::decibelsToGain(juce::jlimit(-24.0f, 24.0f, global.inputGainDb)));
     smoothedOutputGain.setTargetValue(juce::Decibels::decibelsToGain(juce::jlimit(-24.0f, 24.0f, global.outputGainDb)));
     smoothedGlobalMix.setTargetValue(juce::jlimit(0.0f, 1.0f, global.mix01));
@@ -203,30 +213,6 @@ void EmberEngine::setParameters(const GlobalParams& global, const BandParams* ba
     for (int b = 0; b < n; ++b)
     {
         bandParams[static_cast<size_t>(b)] = bandsIn[b];
-
-        // The band's own frequency range, so its tone stage can keep its nodes
-        // inside it however the parameters were written. Told before the
-        // parameters, because setParameters clamps against it.
-        //
-        // The span comes from the crossover rather than from global.crossoverHz.
-        // Those are the REQUESTED edges; the crossover clamps them apart by at
-        // least a third of an octave, so when automation drives two edges
-        // together the request describes a band a few hertz wide that does not
-        // exist. Clamping tone nodes into that would put them outside the band
-        // they are shaping - the exact failure this span was added to prevent.
-        {
-            const int edges = juce::jmax(0, activeNumBands - 1);
-            float low = 20.0f;
-            float high = 20000.0f;
-
-            if (b > 0 && b - 1 < edges)
-                low = activeCrossover->getCrossoverFrequency(b - 1);
-
-            if (b < edges)
-                high = activeCrossover->getCrossoverFrequency(b);
-
-            bands[static_cast<size_t>(b)].setBandSpanHz(low, high);
-        }
 
         bands[static_cast<size_t>(b)].setDitherMode(global.dither);
 
@@ -512,5 +498,17 @@ void EmberEngine::accumulateSpectrum(const float* input, const float* output, in
     analyse(input, scratchFrame.inputDb);
     analyse(output, scratchFrame.outputDb);
     spectrumFifo.push(scratchFrame);
+}
+float EmberEngine::getAppliedCrossoverHz(int edge) const noexcept
+{
+    if (edge < 0 || edge >= kMaxCrossovers)
+        return 0.0f;
+
+    return publishedEdges[static_cast<size_t>(edge)].load(std::memory_order_relaxed);
+}
+
+int EmberEngine::getAppliedNumBands() const noexcept
+{
+    return publishedNumBands.load(std::memory_order_relaxed);
 }
 } // namespace ember

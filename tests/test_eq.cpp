@@ -9,8 +9,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include "dsp/BandFx.h"
+#include "TestHelpers.h"
+#include "plugin/ParameterIDs.h"
+#include "plugin/PluginProcessor.h"
 
 using namespace ember;
+using namespace embertest;
 
 namespace
 {
@@ -166,4 +170,94 @@ TEST_CASE("node frequencies are clamped below Nyquist", "[eq]")
 
     for (const auto sample : buffer)
         REQUIRE(std::isfinite(sample));
+}
+
+TEST_CASE("a band's tone nodes are used where the parameter puts them", "[eq][presets]")
+{
+    // 2.1.1 briefly clamped each node into the band's own frequency span, on
+    // the reasoning that a node outside its band shapes nothing. The reasoning
+    // is right and the clamp is still wrong, for a reason only visible against
+    // real content: no preset stores a node frequency, so all 36 factory
+    // presets load at the defaults - 150 Hz, 1 kHz, 4 kHz - and under the
+    // default crossovers two of those three fall outside each band.
+    //
+    // Outside the band a node is harmless: a 150 Hz low shelf on a band that
+    // starts at 600 Hz is flat across everything the band carries. Clamped to
+    // 600 Hz it lands at full strength on the band's own content. 34 of the 36
+    // factory presets set a tone gain, so 34 of them quietly changed voicing.
+    //
+    // The invariant, therefore: where a node sits must not depend on where the
+    // crossovers are.
+    EmberAudioProcessor processor;
+
+    auto set = [&processor](const juce::String& id, float value)
+    {
+        auto* p = processor.getAPVTS().getParameter(id);
+        REQUIRE(p != nullptr);
+        p->setValueNotifyingHost(p->getNormalisableRange().convertTo0to1(value));
+    };
+
+    // Three bands, split at 120 and 600 Hz, so the top band runs from 600 Hz up
+    // and the default 150 Hz low shelf sits below it.
+    set(pid::numBands, 3.0f);
+    set(pid::crossover(0), 120.0f);
+    set(pid::crossover(1), 600.0f);
+
+    // Nothing but the tone stage should colour the probe.
+    for (int b = 0; b < 3; ++b)
+    {
+        set(pid::drive(b), 0.0f);
+        set(pid::bandMix(b), 100.0f);
+    }
+
+    set(pid::autoGain, 0.0f);
+
+    const double sampleRate = 48000.0;
+    const int blockSize = 512;
+    const float probeHz = 900.0f; // inside the top band, above 600 Hz
+
+    auto measureDb = [&](float shelfDb, float shelfHz)
+    {
+        for (int b = 0; b < 6; ++b)
+        {
+            set(pid::toneLow(b), shelfDb);
+            set(pid::toneLowHz(b), shelfHz);
+        }
+
+        processor.prepareToPlay(sampleRate, blockSize);
+
+        juce::AudioBuffer<float> buf(2, blockSize);
+        juce::MidiBuffer midi;
+        float out = 0.0f;
+
+        // Settle first: gain smoothers and the crossover both need a few blocks
+        // before the measurement means anything.
+        for (int i = 0; i < 40; ++i)
+        {
+            fillSine(buf, sampleRate, probeHz, 0.25f);
+            processor.processBlock(buf, midi);
+
+            if (i >= 30)
+                out = juce::jmax(out, rms(buf));
+        }
+
+        return juce::Decibels::gainToDecibels(out / 0.25f * std::sqrt(2.0f));
+    };
+
+    const auto flat = measureDb(0.0f, 150.0f);
+    const auto asWritten = measureDb(-6.0f, 150.0f);
+    const auto asClamped = measureDb(-6.0f, 600.0f);
+
+    INFO("900 Hz: flat " << flat << " dB, shelf at 150 Hz " << asWritten << " dB, shelf at the 600 Hz band edge "
+                         << asClamped << " dB");
+
+    // A 150 Hz low shelf is flat at 900 Hz, two and a half octaves above its
+    // corner, so the band sounds the same as with no shelf at all.
+    REQUIRE_THAT(asWritten, Catch::Matchers::WithinAbs(flat, 0.2));
+
+    // Moved to the band edge it is emphatically not flat there - which is both
+    // what the clamp did and why it mattered. Asserted so the first REQUIRE
+    // cannot pass by measuring nothing: a broken harness would report both as
+    // flat.
+    REQUIRE(flat - asClamped > 0.8);
 }

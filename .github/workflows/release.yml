@@ -84,12 +84,19 @@ jobs:
           esac
 
           # The plug-in reports the version baked into project(Ember VERSION ...).
-          # A mismatch means the binaries would identify themselves as a different
-          # release than the tag; warn loudly but do not block the build.
+          # A mismatch means every binary in the release identifies itself as a
+          # different version than the tag on the box. This was a warning once,
+          # and v1.0.1 duly shipped with binaries reporting 1.0.0 — a warning in
+          # a log nobody reads is not a check. Fail.
           CMAKE_VERSION="$(grep -m1 -oE '^[[:space:]]*VERSION[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt \
                            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)"
-          if [ -n "$CMAKE_VERSION" ] && [ "$CMAKE_VERSION" != "${VERSION%%-*}" ]; then
-            echo "::warning::tag version $VERSION does not match project() version $CMAKE_VERSION in CMakeLists.txt"
+          if [ -z "$CMAKE_VERSION" ]; then
+            echo "::error::could not read project(Ember VERSION ...) from CMakeLists.txt"
+            exit 1
+          fi
+          if [ "$CMAKE_VERSION" != "${VERSION%%-*}" ]; then
+            echo "::error::tag version $VERSION does not match project() version $CMAKE_VERSION in CMakeLists.txt — bump one of them and re-tag"
+            exit 1
           fi
 
           {

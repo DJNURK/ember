@@ -336,8 +336,13 @@ TEST_CASE("parameters can be automated from another thread while processing", "[
     REQUIRE(writes.load() > 0);
 }
 
-TEST_CASE("TEMP audit: xyY destination", "[tempaudit]")
+TEST_CASE("each XY axis is moved by its own parameter's modulation", "[processor][modulation]")
 {
+    // The pad has two coordinates; a modulation source emits one value, and
+    // "XY Axis" says which. Only X was ever registered as a source parameter,
+    // so a routing to "XY Y" reached nothing at all, and a routing to "XY X"
+    // drove whichever axis was selected. 2.1.1 added the axis selector without
+    // noticing that the half it selects between did not exist.
     auto run = [](const char* destId, float axisReal)
     {
         EmberAudioProcessor proc;
@@ -364,16 +369,25 @@ TEST_CASE("TEMP audit: xyY destination", "[tempaudit]")
         prepareAndRun(proc, 64);
         const float b = proc.getModulationEngine().getSourceValue(flatSourceIndex(ModSourceType::XYController, 0));
 
-        const float offs = proc.getModulationEngine().getModulationOffset(target);
-        WARN("dest=" << destId << " axis=" << axisReal << "  XY source: " << a << " -> " << b
-                     << "   (offset at target = " << offs << ")");
         return b - a;
     };
 
-    const float dYaxisY = run(pid::xyY, 1.0f);
-    const float dXaxisY = run(pid::xyX, 1.0f);
-    const float dXaxisX = run(pid::xyX, 0.0f);
-    const float dYaxisX = run(pid::xyY, 0.0f);
-    WARN("delta: ->xyY/axisY=" << dYaxisY << "  ->xyX/axisY=" << dXaxisY << "  ->xyX/axisX=" << dXaxisX
-                               << "  ->xyY/axisX=" << dYaxisX);
+    constexpr float kAxisX = 0.0f;
+    constexpr float kAxisY = 1.0f;
+
+    const auto yMovesY = run(pid::xyY, kAxisY);
+    const auto xMovesX = run(pid::xyX, kAxisX);
+    const auto xLeavesY = run(pid::xyX, kAxisY);
+    const auto yLeavesX = run(pid::xyY, kAxisX);
+
+    INFO("Y->Y " << yMovesY << ", X->X " << xMovesX << ", X->Y " << xLeavesY << ", Y->X " << yLeavesX);
+
+    // The selected axis follows its own parameter...
+    REQUIRE(yMovesY > 0.2f);
+    REQUIRE(xMovesX > 0.2f);
+
+    // ...and only its own. Before this, X->Y read the same as X->X and Y->Y
+    // read zero: the pad had one modulatable coordinate wearing two names.
+    REQUIRE(std::abs(xLeavesY) < 0.01f);
+    REQUIRE(std::abs(yLeavesX) < 0.01f);
 }

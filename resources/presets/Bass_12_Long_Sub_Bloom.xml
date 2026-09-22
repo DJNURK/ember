@@ -87,7 +87,7 @@
     <PARAM id="band6ToneLow" value="-0.0"/>
     <PARAM id="band6ToneMid" value="-0.0"/>
     <PARAM id="band6Width" value="100.0"/>
-    <PARAM id="dither" value="0.0"/>
+    <PARAM id="dither" value="2.0"/>
     <PARAM id="ef1Attack" value="5.0"/>
     <PARAM id="ef1Band" value="1.0"/>
     <PARAM id="ef1Gain" value="0.0"/>
