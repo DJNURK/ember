@@ -589,9 +589,11 @@ void BandPanel::showControlsFor(int bandIndex)
     {
         if (auto* controls = bandControls[idx(band)].get())
         {
-            const bool isActive = band < active;
+            // `active` is the band COUNT, never zero, so testing it here left
+            // a band's controls on screen after the count was reduced past it.
+            const bool bandIsActive = band < active;
 
-            if (!active)
+            if (!bandIsActive)
             {
                 controls->setControlsVisible(false);
                 controls->setPollingEnabled(false);

@@ -6,6 +6,7 @@
 // These construct a real editor and resolve every target of every shipped tour
 // against it.
 #include <catch2/catch_test_macros.hpp>
+#include "gui/tutorial/Reference.h"
 #include "gui/tutorial/TourLibrary.h"
 #include "gui/tutorial/TourTargets.h"
 #include "plugin/PluginEditor.h"
@@ -67,17 +68,17 @@ TEST_CASE("every shipped tour parses", "[tutorials]")
 
             // An active step with no hint gives the user nothing to act on.
             if (step.action.isActive())
-                REQUIRE((step.hint.isNotEmpty() || step.action.type == ActionType::clicked
-                         || step.action.type == ActionType::presetLoaded
-                         || step.action.type == ActionType::modulationConnected));
+                REQUIRE((step.hint.isNotEmpty() || step.action.type == ActionType::clicked ||
+                         step.action.type == ActionType::presetLoaded ||
+                         step.action.type == ActionType::modulationConnected));
         }
     }
 }
 
 TEST_CASE("the eight tours are the eight the manual promises", "[tutorials]")
 {
-    const juce::StringArray expected{"quickstart", "multiband",     "styles",  "feedback-dynamics",
-                                     "tone-eq",    "modulation",    "recipes", "hq-cpu"};
+    const juce::StringArray expected{"quickstart", "multiband",  "styles",  "feedback-dynamics",
+                                     "tone-eq",    "modulation", "recipes", "hq-cpu"};
 
     juce::StringArray actual;
 
@@ -112,11 +113,12 @@ TEST_CASE("every tour target resolves to a real component", "[tutorials]")
     for (const auto& tour : TourLibrary::tours())
         for (size_t i = 0; i < tour.steps.size(); ++i)
             if (const auto& target = tour.steps[i].target; target.isNotEmpty())
-                if (! findID(*editor, target))
+                if (!findID(*editor, target))
                     missing.add(tour.id + " step " + juce::String(i + 1) + " -> '" + target + "'");
 
-    INFO("unresolved targets:\n" << missing.joinIntoString("\n") << "\n\navailable ids:\n"
-                                 << available.joinIntoString("\n"));
+    INFO("unresolved targets:\n"
+         << missing.joinIntoString("\n") << "\n\navailable ids:\n"
+         << available.joinIntoString("\n"));
     REQUIRE(missing.isEmpty());
 }
 
@@ -191,4 +193,61 @@ TEST_CASE("the parser rejects what it should", "[tutorials]")
 
     REQUIRE_FALSE(TourLibrary::parse(noParam, error).isValid());
     REQUIRE(error.contains("needs a parameter"));
+}
+
+TEST_CASE("every parameter has a reference article", "[tutorials]")
+{
+    // The specification's own requirement, and the reason articles are keyed by
+    // kind: 209 parameters collapse to 53 kinds, so adding a parameter to an
+    // existing family costs nothing, while adding a new family fails here
+    // rather than shipping undocumented.
+    EmberAudioProcessor processor;
+
+    juce::StringArray uncovered;
+    int total = 0;
+
+    for (auto* parameter : processor.getParameters())
+    {
+        auto* withID = dynamic_cast<juce::AudioProcessorParameterWithID*>(parameter);
+
+        if (withID == nullptr)
+            continue;
+
+        ++total;
+
+        if (Reference::articleFor(withID->paramID) == nullptr)
+            uncovered.add(withID->paramID + "  (kind: " + Reference::kindOf(withID->paramID) + ")");
+    }
+
+    INFO("parameters with no article:\n" << uncovered.joinIntoString("\n"));
+    REQUIRE(total > 200);
+    REQUIRE(uncovered.isEmpty());
+}
+
+TEST_CASE("articles are short enough to read in the panel", "[tutorials]")
+{
+    // The Learn panel is 360 px wide. An article that runs to a screenful stops
+    // being a reference and becomes a chapter nobody reads.
+    for (const auto& article : Reference::articles())
+    {
+        INFO("article: " << article.kind);
+        REQUIRE(article.displayName.isNotEmpty());
+        REQUIRE(article.body.isNotEmpty());
+        REQUIRE(article.body.length() < 700);
+        REQUIRE(article.whenToUse.length() < 500);
+    }
+}
+
+TEST_CASE("a Show me link names a tour that exists", "[tutorials]")
+{
+    for (const auto& article : Reference::articles())
+    {
+        if (article.showMe.isEmpty())
+            continue;
+
+        const auto tourId = article.showMe.upToFirstOccurrenceOf("#", false, false).trim();
+
+        INFO("article " << article.kind << " points at tour '" << tourId << "'");
+        REQUIRE(TourLibrary::find(tourId) != nullptr);
+    }
 }

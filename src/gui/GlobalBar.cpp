@@ -697,6 +697,15 @@ GlobalBar::GlobalBar(EmberAudioProcessor& processorToUse)
     overflowButton.onClick = [this] { showOverflowMenu(); };
     presetButton.setComponentID(tutorial::TourTargets::presetsButton);
     modulationButton.setComponentID(tutorial::TourTargets::modButton);
+    helpButton.setComponentID(tutorial::TourTargets::helpButton);
+    helpButton.setTooltip("Tutorials & help");
+    helpButton.onClick = [this]
+    {
+        if (onHelpRequested != nullptr)
+            onHelpRequested();
+    };
+    addAndMakeVisible(helpButton);
+
     overflowButton.setComponentID(tutorial::TourTargets::overflow);
     addChildComponent(overflowButton);
 
@@ -1425,6 +1434,19 @@ void GlobalBar::resized()
 
         if (showModulation)
             modulationButton.setBounds(row.removeFromLeft(juce::jmin(modW, row.getWidth())));
+
+        // The "?" is last and smallest: it is the control you need once and
+        // then stop needing, so it yields space to everything else.
+        if (row.getWidth() > 4)
+        {
+            row.removeFromLeft(juce::jmin(tightGap, row.getWidth()));
+            helpButton.setBounds(row.removeFromLeft(juce::jmin(row.getHeight(), row.getWidth())));
+            helpButton.setVisible(helpButton.getWidth() > 12);
+        }
+        else
+        {
+            helpButton.setVisible(false);
+        }
     }
 }
 } // namespace ember::gui

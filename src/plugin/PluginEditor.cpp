@@ -1,5 +1,7 @@
 #include "PluginEditor.h"
 #include "gui/EmberTheme.h"
+#include "gui/tutorial/TourLibrary.h"
+#include "gui/tutorial/UserSettings.h"
 
 namespace ember
 {
@@ -29,6 +31,15 @@ EmberAudioProcessorEditor::EmberAudioProcessorEditor(EmberAudioProcessor& p)
     addAndMakeVisible(bandPanel);
     addAndMakeVisible(modPanel);
     addAndMakeVisible(footer);
+
+    // The tour overlay sits above everything; the Learn panel beside the strip.
+    addChildComponent(learnPanel);
+    addChildComponent(tourEngine);
+
+    tourEngine.onProgress = [](const juce::String& tourId, int step, bool completed)
+    { gui::tutorial::UserSettings::setTourProgress(tourId, step, completed); };
+
+    globalBar.onHelpRequested = [this] { learnPanel.isShowing() ? learnPanel.hide() : learnPanel.show(); };
 
     bandPanel.setMotionClock(motion);
 
@@ -65,6 +76,14 @@ void EmberAudioProcessorEditor::wirePanels()
     spectrum.onBandSelected = [this](int band) { selectBand(band); };
     bandPanel.onBandClicked = [this](int band) { selectBand(band); };
     spectrum.onEqNodeHovered = [this](int band) { bandPanel.setHighlightedBand(band); };
+
+    // First run only, and never again after "Don't show again".
+    juce::MessageManager::callAsync(
+        [safe = juce::Component::SafePointer<EmberAudioProcessorEditor>(this)]
+        {
+            if (safe != nullptr)
+                safe->showWelcomeIfFirstRun();
+        });
 
     globalBar.onZoomRequested = [this](float factor)
     {
@@ -117,6 +136,40 @@ void EmberAudioProcessorEditor::wirePanels()
     modPanel.onCollapsedChanged = [this] { resized(); };
 }
 
+void EmberAudioProcessorEditor::showWelcomeIfFirstRun()
+{
+    if (gui::tutorial::UserSettings::welcomeDismissed())
+        return;
+
+    // A card over the display rather than a modal dialog: a modal stops the
+    // plugin being a plugin, and someone who opened Ember to work should be
+    // able to ignore this entirely.
+    juce::AlertWindow::showAsync(
+        juce::MessageBoxOptions()
+            .withIconType(juce::MessageBoxIconType::NoIcon)
+            .withTitle("New to Ember?")
+            .withMessage("Ember splits the signal into bands and saturates each one separately.\n\n"
+                         "The two-minute tour covers the whole idea.")
+            .withButton("Take the tour")
+            .withButton("Skip")
+            .withButton("Don't show again"),
+        [safe = juce::Component::SafePointer<EmberAudioProcessorEditor>(this)](int result)
+        {
+            if (safe == nullptr)
+                return;
+
+            // Skip leaves the flag alone, so the card returns next time. Only
+            // "Don't show again" is permanent - a welcome that comes back after
+            // being dismissed is a nag, and one that vanishes after being
+            // skipped once was never offered properly.
+            if (result == 2)
+                gui::tutorial::UserSettings::setWelcomeDismissed(true);
+            else if (result == 0)
+                if (const auto* tour = gui::tutorial::TourLibrary::find("quickstart"))
+                    safe->tourEngine.start(*tour, 0);
+        });
+}
+
 void EmberAudioProcessorEditor::selectBand(int band)
 {
     processorRef.setSelectedBand(band);
@@ -150,6 +203,17 @@ void EmberAudioProcessorEditor::resized()
     header.removeFromLeft(kEdge / 2);
     globalBar.setBounds(header);
     area.removeFromTop(kEdge / 2);
+
+    // The tour overlay covers the editor; the Learn panel takes width from the
+    // right rather than floating over the controls it is describing.
+    tourEngine.setBounds(getLocalBounds());
+
+    if (learnPanel.isShowing())
+    {
+        const int panelWidth = juce::jmin(gui::tutorial::LearnPanel::preferredWidth, area.getWidth() / 2);
+        learnPanel.setBounds(area.removeFromRight(panelWidth));
+        area.removeFromRight(kEdge / 2);
+    }
 
     footer.setBounds(area.removeFromBottom(gui::FooterBar::preferredHeight(scale)));
     area.removeFromBottom(kEdge / 2);

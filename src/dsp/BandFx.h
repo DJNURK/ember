@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <juce_dsp/juce_dsp.h>
 #include "dsp/EmberTypes.h"
 
@@ -70,13 +71,17 @@ public:
     void process(float* const* channels, int numChannels, int numSamples) noexcept;
 
     /** Current gain reduction in dB (negative), for the GUI meter. */
-    float getGainReductionDb() const noexcept { return gainReductionDb; }
+    /** For the GUI meter. Atomic because the audio thread writes it and the
+        message thread reads it; a plain float here was a data race that
+        ThreadSanitizer had not caught only because no test drove the meter and
+        the audio thread at once. */
+    float getGainReductionDb() const noexcept { return gainReductionDb.load(std::memory_order_relaxed); }
 
 private:
     double sampleRate{44100.0};
     float amount{0.0f};
     float rmsState{0.0f}, peakState{0.0f}, envState{1.0f};
-    float gainReductionDb{0.0f};
+    std::atomic<float> gainReductionDb{0.0f};
     float attackCoeff{0.0f}, releaseCoeff{0.0f}, rmsCoeff{0.0f};
 };
 

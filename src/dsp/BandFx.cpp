@@ -585,16 +585,10 @@ void Dynamics::process(float* const* channels, int numChannels, int numSamples) 
             channels[ch][i] *= envState;
     }
 
-    // Meter value: one conversion per block, never per sample.
-    //
-    // NOTE: gainReductionDb is a plain float declared in BandFx.h, written here
-    // on the audio thread and read on the message thread by the GUI meter
-    // (src/gui/Widgets.h, via BandChain/EmberEngine::getBandGainReductionDb).
-    // That is a data race; the project's own rule is "GUI reads parameter
-    // values through std::atomic" (docs/PLAN.md), which EmberEngine::bandLevels
-    // follows and this does not. Fixing it means changing the member's type in
-    // BandFx.h, which this pass does not own.
-    gainReductionDb = juce::Decibels::gainToDecibels(juce::jmin(1.0f, worstGain), -60.0f);
+    // Meter value: one conversion per block, never per sample. Stored through
+    // an atomic because the GUI meter reads it from the message thread.
+    gainReductionDb.store(juce::Decibels::gainToDecibels(juce::jmin(1.0f, worstGain), -60.0f),
+                          std::memory_order_relaxed);
 }
 
 //==============================================================================

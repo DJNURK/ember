@@ -93,12 +93,17 @@ file(GLOB EMBER_PRESET_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/reso
 file(GLOB EMBER_TUTORIAL_FILES CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/resources/tutorials/*.json")
 
+# The reference is one Markdown file read by both the plugin and the docs
+# generator, so the in-plugin help and the manual cannot drift apart.
+file(GLOB EMBER_HELP_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/help/*.md")
+
 file(GLOB EMBER_FONT_FILES CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/resources/fonts/*.ttf"
      "${CMAKE_CURRENT_SOURCE_DIR}/resources/fonts/*OFL.txt")
 
 juce_add_binary_data(ember_resources SOURCES ${EMBER_PRESET_FILES} ${EMBER_FONT_FILES}
-                                             ${EMBER_TUTORIAL_FILES})
+                                             ${EMBER_TUTORIAL_FILES}
+                                             ${EMBER_HELP_FILES})
 set_target_properties(ember_resources PROPERTIES POSITION_INDEPENDENT_CODE ON FOLDER "Ember")
 
 add_subdirectory(src)

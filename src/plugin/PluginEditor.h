@@ -9,6 +9,8 @@
 #include "gui/ModPanel.h"
 #include "gui/FooterBar.h"
 #include "gui/MotionClock.h"
+#include "gui/tutorial/LearnPanel.h"
+#include "gui/tutorial/TourEngine.h"
 #include "gui/PresetBrowser.h"
 
 namespace ember
@@ -42,6 +44,7 @@ public:
 private:
     void wirePanels();
     void selectBand(int band);
+    void showWelcomeIfFirstRun();
 
     EmberAudioProcessor& processorRef;
     gui::EmberLookAndFeel lookAndFeel;
@@ -56,6 +59,11 @@ private:
     gui::BandPanel bandPanel;
     gui::ModPanel modPanel;
     gui::FooterBar footer;
+
+    /** The help system. The engine overlays the whole editor; the panel takes
+        width from the band strip so it never covers what it describes. */
+    gui::tutorial::TourEngine tourEngine{*this, processorRef};
+    gui::tutorial::LearnPanel learnPanel{tourEngine};
 
     // One tooltip window for the whole editor; every control's getTooltip()
     // feeds it.

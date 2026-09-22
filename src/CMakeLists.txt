@@ -36,6 +36,9 @@ target_sources(ember_dsp PRIVATE
     gui/MotionClock.cpp
     gui/tutorial/TourEngine.cpp
     gui/tutorial/TourLibrary.cpp
+    gui/tutorial/UserSettings.cpp
+    gui/tutorial/Reference.cpp
+    gui/tutorial/LearnPanel.cpp
     gui/ModPanel.cpp
     gui/PresetBrowser.cpp)
 
