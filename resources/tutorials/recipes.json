@@ -1,0 +1,33 @@
+{
+  "id": "recipes",
+  "title": "Mixing recipes",
+  "estimatedMinutes": 3,
+  "steps": [
+    {
+      "title": "Three things that work",
+      "body": "Starting points rather than presets. Each one is a shape you can adapt; the numbers matter less than the reasoning."
+    },
+    {
+      "target": "band.1.mix",
+      "title": "Parallel drum crunch",
+      "body": "One band, a hard style, Drive around 20 dB, and Mix at 30 to 40 percent. The distortion fills the gaps between hits while the transients stay intact because most of the dry signal is still there.",
+      "hint": "Set Mix to about 35 percent.",
+      "action": { "type": "parameterChanged", "parameter": "band1Mix" }
+    },
+    {
+      "target": "display.crossover.1",
+      "title": "Warm bass, clean low end",
+      "body": "Crossover near 120 Hz. Low band on Clean Tube at low drive, or bypassed entirely; upper bands on Warm Tape pushed harder. The weight stays defined and the harmonics that make bass audible on small speakers come from above it."
+    },
+    {
+      "target": "band.2.style",
+      "title": "Vocal presence",
+      "body": "Three bands, the middle one covering roughly 1 to 4 kHz on Transformer, with Dynamics slightly positive. The compression evens out what the saturator sees, so the presence stays constant as the singer moves."
+    },
+    {
+      "target": "header.presets",
+      "title": "Save what worked",
+      "body": "The preset browser saves to a user folder alongside the factory library. Name it after the source rather than the settings — you will search for 'thin vocal', not for 'transformer 14 dB'."
+    }
+  ]
+}

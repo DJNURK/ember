@@ -1,0 +1,54 @@
+{
+  "id": "quickstart",
+  "title": "Quick start",
+  "estimatedMinutes": 2,
+  "steps": [
+    {
+      "title": "Two minutes to the whole idea",
+      "body": "Ember splits the signal into bands and saturates each one separately. That is the entire concept; everything else is detail. Nothing here changes your settings unless you ask it to."
+    },
+    {
+      "target": "header.preset",
+      "title": "Start from a preset",
+      "body": "The arrows step through the library. Presets are a faster way to learn what the styles sound like than turning knobs at random.",
+      "hint": "Click a preset arrow.",
+      "action": { "type": "presetLoaded" }
+    },
+    {
+      "target": "display",
+      "title": "The display is the map",
+      "body": "Each shaded region is a band. Click one to select it; drag the handles between them to move the crossovers. The band you select is the module that opens below."
+    },
+    {
+      "target": "band.1.drive",
+      "title": "Drive is the heart of it",
+      "body": "Drive pushes the band into its style. Watch the display warm up as you turn it — that glow is measured distortion, not level.",
+      "hint": "Try about 12 dB.",
+      "action": { "type": "parameterAtLeast", "parameter": "band1Drive", "value": 12 }
+    },
+    {
+      "target": "band.1.style",
+      "title": "The style is the character",
+      "body": "Nineteen of them, grouped by family. Tube is forgiving, tape softens transients, the broken ones are effects rather than colour.",
+      "hint": "Pick a different style.",
+      "action": { "type": "styleSelected" }
+    },
+    {
+      "target": "band.1.mix",
+      "title": "Mix is the control you will use most",
+      "body": "It blends the saturated band back with the clean one. Heavy drive flattens transients; pulling Mix back to 40 percent keeps them and keeps the harmonics.",
+      "hint": "Pull Mix back a little.",
+      "action": { "type": "parameterChanged", "parameter": "band1Mix" }
+    },
+    {
+      "target": "footer.autogain",
+      "title": "Auto Gain keeps you honest",
+      "body": "Drive makes things louder, and louder sounds better whether or not it is better. Auto Gain compensates, so you are comparing character rather than volume."
+    },
+    {
+      "target": "header.compare.a",
+      "title": "A and B",
+      "body": "Two full snapshots. Set one up, copy it across, change it, and switch between them. Trust this more than your memory of what it sounded like a minute ago."
+    }
+  ]
+}

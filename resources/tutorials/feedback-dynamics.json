@@ -1,0 +1,30 @@
+{
+  "id": "feedback-dynamics",
+  "title": "Feedback and Dynamics",
+  "estimatedMinutes": 2,
+  "steps": [
+    {
+      "target": "band.1.feedback",
+      "title": "Feedback is a resonant path around the saturator",
+      "body": "A little adds body and a ring; a lot is a howl. It is internally limited, so it cannot run away no matter how you set it — this is safe to explore.",
+      "hint": "Turn Feedback up.",
+      "action": { "type": "parameterAtLeast", "parameter": "band1Feedback", "value": 25 }
+    },
+    {
+      "target": "band.1.feedbackfreq",
+      "title": "Freq is where it rings",
+      "body": "Between 20 Hz and 2 kHz. On a snare band, tuning this near the drum's own pitch turns the effect into sustain rather than noise."
+    },
+    {
+      "target": "band.1.dynamics",
+      "title": "One knob, two behaviours",
+      "body": "Right of centre compresses, with a program-dependent attack and release. Left of centre expands and gates. Dead centre is a true bypass, not a null setting.",
+      "hint": "Move Dynamics either way.",
+      "action": { "type": "parameterChanged", "parameter": "band1Dynamics" }
+    },
+    {
+      "title": "Why per-band dynamics",
+      "body": "Compressing before saturation evens out what the saturator sees, so the distortion stays constant as the source moves. Expanding after it does the opposite — the effect only appears on the loud parts."
+    }
+  ]
+}

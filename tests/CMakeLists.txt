@@ -12,7 +12,8 @@ add_executable(ember_tests
     test_modulation_stress.cpp
     test_theme.cpp
     test_heat.cpp
-    test_eq.cpp)
+    test_eq.cpp
+    test_tutorials.cpp)
 
 target_include_directories(ember_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 # test_theme greps the GUI sources for stray colour literals, so it needs to
@@ -65,3 +66,13 @@ target_link_libraries(ember_rendereditor PRIVATE
     ember_dsp
     juce::juce_recommended_config_flags)
 set_target_properties(ember_rendereditor PROPERTIES FOLDER "Ember")
+
+# Lists every APVTS parameter ID. The reference-article test needs the list, and
+# generating it from the live layout means an added parameter shows up as a
+# missing article rather than being quietly undocumented.
+add_executable(ember_dumpparams ${CMAKE_CURRENT_SOURCE_DIR}/../tools/dump_params.cpp)
+target_include_directories(ember_dumpparams PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(ember_dumpparams PRIVATE
+    ember_dsp
+    juce::juce_recommended_config_flags)
+set_target_properties(ember_dumpparams PROPERTIES FOLDER "Ember")

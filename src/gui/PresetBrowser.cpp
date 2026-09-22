@@ -1,5 +1,6 @@
 #include "gui/PresetBrowser.h"
 #include "gui/EmberTheme.h"
+#include "gui/tutorial/TourTargets.h"
 
 namespace ember::gui
 {
@@ -1294,6 +1295,10 @@ PresetBar::PresetBar(EmberAudioProcessor& processorToUse)
     nextButton.onClick = [this] { manager.loadNext(); };
     nameDisplay.onClick = [this] { showBrowser(); };
 
+    wordmark.setComponentID(tutorial::TourTargets::logo);
+    previousButton.setComponentID(tutorial::TourTargets::presetPrevious);
+    nextButton.setComponentID(tutorial::TourTargets::presetNext);
+    nameDisplay.setComponentID(tutorial::TourTargets::presetName);
     addAndMakeVisible(wordmark);
     addAndMakeVisible(previousButton);
     addAndMakeVisible(nameDisplay);

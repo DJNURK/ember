@@ -1,0 +1,41 @@
+{
+  "id": "modulation",
+  "title": "Modulation",
+  "estimatedMinutes": 4,
+  "steps": [
+    {
+      "target": "header.mod",
+      "title": "Open the modulation panel",
+      "body": "Ember has four LFOs, two envelopes, four followers, an XY pad, MIDI sources and eight macros. Everything cool-coloured in the interface is control rather than audio.",
+      "hint": "Click Mod.",
+      "action": { "type": "clicked" }
+    },
+    {
+      "target": "mod.sources",
+      "title": "Sources live here",
+      "body": "Each card shows what its source is doing right now. The XLFO is the one to start with: it has an editable shape rather than a fixed waveform."
+    },
+    {
+      "target": "band.1.drive",
+      "title": "Drag a source onto a control",
+      "body": "Pick up an XLFO by its handle and drop it on Drive. The knob grows a cool ring showing the range the modulation covers and a dot showing where it is now.",
+      "hint": "Drop a source on a knob.",
+      "action": { "type": "modulationConnected" }
+    },
+    {
+      "target": "band.1.drive",
+      "title": "Set the amount",
+      "body": "Alt-drag a modulated knob to change how far the modulation reaches, without moving the knob's own value. The ring shows the span; the dot shows the sum."
+    },
+    {
+      "target": "mod.sources",
+      "title": "Sync to tempo",
+      "body": "An LFO in sync mode follows the host's tempo in musical divisions. Free mode is in hertz and is what you want for anything that should not lock to the grid."
+    },
+    {
+      "target": "mod.matrix",
+      "title": "The matrix view",
+      "body": "Every routing in one table, with its amount and curve, and a button to remove it. Faster than hunting for a knob when you have lost track of what is moving."
+    }
+  ]
+}

@@ -366,6 +366,14 @@ jobs:
 
       # Checks only; nothing is rewritten. git pathspecs are used so untracked
       # and generated files (e.g. anything under build/) are never considered.
+      - name: Check the manual is in sync with the reference
+        run: |
+          set -eu
+          # The in-plugin help and the manual are the same words from one
+          # source. This fails if someone edited reference.md without
+          # regenerating, or edited the generated section by hand.
+          python3 scripts/gen-docs.py --check
+
       - name: Check src/ and tests/ against .clang-format
         run: |
           set -eu

@@ -9,6 +9,8 @@
 #include "dsp/SpectrumFifo.h"
 #include "gui/EmberLookAndFeel.h"
 #include "dsp/BandFx.h"
+#include "gui/tutorial/TourAnchor.h"
+#include "gui/tutorial/TourTargets.h"
 #include "plugin/PluginProcessor.h"
 
 /**
@@ -264,6 +266,10 @@ private:
 
     // Geometry, recomputed in resized().
     juce::Rectangle<float> plotArea;
+
+    tutorial::TourAnchor modeAnchor{tutorial::TourTargets::displayMode};
+    tutorial::TourAnchor gearAnchor{tutorial::TourTargets::analyserSettings};
+    std::array<std::unique_ptr<tutorial::TourAnchor>, static_cast<size_t>(kMaxCrossovers)> crossoverAnchors;
 
     DisplayMode displayMode{DisplayMode::both};
     EqNodeRef hoveredEqNode;

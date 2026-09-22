@@ -1,0 +1,38 @@
+{
+  "id": "styles",
+  "title": "Saturation styles explained",
+  "estimatedMinutes": 3,
+  "steps": [
+    {
+      "title": "Nineteen styles, five ideas",
+      "body": "The list is long but the families are short: tube, tape, transformer, clipping, and the deliberately broken ones. Knowing which family you want narrows it to three."
+    },
+    {
+      "target": "band.1.style",
+      "title": "Tube — soft, asymmetric, forgiving",
+      "body": "Adds mostly even harmonics and rounds peaks gradually. Clean Tube barely colours; Broken Tube is an effect. This is the family to reach for when you are not sure.",
+      "hint": "Try a tube style.",
+      "action": { "type": "styleSelected" }
+    },
+    {
+      "target": "band.1.style",
+      "title": "Tape — compression you hear as thickness",
+      "body": "Softens transients before it adds harmonics, so drums come back sounding glued rather than distorted. Push Drive further here than you would on a tube style."
+    },
+    {
+      "target": "band.1.style",
+      "title": "Transformer — weight at the bottom",
+      "body": "Low-frequency saturation with a gentle high-end loss. Useful on bass and on a whole mix at low drive, where it reads as size rather than as distortion."
+    },
+    {
+      "target": "band.1.style",
+      "title": "Rectify and Foldback — not colour, effects",
+      "body": "Rectify folds the negative half of the waveform; Foldback turns peaks back on themselves. Both generate harmonics unrelated to the source, which is the point. Use small amounts of Mix."
+    },
+    {
+      "target": "band.1.drive",
+      "title": "Every style is gain-matched",
+      "body": "At any drive, the output level stays within a tenth of a decibel of the input. You can turn Drive up and hear only what it does to the character, which is the only honest way to choose a style."
+    }
+  ]
+}

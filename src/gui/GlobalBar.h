@@ -285,6 +285,9 @@ public:
         needs to repaint from the theme. */
     std::function<void()> onAppearanceChanged;
 
+    /** The "?" was clicked. The bar does not own the help panel. */
+    std::function<void()> onHelpRequested;
+
 private:
     enum class Optional
     {
@@ -350,6 +353,7 @@ private:
     IconButton undoButton{IconButton::Icon::undo, "undo"};
     IconButton redoButton{IconButton::Icon::redo, "redo"};
     IconButton overflowButton{IconButton::Icon::more, "more"};
+    EmberButton helpButton{"?"};
 
     EmberButton presetButton{"Presets"}, modulationButton{"Mod"};
 

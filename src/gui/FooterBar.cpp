@@ -3,6 +3,7 @@
 #include "gui/EmberTheme.h"
 #include "plugin/ParameterIDs.h"
 #include "plugin/PluginProcessor.h"
+#include "gui/tutorial/TourTargets.h"
 
 namespace ember::gui
 {
@@ -14,6 +15,10 @@ FooterBar::FooterBar(EmberAudioProcessor& processorToUse)
     outputKnob.getKnob().setExtraTooltipText("Level after the bands are summed.");
     mixKnob.getKnob().setExtraTooltipText("Dry/wet blend across the whole plugin.");
 
+    inputKnob.setComponentID(tutorial::TourTargets::footerInput);
+    outputKnob.setComponentID(tutorial::TourTargets::footerOutput);
+    mixKnob.setComponentID(tutorial::TourTargets::footerMix);
+
     for (auto* knob : {&inputKnob, &outputKnob, &mixKnob})
         addAndMakeVisible(knob);
 
@@ -21,7 +26,12 @@ FooterBar::FooterBar(EmberAudioProcessor& processorToUse)
     autoGainToggle.setButtonText("AUTO GAIN");
     autoGainToggle.setTooltip("Auto Gain\nCompensates the level the drive adds, so styles and drive "
                               "settings can be compared by character rather than by loudness.");
+    autoGainToggle.setComponentID(tutorial::TourTargets::footerAutoGain);
     addAndMakeVisible(autoGainToggle);
+
+    // The CPU and latency figures are painted, so they get an anchor for the
+    // tour to point at.
+    addAndMakeVisible(cpuAnchor);
 
     startTimerHz(20);
 }
@@ -108,6 +118,7 @@ void FooterBar::resized()
     // CPU and latency from the right: they are a fixed width, so taking them
     // first means the hint line gets whatever honestly remains rather than
     // being clipped by them later.
+    cpuAnchor.setBounds(readoutArea);
     readoutArea = area.removeFromRight(juce::jmin(area.getWidth() / 3, juce::roundToInt(130.0f * scale)));
     area.removeFromRight(gap);
 

@@ -1,5 +1,6 @@
 #include "gui/GlobalBar.h"
 #include "gui/EmberTheme.h"
+#include "gui/tutorial/TourTargets.h"
 #include "plugin/ParameterIDs.h"
 
 #include <algorithm>
@@ -638,12 +639,14 @@ GlobalBar::GlobalBar(EmberAudioProcessor& processorToUse)
         if (onBandCountChanged != nullptr)
             onBandCountChanged(newCount);
     };
+    bandCount.setComponentID(tutorial::TourTargets::bandCount);
     addAndMakeVisible(bandCount);
 
     osRealtimeBox.attachTo(state, pid::osFactor);
     osRealtimeBox.setScrollWheelEnabled(true);
     osRealtimeBox.setTooltip("Oversampling — realtime\nUsed while you play. Higher factors reject more "
                              "aliasing and cost more CPU and latency.");
+    osRealtimeBox.setComponentID(tutorial::TourTargets::oversampling);
     addAndMakeVisible(osRealtimeBox);
 
     osOfflineBox.attachTo(state, pid::osOffline);
@@ -656,12 +659,14 @@ GlobalBar::GlobalBar(EmberAudioProcessor& processorToUse)
     crossoverModeBox.setScrollWheelEnabled(true);
     crossoverModeBox.setTooltip("Crossover mode\nMinimum phase is zero latency with a phase shift at each "
                                 "edge; linear phase keeps the phase flat and adds latency.");
+    crossoverModeBox.setComponentID(tutorial::TourTargets::crossoverMode);
     addAndMakeVisible(crossoverModeBox);
 
     stereoModeBox.attachTo(state, pid::stereoMode);
     stereoModeBox.setScrollWheelEnabled(true);
     stereoModeBox.setTooltip("Stereo mode\nStereo processes left and right; mid-side processes the centre "
                              "and the sides separately.");
+    stereoModeBox.setComponentID(tutorial::TourTargets::stereoMode);
     addAndMakeVisible(stereoModeBox);
 
     latencyReadout.setTooltip("Latency reported to the host.");
@@ -673,7 +678,9 @@ GlobalBar::GlobalBar(EmberAudioProcessor& processorToUse)
     slotBButton.setTooltip("Compare slot B.\nSwitching stores the current settings in the slot you leave.");
     slotAButton.onClick = [this] { handleSlotClicked(0); };
     slotBButton.onClick = [this] { handleSlotClicked(1); };
+    slotAButton.setComponentID(tutorial::TourTargets::compareA);
     addAndMakeVisible(slotAButton);
+    slotBButton.setComponentID(tutorial::TourTargets::compareB);
     addAndMakeVisible(slotBButton);
 
     copyButton.onClick = [this] { handleCopyClicked(); };
@@ -681,11 +688,25 @@ GlobalBar::GlobalBar(EmberAudioProcessor& processorToUse)
 
     undoButton.onClick = [this] { handleUndoClicked(); };
     redoButton.onClick = [this] { handleRedoClicked(); };
+    undoButton.setComponentID(tutorial::TourTargets::undo);
     addAndMakeVisible(undoButton);
+    redoButton.setComponentID(tutorial::TourTargets::redo);
     addAndMakeVisible(redoButton);
 
     overflowButton.setTooltip("More global settings.");
     overflowButton.onClick = [this] { showOverflowMenu(); };
+    presetButton.setComponentID(tutorial::TourTargets::presetsButton);
+    modulationButton.setComponentID(tutorial::TourTargets::modButton);
+    helpButton.setComponentID(tutorial::TourTargets::helpButton);
+    helpButton.setTooltip("Tutorials & help");
+    helpButton.onClick = [this]
+    {
+        if (onHelpRequested != nullptr)
+            onHelpRequested();
+    };
+    addAndMakeVisible(helpButton);
+
+    overflowButton.setComponentID(tutorial::TourTargets::overflow);
     addChildComponent(overflowButton);
 
     presetButton.setTooltip("Browse, save and manage presets.");
@@ -1413,6 +1434,19 @@ void GlobalBar::resized()
 
         if (showModulation)
             modulationButton.setBounds(row.removeFromLeft(juce::jmin(modW, row.getWidth())));
+
+        // The "?" is last and smallest: it is the control you need once and
+        // then stop needing, so it yields space to everything else.
+        if (row.getWidth() > 4)
+        {
+            row.removeFromLeft(juce::jmin(tightGap, row.getWidth()));
+            helpButton.setBounds(row.removeFromLeft(juce::jmin(row.getHeight(), row.getWidth())));
+            helpButton.setVisible(helpButton.getWidth() > 12);
+        }
+        else
+        {
+            helpButton.setVisible(false);
+        }
     }
 }
 } // namespace ember::gui

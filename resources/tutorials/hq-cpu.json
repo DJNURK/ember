@@ -1,0 +1,27 @@
+{
+  "id": "hq-cpu",
+  "title": "HQ, oversampling and CPU",
+  "estimatedMinutes": 1,
+  "steps": [
+    {
+      "target": "header.more",
+      "title": "Oversampling, and why there are two settings",
+      "body": "Saturation generates harmonics above the sample rate, which fold back as aliasing. Oversampling runs the nonlinearity at a higher rate so they land where they belong. Realtime and offline are separate parameters on purpose."
+    },
+    {
+      "target": "header.more",
+      "title": "Offline can afford more",
+      "body": "During a bounce, latency and CPU stop mattering. Set offline to 8x or 16x and realtime to whatever keeps your session comfortable — the render will be cleaner than what you monitored."
+    },
+    {
+      "target": "footer.cpu",
+      "title": "What it costs",
+      "body": "The footer shows the plugin's share of one core. Oversampling is most of it: six bands at 4x is roughly twice the cost of the same six with it off."
+    },
+    {
+      "target": "footer.cpu",
+      "title": "And the latency it buys",
+      "body": "Beside the CPU figure. Oversampling and linear-phase crossovers both add latency, which your host compensates for — but it is worth knowing before you track through it."
+    }
+  ]
+}

@@ -9,6 +9,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [2.1.0] — 2026-09-22
+
+In-plugin help. Nothing about the audio changes.
+
+### Added
+
+- **Eight guided tours**, 44 steps: quick start, multiband basics, saturation
+  styles, feedback and dynamics, the tone EQ, modulation, mixing recipes, and
+  HQ/CPU. A step dims the interface around the control it is describing and
+  waits for you to use it; every active step carries a "Do it for me" link so
+  nobody can be stuck.
+- **A Learn panel** with four tabs — Tours with a completion ring each, a
+  searchable Reference, every modifier in one Shortcuts table, and About. It
+  takes width from the band strip rather than covering the controls it
+  describes.
+- **53 reference articles** covering all 209 parameters, keyed by kind so
+  `band3Drive` and `band5Drive` share one article with a different number in
+  it. Tests assert every parameter resolves to an article, that no article is
+  too long to read in a 360 px panel, and that every "Show me" link names a
+  tour that exists.
+- **A first-run welcome** offering the two-minute tour. Skip leaves it for next
+  time; only "Don't show again" is permanent.
+- **`scripts/gen-docs.py`**, which writes the manual's parameter reference from
+  the same file the plugin reads, with a CI check that fails if they drift.
+
+### Fixed
+
+- `gainReductionDb` was a plain float written on the audio thread and read by
+  the GUI meter — a data race the project's own rules forbid, which
+  ThreadSanitizer had not caught because no test drove the meter and the audio
+  thread at once.
+- A band's controls stayed on screen after the band count was reduced past it:
+  the visibility test read the band *count*, which is never zero, instead of
+  whether that band was active.
+- Band control sets were created on first selection, so an unselected band's
+  controls did not exist to be pointed at. All active bands are built during
+  layout now.
+
+### Known
+
+- `dither` and the XY pad's Y axis are saved and restored but currently do
+  nothing: `ditherMode` is read by no code, and the XY source only ever emits
+  its X axis. Both are documented as inert rather than described as working.
+- Crossovers can be placed closer by automation than by dragging: the GUI
+  enforces a third of an octave, the engine 1/35th.
+- Tone node frequencies are clamped to their band by the mouse only; automation
+  and modulation can push them outside it.
+
 ## [2.0.0] — 2026-09-22
 
 A complete rebuild of the interface, and the tone stage becomes an EQ you can

@@ -1,0 +1,38 @@
+{
+  "id": "multiband",
+  "title": "Multiband basics",
+  "estimatedMinutes": 3,
+  "steps": [
+    {
+      "title": "Why bands at all",
+      "body": "Saturating a full mix lets the loudest thing in it decide how everything else distorts. Bands stop the kick from choosing what the cymbals do."
+    },
+    {
+      "target": "header.bands",
+      "title": "One to six",
+      "body": "Add a band and a new crossover appears. You can change this while audio is playing — the crossovers fade rather than click.",
+      "hint": "Add a band.",
+      "action": { "type": "bandAdded" }
+    },
+    {
+      "target": "display.crossover.1",
+      "title": "Drag a crossover",
+      "body": "Hold Alt to snap to musical points, Cmd to move every edge together, Shift for fine control. Right-click the display to distribute them evenly."
+    },
+    {
+      "target": "band.1.solo",
+      "title": "Solo to hear one band",
+      "body": "Solo is how you find out what a band is actually contributing. Most bands sound worse alone than they do in context, which is normal."
+    },
+    {
+      "target": "band.1.bypass",
+      "title": "Bypass to hear its absence",
+      "body": "A bypassed band still passes through with the same latency, so the sum does not comb. Comparing with and without is more informative than soloing."
+    },
+    {
+      "target": "header.more",
+      "title": "Linear phase, and when to want it",
+      "body": "Minimum phase is the default and costs no latency. Linear phase keeps the band edges phase-aligned, which matters when you are blending heavily with the dry signal — and costs latency, so it is a mixing choice, not a tracking one."
+    }
+  ]
+}
