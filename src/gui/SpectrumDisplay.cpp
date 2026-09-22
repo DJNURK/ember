@@ -1,4 +1,5 @@
 #include "gui/SpectrumDisplay.h"
+#include "gui/EmberTheme.h"
 
 #include <cmath>
 
@@ -476,9 +477,213 @@ void SpectrumDisplay::paint(juce::Graphics& g)
 
     paintBandRegions(g, scale);
     paintGrid(g, scale);
-    paintSpectra(g, scale);
+
+    if (displayMode != DisplayMode::eq)
+        paintSpectra(g, scale);
+
+    if (displayMode != DisplayMode::spectrum)
+        paintEqOverlay(g, scale);
+
     paintCrossovers(g, scale);
     paintDragReadout(g, scale);
+    paintModeSelector(g, scale);
+}
+
+void SpectrumDisplay::setDisplayMode(DisplayMode mode)
+{
+    if (displayMode == mode)
+        return;
+
+    displayMode = mode;
+    repaint();
+}
+
+juce::Rectangle<float> SpectrumDisplay::modeSelectorBounds(float scale) const
+{
+    if (plotArea.getWidth() < 260.0f)
+        return {};
+
+    const float height = juce::jlimit(14.0f, 22.0f, 17.0f * scale);
+
+    // Measured from the widest label, not guessed. Guessing truncated "BOTH"
+    // to "B" - the same mistake the EQ panel's chips made, and the same fix.
+    const auto font = EmberFonts::get(EmberFonts::Role::micro, scale);
+    const auto widest = juce::jmax(juce::GlyphArrangement::getStringWidth(font, "SPEC"),
+                                   juce::GlyphArrangement::getStringWidth(font, "BOTH"));
+    const float width = (widest + 12.0f) * 3.0f;
+
+    return {plotArea.getRight() - width - 6.0f * scale, plotArea.getY() + 6.0f * scale, width, height};
+}
+
+int SpectrumDisplay::modeSegmentAt(juce::Point<float> position, float scale) const
+{
+    const auto bounds = modeSelectorBounds(scale);
+
+    if (bounds.isEmpty() || !bounds.contains(position))
+        return -1;
+
+    const auto segment = static_cast<int>((position.x - bounds.getX()) / (bounds.getWidth() / 3.0f));
+
+    return juce::jlimit(0, 2, segment);
+}
+
+void SpectrumDisplay::paintModeSelector(juce::Graphics& g, float scale) const
+{
+    const auto bounds = modeSelectorBounds(scale);
+
+    if (bounds.isEmpty())
+        return;
+
+    const auto& tk = EmberTheme::tokens();
+    const float segmentWidth = bounds.getWidth() / 3.0f;
+    const char* labels[] = {"SPEC", "EQ", "BOTH"};
+
+    g.setColour(tk.bgDeep.withAlpha(0.85f));
+    g.fillRoundedRectangle(bounds, bounds.getHeight() * 0.3f);
+
+    for (int i = 0; i < 3; ++i)
+    {
+        const auto cell = juce::Rectangle<float>(bounds.getX() + static_cast<float>(i) * segmentWidth, bounds.getY(),
+                                                 segmentWidth, bounds.getHeight());
+        const bool on = static_cast<int>(displayMode) == i;
+
+        if (on)
+        {
+            g.setColour(tk.ember.withAlpha(0.22f));
+            g.fillRoundedRectangle(cell.reduced(1.0f), bounds.getHeight() * 0.28f);
+        }
+
+        g.setFont(EmberFonts::get(EmberFonts::Role::micro, scale));
+        g.setColour(on ? tk.text : (i == hoveredModeSegment ? tk.textDim.brighter(0.3f) : tk.textDim));
+        g.drawText(labels[i], cell, juce::Justification::centred, false);
+    }
+
+    g.setColour(tk.panelEdge);
+    g.drawRoundedRectangle(bounds.reduced(0.5f), bounds.getHeight() * 0.3f, 1.0f);
+}
+
+void SpectrumDisplay::paintEqOverlay(juce::Graphics& g, float scale)
+{
+    const auto& tk = EmberTheme::tokens();
+    auto& state = processor.getAPVTS();
+
+    const auto read = [&state](const juce::String& id, float fallback)
+    {
+        if (auto* v = state.getRawParameterValue(id))
+            return v->load(std::memory_order_relaxed);
+
+        return fallback;
+    };
+
+    // The EQ plot uses its own +/-12 dB scale rather than the analyser's dB
+    // range: a 6 dB shelf drawn against an 80 dB spectrum scale is a flat line,
+    // which is worse than not drawing it.
+    constexpr float kEqRangeDb = 12.0f;
+    const auto yForEqDb = [this](float db)
+    {
+        const auto t = (kEqRangeDb - juce::jlimit(-kEqRangeDb, kEqRangeDb, db)) / (2.0f * kEqRangeDb);
+        return plotArea.getY() + t * plotArea.getHeight();
+    };
+
+    constexpr int kPoints = 200;
+    combinedPath.clear();
+
+    std::array<float, kPoints> combinedDb{};
+    float weightTotal = 0.0f;
+
+    for (int b = 0; b < numBands; ++b)
+    {
+        const auto index = static_cast<size_t>(b);
+
+        toneDrawing[index].setShape({read(pid::toneLowHz(b), 150.0f), read(pid::toneMidHz(b), 1000.0f),
+                                     read(pid::toneMidQ(b), 0.7f), read(pid::toneHighHz(b), 4000.0f)});
+
+        const bool bypassed = read(pid::toneBypass(b), 0.0f) > 0.5f;
+
+        toneDrawing[index].setGainsDb(bypassed ? 0.0f : read(pid::toneLow(b), 0.0f),
+                                      bypassed ? 0.0f : read(pid::toneMid(b), 0.0f),
+                                      bypassed ? 0.0f : read(pid::toneHigh(b), 0.0f));
+
+        float bandLow = 20.0f;
+        float bandHigh = 20000.0f;
+        processor.getBandSpanHz(b, bandLow, bandHigh);
+
+        auto& path = tonePaths[index];
+        path.clear();
+
+        // Weighted by the band's level: the combined line is what the plugin is
+        // doing to the signal, and a band with nothing in it is not doing
+        // anything to it however its curve is set.
+        const auto weight = juce::jlimit(0.0f, 1.0f, processor.getBandLevel(b));
+        weightTotal += weight;
+
+        for (int i = 0; i < kPoints; ++i)
+        {
+            const auto t = static_cast<float>(i) / static_cast<float>(kPoints - 1);
+            const auto hz = minFrequency * std::pow(maxFrequency / minFrequency, t);
+            const auto db = toneDrawing[index].magnitudeDbAt(hz);
+
+            combinedDb[static_cast<size_t>(i)] += db * weight;
+
+            const auto x = plotArea.getX() + t * plotArea.getWidth();
+            const auto y = yForEqDb(db);
+
+            if (i == 0)
+                path.startNewSubPath(x, y);
+            else
+                path.lineTo(x, y);
+        }
+
+        // Only the in-band stretch is drawn: this stage shapes this band alone.
+        const auto left = xForFrequency(bandLow);
+        const auto right = xForFrequency(bandHigh);
+
+        juce::Graphics::ScopedSaveState save{g};
+        g.reduceClipRegion(
+            juce::Rectangle<float>(left, plotArea.getY(), juce::jmax(0.0f, right - left), plotArea.getHeight())
+                .toNearestInt());
+
+        const auto heat = juce::jlimit(0.0f, 1.0f, bandHeat[index]);
+        const auto colour = heat > 0.02f ? tk.heatTint(heat) : tk.ember;
+
+        if (heat > 0.02f && !EmberTheme::reduceMotion())
+        {
+            g.setColour(tk.tubeGlow.withAlpha(heat * 0.35f));
+            g.strokePath(path, juce::PathStrokeType(4.0f * scale, juce::PathStrokeType::curved));
+        }
+
+        g.setColour(colour.withAlpha(b == selectedBand ? 0.95f : 0.6f));
+        g.strokePath(path,
+                     juce::PathStrokeType((b == selectedBand ? 2.0f : 1.4f) * scale, juce::PathStrokeType::curved));
+    }
+
+    // ---- the combined response --------------------------------------------
+    if (weightTotal > 1.0e-4f)
+    {
+        for (int i = 0; i < kPoints; ++i)
+        {
+            const auto t = static_cast<float>(i) / static_cast<float>(kPoints - 1);
+            const auto x = plotArea.getX() + t * plotArea.getWidth();
+            const auto y = yForEqDb(combinedDb[static_cast<size_t>(i)] / weightTotal);
+
+            if (i == 0)
+                combinedPath.startNewSubPath(x, y);
+            else
+                combinedPath.lineTo(x, y);
+        }
+
+        juce::Graphics::ScopedSaveState save{g};
+        g.reduceClipRegion(plotArea.toNearestInt());
+
+        if (!EmberTheme::reduceMotion())
+        {
+            g.setColour(tk.signal.withAlpha(0.25f));
+            g.strokePath(combinedPath, juce::PathStrokeType(6.0f * scale, juce::PathStrokeType::curved));
+        }
+
+        g.setColour(tk.signal);
+        g.strokePath(combinedPath, juce::PathStrokeType(2.4f * scale, juce::PathStrokeType::curved));
+    }
 }
 
 void SpectrumDisplay::paintBandRegions(juce::Graphics& g, float scale) const
@@ -927,6 +1132,12 @@ void SpectrumDisplay::setSelectedBandAndNotify(int band)
 //==============================================================================
 void SpectrumDisplay::mouseMove(const juce::MouseEvent& e)
 {
+    if (const auto segment = modeSegmentAt(e.position, currentUiScale()); segment != hoveredModeSegment)
+    {
+        hoveredModeSegment = segment;
+        repaint();
+    }
+
     updateHover(e.position);
 }
 
@@ -948,6 +1159,14 @@ void SpectrumDisplay::mouseExit(const juce::MouseEvent&)
 
 void SpectrumDisplay::mouseDown(const juce::MouseEvent& e)
 {
+    // The mode selector takes the click before anything else: it sits over the
+    // plot, and a crossover drag starting on it would be a trap.
+    if (const auto segment = modeSegmentAt(e.position, currentUiScale()); segment >= 0)
+    {
+        setDisplayMode(static_cast<DisplayMode>(segment));
+        return;
+    }
+
     const int divider = dividerAt(e.position);
 
     if (divider >= 0)

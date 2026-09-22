@@ -8,6 +8,7 @@
 #include "dsp/EmberTypes.h"
 #include "dsp/SpectrumFifo.h"
 #include "gui/EmberLookAndFeel.h"
+#include "dsp/BandFx.h"
 #include "plugin/PluginProcessor.h"
 
 /**
@@ -103,6 +104,23 @@ public:
         except the frequency scale along the bottom. */
     juce::Rectangle<float> getPlotArea() const noexcept { return plotArea; }
 
+    /** What the display is showing.
+
+        The analyser and the EQ curves answer different questions - "what is in
+        the signal" and "what am I doing to it" - and drawn together at full
+        strength they fight for the same pixels. Both is the default because
+        the two together are how you work; either alone is for when one of them
+        is in the way. */
+    enum class DisplayMode
+    {
+        spectrum = 0,
+        eq,
+        both
+    };
+
+    void setDisplayMode(DisplayMode);
+    DisplayMode getDisplayMode() const noexcept { return displayMode; }
+
     //==========================================================================
     juce::String getTooltip() override;
 
@@ -153,6 +171,16 @@ private:
     void paintGrid(juce::Graphics&, float scale) const;
     void paintSpectra(juce::Graphics&, float scale); // not const: reuses the cached paths
     void paintCrossovers(juce::Graphics&, float scale) const;
+
+    /** Every band's tone curve in its own region, plus the combined response.
+        Not const: it reconfigures the per-band drawing filters. */
+    void paintEqOverlay(juce::Graphics&, float scale);
+
+    /** The Spectrum / EQ / Both selector, top-right of the plot. A painted hit
+        region rather than a child component, like the EQ panel's chips. */
+    void paintModeSelector(juce::Graphics&, float scale) const;
+    juce::Rectangle<float> modeSelectorBounds(float scale) const;
+    int modeSegmentAt(juce::Point<float>, float scale) const;
     void paintDragReadout(juce::Graphics&, float scale) const;
 
     //==========================================================================
@@ -195,6 +223,16 @@ private:
 
     // Geometry, recomputed in resized().
     juce::Rectangle<float> plotArea;
+
+    DisplayMode displayMode{DisplayMode::both};
+    int hoveredModeSegment{-1};
+
+    /** One per band, for drawing only - never processes audio. Configured from
+        the same parameters the audio path uses, so the drawn curve cannot drift
+        from the filters. */
+    std::array<ToneStack, static_cast<size_t>(kMaxBands)> toneDrawing;
+    std::array<juce::Path, static_cast<size_t>(kMaxBands)> tonePaths;
+    juce::Path combinedPath;
     juce::Rectangle<float> axisArea;
 
     // Paint-path scratch. Held between frames so a 50 Hz repaint reuses the
