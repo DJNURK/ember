@@ -207,24 +207,28 @@ void EmberEngine::setParameters(const GlobalParams& global, const BandParams* ba
         // The band's own frequency range, so its tone stage can keep its nodes
         // inside it however the parameters were written. Told before the
         // parameters, because setParameters clamps against it.
+        //
+        // The span comes from the crossover rather than from global.crossoverHz.
+        // Those are the REQUESTED edges; the crossover clamps them apart by at
+        // least a third of an octave, so when automation drives two edges
+        // together the request describes a band a few hertz wide that does not
+        // exist. Clamping tone nodes into that would put them outside the band
+        // they are shaping - the exact failure this span was added to prevent.
         {
             const int edges = juce::jmax(0, activeNumBands - 1);
             float low = 20.0f;
             float high = 20000.0f;
 
             if (b > 0 && b - 1 < edges)
-                low = global.crossoverHz[static_cast<size_t>(b - 1)];
+                low = activeCrossover->getCrossoverFrequency(b - 1);
 
             if (b < edges)
-                high = global.crossoverHz[static_cast<size_t>(b)];
+                high = activeCrossover->getCrossoverFrequency(b);
 
             bands[static_cast<size_t>(b)].setBandSpanHz(low, high);
         }
 
         bands[static_cast<size_t>(b)].setDitherMode(global.dither);
-
-        {
-        }
 
         bands[static_cast<size_t>(b)].setParameters(bandsIn[b]);
 

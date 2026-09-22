@@ -793,6 +793,14 @@ int Crossover::getNumBands() const noexcept
     return impl->numBands;
 }
 
+float Crossover::getCrossoverFrequency(int edge) const noexcept
+{
+    if (edge < 0 || edge >= kMaxCrossovers)
+        return 0.0f;
+
+    return impl->freqs[static_cast<size_t>(edge)];
+}
+
 void Crossover::setCrossoverFrequencies(const float* freqs, int numEdges) noexcept
 {
     if (freqs == nullptr)

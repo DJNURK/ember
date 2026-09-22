@@ -335,3 +335,45 @@ TEST_CASE("parameters can be automated from another thread while processing", "[
     INFO("parameter writes from the other thread: " << writes.load());
     REQUIRE(writes.load() > 0);
 }
+
+TEST_CASE("TEMP audit: xyY destination", "[tempaudit]")
+{
+    auto run = [](const char* destId, float axisReal)
+    {
+        EmberAudioProcessor proc;
+        const int target = proc.getModulationTargetIndex(destId);
+        REQUIRE(target >= 0);
+
+        ModConnection c;
+        c.sourceIndex = flatSourceIndex(ModSourceType::Macro, 0);
+        c.targetIndex = target;
+        c.amount = 1.0f;
+        c.curve = ModCurve::Linear;
+        c.smoothingMs = 0.0f;
+        REQUIRE(proc.getModulationEngine().addConnection(c));
+
+        setParam(proc, pid::xyAxis, axisReal);
+        setParam(proc, pid::xyX, 50.0f);
+        setParam(proc, pid::xyY, 50.0f);
+
+        setParam(proc, pid::macro(0), 0.0f);
+        prepareAndRun(proc, 64);
+        const float a = proc.getModulationEngine().getSourceValue(flatSourceIndex(ModSourceType::XYController, 0));
+
+        setParam(proc, pid::macro(0), 100.0f);
+        prepareAndRun(proc, 64);
+        const float b = proc.getModulationEngine().getSourceValue(flatSourceIndex(ModSourceType::XYController, 0));
+
+        const float offs = proc.getModulationEngine().getModulationOffset(target);
+        WARN("dest=" << destId << " axis=" << axisReal << "  XY source: " << a << " -> " << b
+                     << "   (offset at target = " << offs << ")");
+        return b - a;
+    };
+
+    const float dYaxisY = run(pid::xyY, 1.0f);
+    const float dXaxisY = run(pid::xyX, 1.0f);
+    const float dXaxisX = run(pid::xyX, 0.0f);
+    const float dYaxisX = run(pid::xyY, 0.0f);
+    WARN("delta: ->xyY/axisY=" << dYaxisY << "  ->xyX/axisY=" << dXaxisY << "  ->xyX/axisX=" << dXaxisX
+                               << "  ->xyY/axisX=" << dYaxisX);
+}

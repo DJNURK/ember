@@ -166,3 +166,42 @@ TEST_CASE("linear phase crossover nulls against the delayed input", "[crossover]
         REQUIRE(residualDb < -100.0);
     }
 }
+
+TEST_CASE("the reported edges are the clamped ones, not the requested ones", "[crossover]")
+{
+    // Anything that needs to know where a band begins and ends - the tone
+    // stage's span, most of all - has to ask the crossover rather than reuse
+    // the frequencies it passed in. The two are the same until automation
+    // drives two edges together, and that is precisely the case where the
+    // request describes a band that does not exist: a few hertz wide, when the
+    // filters have actually placed the edge a third of an octave up.
+    //
+    // Clamping tone nodes into the band as REQUESTED would put them outside the
+    // band as BUILT, which is the failure the span was added to prevent.
+    ember::Crossover crossover;
+    crossover.prepare(48000.0, 512, 2);
+    crossover.setNumBands(4);
+
+    // Three edges, the upper two asked for almost on top of the first.
+    const float requested[3] = {1000.0f, 1001.0f, 1002.0f};
+    crossover.setCrossoverFrequencies(requested, 3);
+
+    const auto e0 = crossover.getCrossoverFrequency(0);
+    const auto e1 = crossover.getCrossoverFrequency(1);
+    const auto e2 = crossover.getCrossoverFrequency(2);
+
+    INFO("edges: " << e0 << ", " << e1 << ", " << e2);
+
+    // A third of an octave is 2^(1/3) = 1.2599. Allow for float rounding only.
+    REQUIRE(e1 >= e0 * 1.2598f);
+    REQUIRE(e2 >= e1 * 1.2598f);
+
+    // And the reported value is what the caller would otherwise have assumed,
+    // so the getter is not merely echoing the request back.
+    REQUIRE(e1 > requested[1]);
+    REQUIRE(e2 > requested[2]);
+
+    // Out of range asks answer 0 rather than reading past the array.
+    REQUIRE(crossover.getCrossoverFrequency(-1) == 0.0f);
+    REQUIRE(crossover.getCrossoverFrequency(ember::kMaxCrossovers) == 0.0f);
+}

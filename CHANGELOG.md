@@ -42,6 +42,12 @@ fixing them — and one that nothing had listed at all.
   afterwards put it back, at the width it had before. It was drawn 89 px
   outside its own module, over its neighbour. Visibility is now settled before
   the modules are laid out, so the layout has the last word.
+- **A band's tone span is the band the filters actually built.** The span came
+  from the requested crossover frequencies, not the clamped ones. Those agree
+  until automation drives two edges together — which is the one case the
+  clamping exists for, and so the one case where the request describes a band
+  that is not there. Tone nodes were clamped into it, which is the failure the
+  span was added to prevent.
 
 ### Known
 
