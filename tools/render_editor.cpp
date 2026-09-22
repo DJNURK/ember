@@ -78,8 +78,15 @@ int main(int argc, char** argv)
     }
     editor->setSize(width, height);
 
-    if (clickID.isNotEmpty())
+    // Comma-separated, so a panel two clicks deep can be reached: open the
+    // modulation rail, then select the source whose controls you want to see.
+    for (const auto& oneID : juce::StringArray::fromTokens(clickID, ",", ""))
     {
+        const auto clickID = oneID.trim();
+
+        if (clickID.isEmpty())
+            continue;
+
         // Depth-first, because ids are unique and the first match is the only
         // match; a miss is a hard error rather than a silently ordinary
         // screenshot, which would be indistinguishable from the panel failing
@@ -97,6 +104,25 @@ int main(int argc, char** argv)
         };
 
         auto* target = find(*editor);
+
+        // Not every clickable thing claims a tour id - the modulation rail's
+        // source list does not - so fall back to matching a button's label.
+        if (target == nullptr)
+        {
+            std::function<juce::Component*(juce::Component&)> byText = [&](juce::Component& c) -> juce::Component*
+            {
+                if (auto* b = dynamic_cast<juce::Button*>(&c); b != nullptr && b->getButtonText() == clickID)
+                    return b;
+
+                for (auto* child : c.getChildren())
+                    if (auto* found = byText(*child))
+                        return found;
+
+                return nullptr;
+            };
+
+            target = byText(*editor);
+        }
 
         if (target == nullptr)
         {

@@ -55,6 +55,9 @@ checking the fix against real content.
   on top, so the marker whose only job is to say where the edge really is
   could sit a third of an octave away from it — and two ghosts could be drawn
   in the opposite order to the edges they described.
+- **The Reference tab reads as sentences.** Each article's advice is written to
+  follow the words "When to use it", and the panel was dropping them, so every
+  entry's second paragraph began mid-clause on a lowercase word.
 - **The parameter reference reads as sentences.** Every one of the 54 rows in
   the manual's table ended with an orphan fragment, because the parser took
   only the first physical line of each entry's advice and appended the rest to
