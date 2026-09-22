@@ -795,6 +795,32 @@ void BandPanel::resized()
         x += width + moduleGap;
     }
 
+    // Keep the anchors on the slots they name. Bands that are not active have
+    // no slot, so their anchor is empty rather than left on a stale rectangle.
+    for (int band = 0; band < kMaxBands; ++band)
+    {
+        if (moduleAnchor[idx(band)] == nullptr)
+        {
+            moduleAnchor[idx(band)] = std::make_unique<tutorial::TourAnchor>(tutorial::TourTargets::band(band));
+            addAndMakeVisible(*moduleAnchor[idx(band)]);
+        }
+
+        moduleAnchor[idx(band)]->setBounds(band < active ? moduleBounds[idx(band)] : juce::Rectangle<int>());
+    }
+
+    // Visibility is settled here rather than only in setBand: setBand can run
+    // before the band-count parameter has been read, and anything it hid then
+    // would stay hidden through every later layout.
+    //
+    // It must come BEFORE the modules are laid out, not after. It shows every
+    // control the selected band owns, including ones the layout is about to
+    // decide there is no room for - and a control shown after being hidden
+    // keeps whatever bounds it last had. With the Learn panel open the strip is
+    // narrow enough that the tone editor does not fit, so it was hidden, shown
+    // again, and painted at its previous width: 89 px past the edge of its own
+    // module and across the band beside it.
+    showControlsFor(currentBand);
+
     // ---- the selected module gets the full editor -------------------------
     auto& controls = controlsFor(currentBand);
     auto area = moduleBounds[idx(currentBand)].reduced(
@@ -843,11 +869,6 @@ void BandPanel::resized()
     layoutKnobGrid(area, controls);
 
     // ---- everything else is compact ---------------------------------------
-    // Visibility is settled here rather than only in setBand: setBand can run
-    // before the band-count parameter has been read, and anything it hid then
-    // would stay hidden through every later layout.
-    showControlsFor(currentBand);
-
     for (int band = 0; band < active; ++band)
         if (band != currentBand)
             layoutCompactModule(moduleBounds[idx(band)], controlsFor(band));

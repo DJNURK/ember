@@ -36,6 +36,12 @@ fixing them — and one that nothing had listed at all.
   not depend on an animation having run, and anywhere the clock does not tick
   the plugin's whole control surface stayed blank. The documentation
   screenshots were rendered that way and have been retaken.
+- **The tone editor no longer paints across the band beside it.** With the
+  Learn panel open and six bands up, a module is too narrow for the tone
+  editor, so the layout dropped it — and the visibility pass that ran
+  afterwards put it back, at the width it had before. It was drawn 89 px
+  outside its own module, over its neighbour. Visibility is now settled before
+  the modules are laid out, so the layout has the last word.
 
 ### Known
 
