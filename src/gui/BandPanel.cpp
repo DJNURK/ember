@@ -519,6 +519,17 @@ BandPanel::BandControls& BandPanel::controlsFor(int bandIndex)
     return *slot;
 }
 
+void BandPanel::setHighlightedBand(int bandIndex)
+{
+    const int clamped = bandIndex >= 0 && bandIndex < kMaxBands ? bandIndex : -1;
+
+    if (highlightedBand == clamped)
+        return;
+
+    highlightedBand = clamped;
+    repaint();
+}
+
 void BandPanel::showControlsFor(int bandIndex)
 {
     // Every active band is on screen now - the panel is a strip of modules, not
@@ -1219,6 +1230,16 @@ void BandPanel::paintModuleChrome(juce::Graphics& g, int band, juce::Rectangle<i
                                                titleBar.getY(), tint.withAlpha(0.0f), titleBar.getCentreX(),
                                                titleBar.getBottom(), false));
         g.fillRoundedRectangle(titleBar, corner);
+    }
+
+    if (band == highlightedBand && !selected)
+    {
+        // Hovering the band's node on the main display lights its module, so
+        // the curve on the display and the controls below are visibly the same
+        // band. Deliberately weaker than selection: it says "this one", not
+        // "you are editing this one".
+        g.setColour(tk.ember.withAlpha(0.35f));
+        g.drawRoundedRectangle(area.reduced(1.0f), corner, 1.5f);
     }
 
     if (selected)

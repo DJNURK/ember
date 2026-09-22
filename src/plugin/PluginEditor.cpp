@@ -62,6 +62,7 @@ void EmberAudioProcessorEditor::wirePanels()
     // Clicking a band region in the spectrum retargets the band panel.
     spectrum.onBandSelected = [this](int band) { selectBand(band); };
     bandPanel.onBandClicked = [this](int band) { selectBand(band); };
+    spectrum.onEqNodeHovered = [this](int band) { bandPanel.setHighlightedBand(band); };
 
     globalBar.onZoomRequested = [this](float factor)
     {

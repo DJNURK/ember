@@ -57,6 +57,11 @@ public:
         the data flows one way and a selection can never bounce between the two. */
     void setBand(int newBandIndex);
 
+    /** Lights a module without selecting it - used while the mouse is over that
+        band's node on the main display, so the two halves of the EQ editor are
+        visibly the same thing. -1 clears it. */
+    void setHighlightedBand(int bandIndex);
+
     /** The band currently being edited, zero-based. */
     int getBand() const noexcept { return currentBand; }
 
@@ -121,6 +126,7 @@ private:
     /** Slot each band's module occupies. Computed in resized(), used by paint()
         and by hit-testing, so chrome and clicks can never disagree. */
     std::array<juce::Rectangle<int>, static_cast<size_t>(kMaxBands)> moduleBounds{};
+    int highlightedBand{-1};
 
     /** Lays one unselected module out: title strip, Drive, heat bar. */
     void layoutCompactModule(juce::Rectangle<int> slot, BandControls& controls);

@@ -68,6 +68,10 @@ public:
         zero-based. The processor's own selection has already been updated. */
     std::function<void(int)> onBandSelected;
 
+    /** The mouse is over a band's EQ node, or has left one (-1). The editor
+        uses it to light the matching band module. */
+    std::function<void(int bandIndex)> onEqNodeHovered;
+
     //==========================================================================
     /** Frame rate for polling and repainting, clamped to 15..60 Hz.
         Default: 50. */
@@ -189,6 +193,31 @@ private:
     /** Right-click menu: add a band here, distribute evenly, reset. */
     void showDisplayMenu(juce::Point<float> position);
 
+    /** One EQ node on the big display: which band owns it, and which of its
+        three it is. */
+    struct EqNodeRef
+    {
+        int band{-1};
+        int node{-1};
+
+        [[nodiscard]] bool isValid() const noexcept { return band >= 0 && node >= 0; }
+        [[nodiscard]] bool operator==(const EqNodeRef& other) const noexcept
+        {
+            return band == other.band && node == other.node;
+        }
+    };
+
+    /** The EQ overlay's own vertical scale, which is +/-12 dB rather than the
+        analyser's 80 dB: a 6 dB shelf on an 80 dB scale is a flat line. */
+    float yForEqDecibels(float db) const;
+    float eqDecibelsForY(float y) const;
+
+    juce::Point<float> eqNodePosition(int band, int node) const;
+    EqNodeRef eqNodeAt(juce::Point<float>) const;
+    juce::RangedAudioParameter* eqNodeGain(int band, int node) const;
+    juce::RangedAudioParameter* eqNodeFreq(int band, int node) const;
+    void paintEqNodes(juce::Graphics&, float scale) const;
+
     /** The gear beside the mode selector: resolution, averaging, tilt, freeze
         and peak-hold. */
     void showAnalyserMenu();
@@ -237,6 +266,8 @@ private:
     juce::Rectangle<float> plotArea;
 
     DisplayMode displayMode{DisplayMode::both};
+    EqNodeRef hoveredEqNode;
+    EqNodeRef draggedEqNode;
     int hoveredModeSegment{-1};
     juce::Point<float> lastMousePosition;
     bool mouseInPlot{false};

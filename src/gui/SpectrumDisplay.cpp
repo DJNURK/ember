@@ -520,6 +520,7 @@ void SpectrumDisplay::paint(juce::Graphics& g)
     paintCrossovers(g, scale);
     paintDragReadout(g, scale);
     paintMouseFrequency(g, scale);
+    paintEqNodes(g, scale);
     paintGear(g, scale);
     paintModeSelector(g, scale);
 }
@@ -595,6 +596,145 @@ void SpectrumDisplay::paintModeSelector(juce::Graphics& g, float scale) const
 
     g.setColour(tk.panelEdge);
     g.drawRoundedRectangle(bounds.reduced(0.5f), bounds.getHeight() * 0.3f, 1.0f);
+}
+
+//==============================================================================
+namespace
+{
+constexpr float kEqOverlayRangeDb = 12.0f;
+constexpr float kEqNodeRadius = 5.0f;
+} // namespace
+
+float SpectrumDisplay::yForEqDecibels(float db) const
+{
+    const auto t =
+        (kEqOverlayRangeDb - juce::jlimit(-kEqOverlayRangeDb, kEqOverlayRangeDb, db)) / (2.0f * kEqOverlayRangeDb);
+    return plotArea.getY() + t * plotArea.getHeight();
+}
+
+float SpectrumDisplay::eqDecibelsForY(float y) const
+{
+    if (plotArea.getHeight() < 1.0f)
+        return 0.0f;
+
+    const auto t = juce::jlimit(0.0f, 1.0f, (y - plotArea.getY()) / plotArea.getHeight());
+    return kEqOverlayRangeDb - t * 2.0f * kEqOverlayRangeDb;
+}
+
+juce::RangedAudioParameter* SpectrumDisplay::eqNodeGain(int band, int node) const
+{
+    auto& state = processor.getAPVTS();
+
+    switch (node)
+    {
+    case 0:
+        return state.getParameter(pid::toneLow(band));
+    case 1:
+        return state.getParameter(pid::toneMid(band));
+    case 2:
+        return state.getParameter(pid::toneHigh(band));
+    default:
+        break;
+    }
+
+    return nullptr;
+}
+
+juce::RangedAudioParameter* SpectrumDisplay::eqNodeFreq(int band, int node) const
+{
+    auto& state = processor.getAPVTS();
+
+    switch (node)
+    {
+    case 0:
+        return state.getParameter(pid::toneLowHz(band));
+    case 1:
+        return state.getParameter(pid::toneMidHz(band));
+    case 2:
+        return state.getParameter(pid::toneHighHz(band));
+    default:
+        break;
+    }
+
+    return nullptr;
+}
+
+juce::Point<float> SpectrumDisplay::eqNodePosition(int band, int node) const
+{
+    auto* gain = eqNodeGain(band, node);
+    auto* freq = eqNodeFreq(band, node);
+
+    if (gain == nullptr || freq == nullptr)
+        return {};
+
+    return {xForFrequency(freq->convertFrom0to1(freq->getValue())),
+            yForEqDecibels(gain->convertFrom0to1(gain->getValue()))};
+}
+
+SpectrumDisplay::EqNodeRef SpectrumDisplay::eqNodeAt(juce::Point<float> position) const
+{
+    if (displayMode == DisplayMode::spectrum)
+        return {};
+
+    EqNodeRef best;
+    float bestDistance = kEqNodeRadius * 3.0f;
+
+    for (int band = 0; band < numBands; ++band)
+    {
+        for (int node = 0; node < 3; ++node)
+        {
+            const auto distance = position.getDistanceFrom(eqNodePosition(band, node));
+
+            // Ties go to the selected band. Six bands' curves cross often, and
+            // without this the node you grab depends on rounding rather than on
+            // which band you are working in.
+            const bool better =
+                distance < bestDistance || (best.isValid() && band == selectedBand && best.band != selectedBand &&
+                                            distance < bestDistance + kEqNodeRadius);
+
+            if (better)
+            {
+                bestDistance = juce::jmin(bestDistance, distance);
+                best = {band, node};
+            }
+        }
+    }
+
+    return best;
+}
+
+void SpectrumDisplay::paintEqNodes(juce::Graphics& g, float scale) const
+{
+    if (displayMode == DisplayMode::spectrum)
+        return;
+
+    const auto& tk = EmberTheme::tokens();
+
+    for (int band = 0; band < numBands; ++band)
+    {
+        for (int node = 0; node < 3; ++node)
+        {
+            const EqNodeRef ref{band, node};
+            const bool active = ref == hoveredEqNode || ref == draggedEqNode;
+            const auto centre = eqNodePosition(band, node);
+            const auto radius = (active ? kEqNodeRadius * 1.3f : kEqNodeRadius) * scale;
+
+            if (!plotArea.contains(centre))
+                continue;
+
+            if (active && !EmberTheme::reduceMotion())
+                GlowCache::draw(g, centre, radius * 2.6f, tk.tubeGlow, 0.45f);
+
+            const auto disc = juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(centre);
+
+            g.setColour(tk.bgDeep.withAlpha(0.85f));
+            g.fillEllipse(disc);
+            g.setColour(band == selectedBand ? tk.ember : tk.ember.withAlpha(0.5f));
+            g.fillEllipse(disc.reduced(radius * 0.45f));
+            g.setColour(tk.panelEdge.brighter(active ? 0.35f : 0.0f));
+            g.drawEllipse(disc.reduced(0.5f), 1.0f);
+        }
+    }
 }
 
 void SpectrumDisplay::paintEqOverlay(juce::Graphics& g, float scale)
@@ -1230,6 +1370,16 @@ void SpectrumDisplay::mouseMove(const juce::MouseEvent& e)
     lastMousePosition = e.position;
     mouseInPlot = plotArea.contains(e.position);
 
+    if (const auto node = eqNodeAt(e.position); !(node == hoveredEqNode))
+    {
+        hoveredEqNode = node;
+
+        if (onEqNodeHovered != nullptr)
+            onEqNodeHovered(node.isValid() ? node.band : -1);
+
+        repaintPlot();
+    }
+
     updateHover(e.position);
 }
 
@@ -1271,6 +1421,26 @@ void SpectrumDisplay::mouseDown(const juce::MouseEvent& e)
         return;
     }
 
+    // A node takes the click before a crossover does: they can sit within a few
+    // pixels of each other, and the node is the smaller target, so the larger
+    // one must not shadow it.
+    if (const auto node = eqNodeAt(e.position); node.isValid())
+    {
+        draggedEqNode = node;
+
+        if (auto* p = eqNodeGain(node.band, node.node))
+            p->beginChangeGesture();
+
+        if (auto* p = eqNodeFreq(node.band, node.node))
+            p->beginChangeGesture();
+
+        if (node.band != selectedBand && onBandSelected != nullptr)
+            onBandSelected(node.band);
+
+        repaintPlot();
+        return;
+    }
+
     const int divider = dividerAt(e.position);
 
     if (divider >= 0)
@@ -1292,6 +1462,25 @@ void SpectrumDisplay::mouseDown(const juce::MouseEvent& e)
 
 void SpectrumDisplay::mouseDrag(const juce::MouseEvent& e)
 {
+    if (draggedEqNode.isValid())
+    {
+        float bandLow = 20.0f;
+        float bandHigh = 20000.0f;
+        processor.getBandSpanHz(draggedEqNode.band, bandLow, bandHigh);
+
+        if (auto* p = eqNodeGain(draggedEqNode.band, draggedEqNode.node))
+            p->setValueNotifyingHost(p->convertTo0to1(eqDecibelsForY(e.position.y)));
+
+        // Clamped to the band, for the same reason the module's panel clamps:
+        // a node outside its band would draw a response that stage cannot
+        // produce there.
+        if (auto* p = eqNodeFreq(draggedEqNode.band, draggedEqNode.node))
+            p->setValueNotifyingHost(p->convertTo0to1(juce::jlimit(bandLow, bandHigh, frequencyForX(e.position.x))));
+
+        repaintPlot();
+        return;
+    }
+
     if (draggedDivider < 0 || plotArea.getWidth() < 2.0f)
         return;
 
@@ -1532,6 +1721,18 @@ void SpectrumDisplay::showDisplayMenu(juce::Point<float> position)
 
 void SpectrumDisplay::mouseUp(const juce::MouseEvent& e)
 {
+    if (draggedEqNode.isValid())
+    {
+        if (auto* p = eqNodeGain(draggedEqNode.band, draggedEqNode.node))
+            p->endChangeGesture();
+
+        if (auto* p = eqNodeFreq(draggedEqNode.band, draggedEqNode.node))
+            p->endChangeGesture();
+
+        draggedEqNode = {};
+        repaintPlot();
+    }
+
     if (draggedDivider >= 0)
     {
         if (auto* parameter = crossoverParams[static_cast<size_t>(draggedDivider)])
