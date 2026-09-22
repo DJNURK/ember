@@ -267,7 +267,7 @@ juce::StringPairArray aboutRows()
     juce::StringPairArray rows;
     rows.set("Version", EMBER_VERSION_STRING);
     rows.set("Formats", "VST3, Audio Unit, Standalone");
-    rows.set("Type", "Inter and Barlow Condensed, SIL OFL");
+    rows.set("Typefaces", "Inter and Barlow Condensed, SIL OFL");
     rows.set("Settings", UserSettings::file().getFullPathName());
     return rows;
 }

@@ -43,8 +43,10 @@ public:
     [[nodiscard]] static bool tourCompleted(const juce::String& tourId);
     static void setTourProgress(const juce::String& tourId, int stepReached, bool completed);
 
-    /** Forgets everything. Exposed for the About tab and for tests, which must
-        not depend on the state of the machine they run on. */
+    /** Forgets everything. Exposed for tests, which must not depend on the
+        state of the machine they run on. No control calls it: "forget my
+        progress" is not worth a button a mis-click can reach, and deleting the
+        file by hand does the same thing. */
     static void reset();
 
 private:
