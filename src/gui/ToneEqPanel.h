@@ -37,6 +37,27 @@ namespace ember::gui
     outside the band's own frequency span - visible enough to place, faint
     enough not to lie.
 */
+/**
+    Where a dragged tone node is allowed to land.
+
+    A node belongs inside its band: dragging a low shelf up into the next band's
+    territory draws a response that stage does not produce there. But each node
+    also has its own range - the high shelf only goes down to 1 kHz - and a band
+    can sit entirely outside it. Band 1 runs 20 to 120 Hz by default, so
+    clamping a high-shelf drag into the band and writing it saturates the
+    parameter to 1 kHz on the first mouse-move, and the node cannot be dragged
+    at all.
+
+    Where the two overlap, the band wins. Where they do not, the parameter's own
+    range does.
+
+    This is a free function because there are two node editors - the band
+    module's panel and the main analyser - and the first version of this fix was
+    applied to only one of them. The rule has one implementation now.
+*/
+[[nodiscard]] float clampToneNodeHz(const juce::RangedAudioParameter& parameter, float bandLowHz, float bandHighHz,
+                                    float requestedHz);
+
 class ToneEqPanel : public juce::Component, public juce::SettableTooltipClient, private juce::Timer
 {
 public:

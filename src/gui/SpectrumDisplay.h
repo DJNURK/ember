@@ -242,6 +242,11 @@ private:
     float modulatedFrequencyFor(int index, float baseHz) const;
 
     void setCrossover(int index, float hz);
+
+    /** As setCrossover, but without the neighbour spacing clamp. For layouts
+        that are valid by construction and would otherwise be blocked by the
+        edges they are about to replace. */
+    void setCrossoverUnclamped(int index, float hz);
     void updateHover(juce::Point<float> position);
     void selectBandAt(juce::Point<float> position);
     void setSelectedBandAndNotify(int band);

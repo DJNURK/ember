@@ -5,6 +5,7 @@
 #include "dsp/modulation/ModTypes.h"
 #include "dsp/modulation/ModulationEngine.h"
 #include "plugin/ParameterIDs.h"
+#include "plugin/PluginProcessor.h"
 
 using namespace ember;
 
@@ -199,4 +200,72 @@ TEST_CASE("factory preset modulation graphs are well formed", "[presets][modulat
 
     INFO("presets shipping modulation: " << presetsWithModulation);
     REQUIRE(presetsWithModulation > 0);
+}
+
+TEST_CASE("a factory preset determines every parameter, not just the ones it lists", "[presets]")
+{
+    // The factory presets list 174 of the plugin's 210 parameters. The 36 they
+    // leave out are the six tone parameters of each of the six bands: the node
+    // frequencies, the mid Q, the pre/post position and the tone bypass.
+    //
+    // That is only safe because replaceState puts a parameter with no child in
+    // the incoming tree back to its DEFAULT, not to whatever the last preset
+    // left it at. An audit claimed the opposite - that absent parameters are
+    // inherited, so moving a tone node once would mis-voice every preset loaded
+    // afterwards - and it is worth saying plainly that this was measured and is
+    // not what happens: set Tone Mid Freq to 5 kHz, load a preset, read 1 kHz.
+    //
+    // The behaviour is JUCE's, though, not ours, and the presets depend on it.
+    // So it is asserted here rather than assumed: load a preset, change things
+    // it does not mention, load it again, and the state must come back.
+    EmberAudioProcessor processor;
+    REQUIRE(processor.getNumPrograms() > 1);
+
+    auto set = [&processor](const juce::String& id, float value)
+    {
+        auto* p = processor.getAPVTS().getParameter(id);
+        REQUIRE(p != nullptr);
+        p->setValueNotifyingHost(p->getNormalisableRange().convertTo0to1(value));
+    };
+
+    auto snapshot = [&processor]
+    {
+        juce::StringArray out;
+
+        for (auto* parameter : processor.getParameters())
+            if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(parameter))
+                out.add(ranged->paramID + "=" + juce::String(ranged->getValue(), 6));
+
+        return out;
+    };
+
+    for (int program : {0, 6, 15, 28})
+    {
+        INFO("preset " << program << ": " << processor.getProgramName(program));
+
+        processor.setCurrentProgram(program);
+        const auto asLoaded = snapshot();
+
+        // Move things the preset does not mention.
+        for (int band = 0; band < kMaxBands; ++band)
+        {
+            set(pid::toneLowHz(band), 800.0f);
+            set(pid::toneMidHz(band), 5000.0f);
+            set(pid::toneMidQ(band), 4.0f);
+            set(pid::toneHighHz(band), 15000.0f);
+            set(pid::toneBypass(band), 1.0f);
+        }
+
+        processor.setCurrentProgram(program);
+        const auto reloaded = snapshot();
+
+        juce::StringArray drifted;
+
+        for (int i = 0; i < asLoaded.size(); ++i)
+            if (asLoaded[i] != reloaded[i])
+                drifted.add(asLoaded[i] + "  ->  " + reloaded[i]);
+
+        INFO("parameters that did not come back:\n" << drifted.joinIntoString("\n"));
+        REQUIRE(drifted.isEmpty());
+    }
 }

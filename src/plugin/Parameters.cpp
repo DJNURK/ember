@@ -300,6 +300,8 @@ juce::String toneMid(int band)
     static const IdTable<kMaxBands> t("band", "ToneMid");
     return t[band];
 }
+const char* const xyAxis = "xyAxis";
+
 juce::String toneHigh(int band)
 {
     static const IdTable<kMaxBands> t("band", "ToneHigh");
@@ -544,6 +546,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     addChoice(xoverMode, "Crossover Mode", crossoverModeChoices(), static_cast<int>(CrossoverMode::MinimumPhaseLR4));
     addChoice(stereoMode, "Stereo Mode", stereoModeChoices(), static_cast<int>(StereoMode::Stereo));
     addChoice(ditherMode, "Dither", ditherChoices(), static_cast<int>(DitherMode::Triangular));
+
+    // An XY pad has two dimensions but a modulation source emits one value, so
+    // this picks which. Y was stored and smoothed but never emitted before
+    // this existed - the axis defaulted to X and nothing could change it.
+    addChoice(xyAxis, "XY Axis", {"X", "Y"}, 0);
 
     addInt(numBands, "Band Count", kMinBands, kMaxBands, 3);
 

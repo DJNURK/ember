@@ -41,6 +41,9 @@ juce::String toneMidHz(int band);
 juce::String toneMidQ(int band);
 juce::String toneHighHz(int band);
 juce::String tonePre(int band);
+
+/** Which of the XY pad's two axes the modulation source emits. */
+extern const char* const xyAxis;
 juce::String toneBypass(int band);
 juce::String bypass(int band);
 juce::String solo(int band);

@@ -9,6 +9,126 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [2.1.1] — 2026-09-22
+
+Three of the four things 2.1.0 listed as known limitations, plus everything an
+adversarial review of those fixes turned up. One of the four was withdrawn: the
+fix was worse than the gap, which is the sort of thing you only find out by
+checking the fix against real content.
+
+### Fixed
+
+- **Crossovers can no longer be driven closer than a third of an octave.** The
+  engine enforced 1/35th while the GUI enforced a third and the manual promised
+  a third; automation could put two edges almost on top of each other and leave
+  a band a few hertz wide.
+- **Dither works.** The parameter saved and restored but was read by no code —
+  Bitcrush always used its own triangular default. Every factory preset now
+  stores Triangular, which is what the DSP was doing when they were auditioned,
+  so wiring the control up does not change how any of them sound.
+- **The XY pad's Y axis works.** A pad has two dimensions but a modulation
+  source emits one value, and the axis selector defaulted to X with nothing
+  able to change it. There is an **XY Axis** parameter now, and a control for
+  it beside the pad — it was reachable only from host automation at first.
+  Each coordinate is also its own modulation destination: routing to **XY Y**
+  reached nothing at all before, and routing to **XY X** drove whichever axis
+  was selected.
+- **The band strip cannot come up empty.** Every module's width came from an
+  animated weight starting at zero, so the first layout had nothing to share
+  out and gave up. A host ticks its display clock a frame later and fills the
+  strip, which is why this was never visible in use — but the steady state must
+  not depend on an animation having run, and anywhere the clock does not tick
+  the plugin's whole control surface stayed blank. The documentation
+  screenshots were rendered that way and have been retaken.
+- **The tone editor no longer paints across the band beside it.** With the
+  Learn panel open and six bands up, a module is too narrow for the tone
+  editor, so the layout dropped it — and the visibility pass that ran
+  afterwards put it back, at the width it had before. It was drawn 89 px
+  outside its own module, over its neighbour. Visibility is now settled before
+  the modules are laid out, so the layout has the last word.
+- **The band layout the editor reads is no longer a data race.** It came
+  straight out of the struct the audio thread rewrites every control block.
+  The engine now publishes the layout its filters are actually running —
+  modulation applied, spacing enforced — and the editor reads that.
+- **The crossover's modulation ghost points at the real edge.** It was drawn
+  from the modulated parameter alone, without the spacing the engine enforces
+  on top, so the marker whose only job is to say where the edge really is
+  could sit a third of an octave away from it — and two ghosts could be drawn
+  in the opposite order to the edges they described.
+- **The Reference tab reads as sentences, and finishes them.** Each article's
+  advice is written to follow the words "When to use it", and the panel was
+  dropping them, so every entry's second paragraph began mid-clause on a
+  lowercase word. Keeping the whole paragraph made the text up to four times
+  longer, which the panel's three-line cap then ellipsised; it fits six now.
+- **The parameter reference reads as sentences.** Every one of the 54 rows in
+  the manual's table ended with an orphan fragment, because the parser took
+  only the first physical line of each entry's advice and appended the rest to
+  the prose above it. The same parser runs inside the plugin, so the Learn
+  panel had it too.
+- **A release cannot ship with the wrong version on it.** The tag-versus-build
+  check was a warning, and v1.0.1 duly published binaries reporting 1.0.0. It
+  fails the build now.
+- **Tone nodes can be dragged in every band, in both node editors.** The drag
+  was clamped to the band, but each node has its own range — the high shelf
+  *starts* at 1 kHz — and a band can sit entirely outside it. Band 1 runs to
+  120 Hz by default, so a high shelf dragged anywhere in it saturated back to
+  1 kHz on the first mouse-move and could not be moved at all. Where band and
+  range do not overlap, the range wins.
+
+  There are two node editors — the band module's panel and the main analyser —
+  and the first version of this fix reached only the panel, leaving the display
+  people actually drag in still broken. They call one function now.
+- **Linked crossover drags shift the layout instead of squashing it.** Cmd-drag
+  scales every edge by one ratio, which preserves their spacing, but each edge
+  was still checked against its neighbour *as it stood* — an edge that had not
+  moved yet. Dragging the set upwards, every edge was stopped by the old
+  position of the one above it. The spacing is now enforced across the whole
+  new layout before any of it is written, so dragging into either rail still
+  cannot stack two edges on one frequency.
+- **The editor never reads a band layout that has not been published.** Moving
+  the span off the audio thread's struct left it reading zeroes until the first
+  audio block, so a plugin opened before the transport rolled saw band 1 as
+  20 Hz to 0 Hz. The layout is published when the engine is prepared as well,
+  from the parameter defaults rather than from the crossover's own placeholder
+  frequencies, which are neither the defaults nor the session's edges.
+- **Factory presets carry the XY axis they were authored with.** A parameter
+  absent from a preset keeps whatever the last one set it to, so once you
+  touched the new Axis control every preset using the XY source loaded with the
+  wrong axis.
+- **"Distribute bands evenly" distributes them.** Each edge was clamped against
+  the one above it as it stood before the command ran, so a layout squeezed to
+  the bottom of the spectrum stayed squeezed.
+- **The display cannot hold a frequency it cannot draw.** With two edges pinned
+  at 20 kHz the fallback midpoint was 22.4 kHz, outside both the axis and the
+  parameter.
+- **The help says what the plugin does.** The Dither, Crossover Frequency, XY X
+  and XY Y articles all still described the behaviour this release changed —
+  including one that told the user Dither was not connected to anything.
+
+### Withdrawn
+
+- **Tone nodes are no longer clamped into their band.** 2.1.0 listed this as a
+  gap and 2.1.1 first "fixed" it. The fix was wrong: no preset stores a node
+  frequency, so all 36 factory presets load at the defaults — 150 Hz, 1 kHz,
+  4 kHz — and under the default crossovers two of those three fall outside each
+  band. Outside the band a node does nothing, which is why it never mattered; a
+  150 Hz low shelf on a band starting at 600 Hz is flat across everything the
+  band carries. Clamped to 600 Hz it lands at full strength on the band's own
+  content, measured here at 1.16 dB at 900 Hz for a −6 dB shelf. 34 of the 36
+  factory presets set a tone gain, so 34 of them quietly changed voicing.
+
+  A node outside its band is something the interface should discourage, not
+  something the engine should rewrite underneath a saved file. The mouse is
+  still clamped; automation is not.
+
+### Known
+
+- The eight animated GIFs the tutorial specification asks for are not built.
+  The screenshot harness renders stills and would need a frame-sequence mode.
+- CPU at six bands and 4× is 4.25 % against a 3 % target; met at three bands.
+- Automation and modulation can still place a tone node outside its band, where
+  it has no audible effect. See Withdrawn above for why this is deliberate.
+
 ## [2.1.0] — 2026-09-22
 
 In-plugin help. Nothing about the audio changes.

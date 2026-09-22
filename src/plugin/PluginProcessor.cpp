@@ -81,6 +81,8 @@ void EmberAudioProcessor::buildParameterCache()
     autoGainCache = cache(pid::autoGain);
     numBandsCache = cache(pid::numBands);
     stereoModeCache = cache(pid::stereoMode);
+    ditherCache = cache(pid::ditherMode);
+    xyAxisCache = cache(pid::xyAxis);
 
     for (int i = 0; i < kMaxCrossovers; ++i)
         crossoverCache[static_cast<size_t>(i)] = cache(pid::crossover(i));
@@ -190,7 +192,11 @@ void EmberAudioProcessor::registerSourceParameterOwnership()
         own(pid::efRelease(i), ModSourceType::EnvelopeFollower, i, ModSourceField::Release);
         own(pid::efGain(i), ModSourceType::EnvelopeFollower, i, ModSourceField::Depth);
     }
+    // The pad has two coordinates and both are modulatable. Only X was
+    // claimed, so a routing to "XY Y" reached nothing at all and a routing to
+    // "XY X" moved whichever axis the selector happened to name.
     own(pid::xyX, ModSourceType::XYController, 0, ModSourceField::Value);
+    own(pid::xyY, ModSourceType::XYController, 0, ModSourceField::ValueY);
     for (int i = 0; i < kNumMidiSources; ++i)
         own(pid::midiSmooth(i), ModSourceType::MidiSource, i, ModSourceField::Smoothing);
     for (int i = 0; i < kNumMacros; ++i)
@@ -250,6 +256,7 @@ void EmberAudioProcessor::pushSourceParameters() noexcept
     XyControllerParams xy;
     xy.x = juce::jlimit(0.0f, 1.0f, xyXCache.raw() * 0.01f);
     xy.y = juce::jlimit(0.0f, 1.0f, xyYCache.raw() * 0.01f);
+    xy.axis = static_cast<XyAxis>(juce::jlimit(0, 1, static_cast<int>(std::lround(xyAxisCache.raw()))));
     modulation.setXyParameters(xy);
 
     for (int i = 0; i < kNumMidiSources; ++i)
@@ -391,6 +398,7 @@ void EmberAudioProcessor::resolveParameters(int numSamples) noexcept
     globalParams.numBands = juce::jlimit(kMinBands, kMaxBands, static_cast<int>(std::lround(value(numBandsCache))));
     globalParams.stereoMode =
         static_cast<StereoMode>(juce::jlimit(0, 1, static_cast<int>(std::lround(stereoModeCache.raw()))));
+    globalParams.dither = static_cast<DitherMode>(juce::jlimit(0, 2, static_cast<int>(std::lround(ditherCache.raw()))));
 
     for (int i = 0; i < kMaxCrossovers; ++i)
         globalParams.crossoverHz[i] = value(crossoverCache[static_cast<size_t>(i)]);
@@ -897,12 +905,22 @@ float EmberAudioProcessor::getGlobalHeat() const noexcept
     return weight > 1.0e-6f ? juce::jlimit(0.0f, 1.0f, weighted / weight) : 0.0f;
 }
 
+float EmberAudioProcessor::getAppliedCrossoverHz(int edge) const noexcept
+{
+    return engine.getAppliedCrossoverHz(edge);
+}
+
 void EmberAudioProcessor::getBandSpanHz(int band, float& lowHz, float& highHz) const noexcept
 {
     lowHz = 20.0f;
     highHz = 20000.0f;
 
-    const int active = juce::jlimit(kMinBands, kMaxBands, globalParams.numBands);
+    // From the engine's published layout, not from globalParams. This runs on
+    // the message thread and the audio thread rewrites globalParams every
+    // control block, so reading it here was a plain data race - and the values
+    // it holds are the requested edges, which the crossover then clamps, so
+    // they could also describe a band the filters never built.
+    const int active = juce::jlimit(kMinBands, kMaxBands, engine.getAppliedNumBands());
     const int numEdges = active - 1;
 
     if (band < 0 || band >= active || numEdges <= 0)
@@ -911,7 +929,7 @@ void EmberAudioProcessor::getBandSpanHz(int band, float& lowHz, float& highHz) c
     std::array<float, static_cast<size_t>(kMaxCrossovers)> edges{};
 
     for (int i = 0; i < numEdges; ++i)
-        edges[static_cast<size_t>(i)] = globalParams.crossoverHz[static_cast<size_t>(i)];
+        edges[static_cast<size_t>(i)] = engine.getAppliedCrossoverHz(i);
 
     std::sort(edges.begin(), edges.begin() + numEdges);
 

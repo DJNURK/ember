@@ -8,9 +8,15 @@
 // real filter, not against a second implementation of the same formula.
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/catch_approx.hpp>
 #include "dsp/BandFx.h"
+#include "gui/ToneEqPanel.h"
+#include "TestHelpers.h"
+#include "plugin/ParameterIDs.h"
+#include "plugin/PluginProcessor.h"
 
 using namespace ember;
+using namespace embertest;
 
 namespace
 {
@@ -166,4 +172,167 @@ TEST_CASE("node frequencies are clamped below Nyquist", "[eq]")
 
     for (const auto sample : buffer)
         REQUIRE(std::isfinite(sample));
+}
+
+TEST_CASE("a band's tone nodes are used where the parameter puts them", "[eq][presets]")
+{
+    // 2.1.1 briefly clamped each node into the band's own frequency span, on
+    // the reasoning that a node outside its band shapes nothing. The reasoning
+    // is right and the clamp is still wrong, for a reason only visible against
+    // real content: no preset stores a node frequency, so all 36 factory
+    // presets load at the defaults - 150 Hz, 1 kHz, 4 kHz - and under the
+    // default crossovers two of those three fall outside each band.
+    //
+    // Outside the band a node is harmless: a 150 Hz low shelf on a band that
+    // starts at 600 Hz is flat across everything the band carries. Clamped to
+    // 600 Hz it lands at full strength on the band's own content. 34 of the 36
+    // factory presets set a tone gain, so 34 of them quietly changed voicing.
+    //
+    // The invariant, therefore: where a node sits must not depend on where the
+    // crossovers are.
+    EmberAudioProcessor processor;
+
+    auto set = [&processor](const juce::String& id, float value)
+    {
+        auto* p = processor.getAPVTS().getParameter(id);
+        REQUIRE(p != nullptr);
+        p->setValueNotifyingHost(p->getNormalisableRange().convertTo0to1(value));
+    };
+
+    // Three bands, split at 120 and 600 Hz, so the top band runs from 600 Hz up
+    // and the default 150 Hz low shelf sits below it.
+    set(pid::numBands, 3.0f);
+    set(pid::crossover(0), 120.0f);
+    set(pid::crossover(1), 600.0f);
+
+    // Nothing but the tone stage should colour the probe.
+    for (int b = 0; b < 3; ++b)
+    {
+        set(pid::drive(b), 0.0f);
+        set(pid::bandMix(b), 100.0f);
+    }
+
+    set(pid::autoGain, 0.0f);
+
+    const double sampleRate = 48000.0;
+    const int blockSize = 512;
+    const float probeHz = 900.0f; // inside the top band, above 600 Hz
+
+    auto measureDb = [&](float shelfDb, float shelfHz)
+    {
+        for (int b = 0; b < 6; ++b)
+        {
+            set(pid::toneLow(b), shelfDb);
+            set(pid::toneLowHz(b), shelfHz);
+        }
+
+        processor.prepareToPlay(sampleRate, blockSize);
+
+        juce::AudioBuffer<float> buf(2, blockSize);
+        juce::MidiBuffer midi;
+        float out = 0.0f;
+
+        // Settle first: gain smoothers and the crossover both need a few blocks
+        // before the measurement means anything.
+        for (int i = 0; i < 40; ++i)
+        {
+            fillSine(buf, sampleRate, probeHz, 0.25f);
+            processor.processBlock(buf, midi);
+
+            if (i >= 30)
+                out = juce::jmax(out, rms(buf));
+        }
+
+        return juce::Decibels::gainToDecibels(out / 0.25f * std::sqrt(2.0f));
+    };
+
+    const auto flat = measureDb(0.0f, 150.0f);
+    const auto asWritten = measureDb(-6.0f, 150.0f);
+    const auto asClamped = measureDb(-6.0f, 600.0f);
+
+    INFO("900 Hz: flat " << flat << " dB, shelf at 150 Hz " << asWritten << " dB, shelf at the 600 Hz band edge "
+                         << asClamped << " dB");
+
+    // A 150 Hz low shelf is flat at 900 Hz, two and a half octaves above its
+    // corner, so the band sounds the same as with no shelf at all.
+    REQUIRE_THAT(asWritten, Catch::Matchers::WithinAbs(flat, 0.2));
+
+    // Moved to the band edge it is emphatically not flat there - which is both
+    // what the clamp did and why it mattered. Asserted so the first REQUIRE
+    // cannot pass by measuring nothing: a broken harness would report both as
+    // flat.
+    REQUIRE(flat - asClamped > 0.8);
+}
+
+TEST_CASE("a dragged tone node lands somewhere it can be dragged again", "[eq][gui]")
+{
+    // The first version of this fix was applied to the band module's panel and
+    // not to the main analyser, which is the display people actually drag in.
+    // Both call one function now, and this tests the function.
+    //
+    // The failure it prevents: band 1 runs 20 to 120 Hz by default and the high
+    // shelf's range starts at 1 kHz. Clamping a drag into the band and writing
+    // it saturates the parameter to 1 kHz on the first mouse-move, so the node
+    // teleports and then cannot be moved at all.
+    EmberAudioProcessor processor;
+
+    auto* high = processor.getAPVTS().getParameter(pid::toneHighHz(0));
+    auto* low = processor.getAPVTS().getParameter(pid::toneLowHz(0));
+    REQUIRE(high != nullptr);
+    REQUIRE(low != nullptr);
+
+    const auto& highRange = high->getNormalisableRange();
+    const auto& lowRange = low->getNormalisableRange();
+
+    SECTION("a band entirely below the node's range leaves the range in charge")
+    {
+        // Band 1 is 20-120 Hz; the high shelf starts at 1 kHz. They do not meet.
+        const auto landed = gui::clampToneNodeHz(*high, 20.0f, 120.0f, 6000.0f);
+
+        INFO("asked for 6 kHz in a 20-120 Hz band, landed at " << landed);
+        REQUIRE(landed == Catch::Approx(6000.0f));
+        REQUIRE(landed >= highRange.start);
+        REQUIRE(landed <= highRange.end);
+    }
+
+    SECTION("a band entirely above the node's range leaves the range in charge")
+    {
+        // The low shelf stops at 1 kHz; a top band starting at 3 kHz is past it.
+        const auto landed = gui::clampToneNodeHz(*low, 3000.0f, 20000.0f, 400.0f);
+
+        INFO("asked for 400 Hz in a 3-20 kHz band, landed at " << landed);
+        REQUIRE(landed == Catch::Approx(400.0f));
+        REQUIRE(landed >= lowRange.start);
+        REQUIRE(landed <= lowRange.end);
+    }
+
+    SECTION("where they overlap, the band wins")
+    {
+        const auto landed = gui::clampToneNodeHz(*high, 2000.0f, 5000.0f, 12000.0f);
+
+        INFO("asked for 12 kHz in a 2-5 kHz band, landed at " << landed);
+        REQUIRE(landed == Catch::Approx(5000.0f));
+    }
+
+    SECTION("an unpublished span does not drag the node to an end of its range")
+    {
+        // Before the first audio block the engine's layout can read back as
+        // 20 Hz to 0 Hz. Clamping to that writes 0, which saturates.
+        const auto landed = gui::clampToneNodeHz(*high, 20.0f, 0.0f, 6000.0f);
+
+        INFO("asked for 6 kHz with an inverted span, landed at " << landed);
+        REQUIRE(landed == Catch::Approx(6000.0f));
+    }
+
+    SECTION("the request is always inside the parameter's own range")
+    {
+        for (float band : {20.0f, 120.0f, 600.0f, 4000.0f, 19000.0f})
+            for (float asked : {5.0f, 150.0f, 9000.0f, 40000.0f})
+            {
+                const auto landed = gui::clampToneNodeHz(*high, band, band * 5.0f, asked);
+                INFO("band from " << band << ", asked " << asked << ", landed " << landed);
+                REQUIRE(landed >= highRange.start);
+                REQUIRE(landed <= highRange.end);
+            }
+    }
 }

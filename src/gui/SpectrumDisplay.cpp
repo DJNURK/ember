@@ -1,4 +1,5 @@
 #include "gui/SpectrumDisplay.h"
+#include "gui/ToneEqPanel.h"
 #include "gui/EmberTheme.h"
 #include "gui/tutorial/TourAnchor.h"
 #include "gui/tutorial/TourTargets.h"
@@ -1291,9 +1292,12 @@ float SpectrumDisplay::clampCrossover(int index, float hz) const
         high = juce::jmin(high, crossoverHz[static_cast<size_t>(index + 1)] / kMinCrossoverRatio);
 
     // Neighbours squeezed together from automation: sit exactly between them
-    // rather than asserting on an inverted range.
+    // rather than asserting on an inverted range. Still inside the display's
+    // own range - the midpoint of an inverted pair lands outside it (two edges
+    // pinned at 20 kHz put it at 22.4 kHz), which is a frequency the axis
+    // cannot draw and the parameter cannot hold.
     if (low > high)
-        return std::sqrt(low * high);
+        return juce::jlimit(minFrequency, maxFrequency, std::sqrt(low * high));
 
     return juce::jlimit(low, high, hz);
 }
@@ -1316,9 +1320,40 @@ float SpectrumDisplay::modulatedFrequencyFor(int index, float baseHz) const
     if (std::abs(offset) <= 1.0e-4f)
         return baseHz;
 
+    // The ghost's whole job is to say where the edge REALLY is, so it has to
+    // come from the engine rather than be recomputed here. Applying the offset
+    // to the parameter and stopping there missed the third-of-an-octave spacing
+    // the engine enforces on top, so the marker could sit a third of an octave
+    // from the filter it was pointing at - and two ghosts could be drawn in the
+    // opposite order to the edges they describe.
+    const float applied = processor.getAppliedCrossoverHz(index);
+
+    if (applied > 0.0f)
+        return juce::jlimit(minFrequency, maxFrequency, applied);
+
     const float normalised = juce::jlimit(0.0f, 1.0f, parameter->convertTo0to1(baseHz) + offset);
 
     return juce::jlimit(minFrequency, maxFrequency, parameter->convertFrom0to1(normalised));
+}
+
+void SpectrumDisplay::setCrossoverUnclamped(int index, float hz)
+{
+    if (index < 0 || index >= kMaxCrossovers)
+        return;
+
+    auto* parameter = crossoverParams[static_cast<size_t>(index)];
+
+    if (parameter == nullptr)
+        return;
+
+    const float target = juce::jlimit(minFrequency, maxFrequency, hz);
+    const float normalised = juce::jlimit(0.0f, 1.0f, parameter->convertTo0to1(target));
+
+    if (std::abs(normalised - parameter->getValue()) > 1.0e-6f)
+        parameter->setValueNotifyingHost(normalised);
+
+    crossoverHz[static_cast<size_t>(index)] = target;
+    modulatedHz[static_cast<size_t>(index)] = modulatedFrequencyFor(index, target);
 }
 
 void SpectrumDisplay::setCrossover(int index, float hz)
@@ -1503,11 +1538,14 @@ void SpectrumDisplay::mouseDrag(const juce::MouseEvent& e)
         if (auto* p = eqNodeGain(draggedEqNode.band, draggedEqNode.node))
             p->setValueNotifyingHost(p->convertTo0to1(eqDecibelsForY(e.position.y)));
 
-        // Clamped to the band, for the same reason the module's panel clamps:
-        // a node outside its band would draw a response that stage cannot
-        // produce there.
+        // The same rule as the band module's own panel, from the same function.
+        // This copy was clamping to the band alone, so a high-shelf node in any
+        // band below 1 kHz - bands 1 and 2 of the default three - saturated to
+        // 1 kHz on the first mouse-move and could not be dragged at all. This
+        // is the display people actually drag in.
         if (auto* p = eqNodeFreq(draggedEqNode.band, draggedEqNode.node))
-            p->setValueNotifyingHost(p->convertTo0to1(juce::jlimit(bandLow, bandHigh, frequencyForX(e.position.x))));
+            p->setValueNotifyingHost(
+                p->convertTo0to1(clampToneNodeHz(*p, bandLow, bandHigh, frequencyForX(e.position.x))));
 
         repaintPlot();
         return;
@@ -1566,11 +1604,41 @@ void SpectrumDisplay::mouseDrag(const juce::MouseEvent& e)
     {
         // Link: every crossover moves by the same musical interval, so the band
         // layout keeps its proportions and only shifts up or down.
+        //
+        // Written without the neighbour clamp, for the reason "distribute
+        // evenly" is: scaling every edge by one ratio preserves the spacing
+        // between them, so the result is valid by construction - while clamping
+        // each edge against its neighbour AS IT STANDS checks it against an
+        // edge that has not moved yet. Dragging the set upwards, every edge was
+        // stopped by the old position of the one above it, and the layout
+        // squashed instead of shifting.
         const auto ratio = target / juce::jmax(1.0f, crossoverHz[static_cast<size_t>(draggedDivider)]);
+        std::array<float, static_cast<size_t>(kMaxCrossovers)> scaled{};
 
         for (int i = 0; i < kMaxCrossovers; ++i)
-            if (i != draggedDivider)
-                setCrossover(i, juce::jlimit(minFrequency, maxFrequency, crossoverHz[static_cast<size_t>(i)] * ratio));
+            scaled[static_cast<size_t>(i)] = crossoverHz[static_cast<size_t>(i)] * ratio;
+
+        scaled[static_cast<size_t>(draggedDivider)] = target;
+
+        // Scaling preserves the spacing only while nothing saturates. Drag the
+        // set into either rail and every edge beyond it lands on the same
+        // frequency - a band of zero width, which is what the spacing rule
+        // exists to prevent. So enforce it on the ARRAY, where each edge is
+        // checked against its neighbour's new position rather than its old one,
+        // and only then write.
+        for (int i = 1; i < kMaxCrossovers; ++i)
+            scaled[static_cast<size_t>(i)] =
+                juce::jmax(scaled[static_cast<size_t>(i)], scaled[static_cast<size_t>(i - 1)] * kMinCrossoverRatio);
+
+        for (int i = kMaxCrossovers - 2; i >= 0; --i)
+            scaled[static_cast<size_t>(i)] =
+                juce::jmin(scaled[static_cast<size_t>(i)], scaled[static_cast<size_t>(i + 1)] / kMinCrossoverRatio);
+
+        for (int i = 0; i < kMaxCrossovers; ++i)
+            setCrossoverUnclamped(i, scaled[static_cast<size_t>(i)]);
+
+        repaintPlot();
+        return;
     }
 
     setCrossover(draggedDivider, target);
@@ -1727,10 +1795,18 @@ void SpectrumDisplay::showDisplayMenu(juce::Point<float> position)
                      // puts five of six edges above 10 kHz and is useless.
                      const int edges = juce::jmax(1, numBands - 1);
 
+                     // Written without the neighbour clamp. Each edge was
+                     // otherwise clamped against the one above it as it stood
+                     // BEFORE the distribution, so a layout squeezed to the
+                     // bottom stayed squeezed: edge 0 could not pass the old
+                     // edge 1, which had not moved yet. The target layout is
+                     // valid by construction - six bands across 20 Hz to 20 kHz
+                     // puts a factor of 3.16 between edges, well over the
+                     // third-of-an-octave minimum.
                      for (int i = 0; i < edges; ++i)
                      {
                          const auto t = static_cast<float>(i + 1) / static_cast<float>(edges + 1);
-                         setCrossover(i, minFrequency * std::pow(maxFrequency / minFrequency, t));
+                         setCrossoverUnclamped(i, minFrequency * std::pow(maxFrequency / minFrequency, t));
                      }
                  });
 

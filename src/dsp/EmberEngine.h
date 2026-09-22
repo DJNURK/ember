@@ -75,6 +75,17 @@ public:
         meaning unchanged. Drives the heat visualisation. Measurement only. */
     float getBandHeatRatio(int band) const noexcept;
 
+    /** The band layout as the filters are actually running it: `edge` counts
+        from 0, and the value is the clamped crossover frequency.
+
+        Published for the editor, which needs to know where a band begins and
+        ends in order to draw it. Reading the engine's own parameter struct from
+        the message thread is a data race - the audio thread rewrites it every
+        control block - so the numbers are copied into atomics once per block
+        instead. Returns 0 for an edge above the active band count. */
+    float getAppliedCrossoverHz(int edge) const noexcept;
+    int getAppliedNumBands() const noexcept;
+
 private:
     void pushSpectrum(const juce::AudioBuffer<float>& in, const juce::AudioBuffer<float>& out, int numSamples) noexcept;
     void accumulateSpectrum(const float* input, const float* output, int numSamples) noexcept;
@@ -107,6 +118,10 @@ private:
 
     std::array<juce::SmoothedValue<float>, kMaxBands> bandGateGain; // solo / bypass-to-silence
     std::array<std::atomic<float>, kMaxBands> bandLevels{};
+
+    /** The band layout, published for the editor. See getAppliedCrossoverHz. */
+    std::array<std::atomic<float>, static_cast<size_t>(kMaxCrossovers)> publishedEdges{};
+    std::atomic<int> publishedNumBands{3};
 
     juce::SmoothedValue<float> smoothedInputGain, smoothedOutputGain, smoothedGlobalMix, smoothedAutoGain;
 

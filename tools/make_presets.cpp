@@ -115,7 +115,11 @@ struct Preset
     bool autoGain{true};
     StereoMode stereo{StereoMode::Stereo};
     CrossoverMode xoverMode{CrossoverMode::MinimumPhaseLR4};
-    DitherMode dither{DitherMode::Off};
+    // Triangular, because that is what the Bitcrush quantiser used
+    // unconditionally before 2.1.1 wired this parameter up - so it is what
+    // every preset in the bank was auditioned with. Generating Off here would
+    // silently undither the two Bitcrush presets the next time this tool runs.
+    DitherMode dither{DitherMode::Triangular};
     float inputGain{0.0f}, outputGain{0.0f};
     std::vector<BandSpec> bands;
     std::vector<Extra> extras;
@@ -204,6 +208,12 @@ void setXy(Preset& p, float xPercent, float yPercent)
 {
     p.extras.push_back({pid::xyX, xPercent});
     p.extras.push_back({pid::xyY, yPercent});
+
+    // The axis the modulation source emits. Written explicitly because APVTS
+    // leaves a parameter absent from a preset at whatever the last one set it
+    // to: without this, loading a preset after touching the Axis control would
+    // keep the wrong axis and the preset would not reproduce its own sound.
+    p.extras.push_back({pid::xyAxis, 0.0f});
 }
 
 void setMidiSource(Preset& p, int i, int typeIndex, int cc, float smoothMs)
@@ -468,7 +478,6 @@ std::vector<Preset> buildPresetBank()
         p.os = OversamplingFactor::x8;
         p.osOffline = OversamplingFactor::x16;    // the only preset that differs
         p.xoverMode = CrossoverMode::LinearPhase; // the only linear-phase preset
-        p.dither = DitherMode::Triangular;        // the only dithered preset
         bank.push_back(std::move(p));
     }
 

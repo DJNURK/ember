@@ -217,16 +217,13 @@ plugin cannot sustain realtime at all.
 
 - CPU target missed at six bands (4.25 % against 3 %), met at three (2.15 %).
   See above for what closing the rest would cost.
-- No tag has been pushed, so no public release exists yet. A
-  `workflow_dispatch` dry run of `release.yml` has exercised the pipeline:
-  the **macOS** `.pkg` was produced and expanded to confirm `Ember.vst3` →
-  `/Library/Audio/Plug-Ins/VST3`, `Ember.component` →
-  `/Library/Audio/Plug-Ins/Components` and `Ember.app` → `/Applications`,
-  with `lipo` confirming `x86_64 arm64`; the **Linux** `.tar.gz` was produced
-  and confirmed to carry a correct VST3 bundle plus an `install.sh` that
-  targets `~/.vst3`. The **Windows** installer step failed on that run (Git
-  Bash mangling ISCC's switches) and the fix has not yet been re-run, so the
-  `.exe` is the one asset never yet built successfully.
+- Superseded: v1.0.0, v1.0.1, v2.0.0 and v2.1.0 have all been tagged and
+  published, and all five assets — including the Windows `.exe` that this
+  section once called the one never built — have been produced, downloaded
+  and unpacked. Each release since has been verified by opening the published
+  files rather than by reading the workflow's exit code, which is how a
+  missing standalone, a version mismatch and a truncated download were each
+  caught after a green build.
 - Windows and Linux plugin builds are exercised by CI, not on this host.
 - The AUv3 target is wired behind `EMBER_BUILD_AUV3` but cannot be built on
   this machine, and the reason is worth recording. JUCE only emits an AUv3

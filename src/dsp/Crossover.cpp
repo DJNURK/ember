@@ -17,7 +17,17 @@ constexpr float kMaxCrossoverHz = 20000.0f;
 
 /** Crossovers are forced at least this far apart (ratio) so a caller that hands
     us a descending or duplicated list still yields a usable, stable filter set. */
-constexpr float kMinCrossoverRatio = 1.02f;
+/** One third of an octave between adjacent edges.
+
+    This was 1.02 - about 1/35 of an octave - while the GUI enforced 1.26 on a
+    drag and the manual promised "about a third of an octave so bands cannot
+    collapse into each other". Both were true of the mouse and neither was true
+    of automation or modulation, which could drive two edges almost on top of
+    each other and produce a band a few hertz wide.
+
+    The engine is the authority on what the engine will accept, so it enforces
+    the number the interface has been claiming. */
+constexpr float kMinCrossoverRatio = 1.26f;
 
 /**
     `juce::dsp::LinkwitzRileyFilter<float>` written out.
@@ -781,6 +791,14 @@ void Crossover::setNumBands(int numBands) noexcept
 int Crossover::getNumBands() const noexcept
 {
     return impl->numBands;
+}
+
+float Crossover::getCrossoverFrequency(int edge) const noexcept
+{
+    if (edge < 0 || edge >= kMaxCrossovers)
+        return 0.0f;
+
+    return impl->freqs[static_cast<size_t>(edge)];
 }
 
 void Crossover::setCrossoverFrequencies(const float* freqs, int numEdges) noexcept

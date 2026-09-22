@@ -44,6 +44,17 @@ public:
         The caller guarantees ascending order and >= 1/3-octave separation. */
     void setCrossoverFrequencies(const float* freqs, int numEdges) noexcept;
 
+    /** Edge `edge` as the filters are actually using it, after the clamping
+        setCrossoverFrequencies applies: inside the sample rate's usable range
+        and at least a third of an octave above the edge below it.
+
+        Anything that needs to know where a band really begins and ends must ask
+        this rather than reuse the values it passed in. The two differ exactly
+        when automation drives two edges together - which is the case the
+        clamping exists for, and therefore the one case where reusing the
+        request describes a band that is not there. */
+    [[nodiscard]] float getCrossoverFrequency(int edge) const noexcept;
+
     /** Split `input` (numChannels x numSamples) into `getNumBands()` buffers.
         `bandOut[b]` must already be sized >= numChannels x numSamples. */
     void process(const juce::AudioBuffer<float>& input, std::array<juce::AudioBuffer<float>, kMaxBands>& bandOut,

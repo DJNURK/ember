@@ -10,6 +10,7 @@
 #include "gui/EmberLookAndFeel.h"
 #include "gui/Widgets.h"
 #include "gui/MotionClock.h"
+#include "gui/tutorial/TourAnchor.h"
 #include "plugin/PluginProcessor.h"
 
 /**
@@ -132,6 +133,13 @@ private:
     /** Slot each band's module occupies. Computed in resized(), used by paint()
         and by hit-testing, so chrome and clicks can never disagree. */
     std::array<juce::Rectangle<int>, static_cast<size_t>(kMaxBands)> moduleBounds{};
+
+    /** An empty, unpainted component over each module's slot, so a module is a
+        thing that can be found by name - by a tour that wants to point at a
+        whole band, and by the test that asserts no band's controls are drawn
+        outside the module they belong to. A module is otherwise only a
+        rectangle in `paint`, which nothing outside this class can see. */
+    std::array<std::unique_ptr<tutorial::TourAnchor>, static_cast<size_t>(kMaxBands)> moduleAnchor;
     int highlightedBand{-1};
 
     /** Each module's width weight, 1.0 collapsed and 1.6 selected. */

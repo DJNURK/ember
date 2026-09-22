@@ -97,6 +97,10 @@ public:
         over one another; this sorts before reading edges off. */
     void getBandSpanHz(int band, float& lowHz, float& highHz) const noexcept;
 
+    /** Edge `edge` as the filters are running it: modulation applied, spacing
+        enforced, sample rate respected. Safe from the message thread. */
+    [[nodiscard]] float getAppliedCrossoverHz(int edge) const noexcept;
+
     /** How the analyser draws itself.
 
         View settings, not parameters: they change nothing about the audio, so
@@ -213,6 +217,7 @@ private:
     std::array<BandCache, kMaxBands> bandCache{};
     std::array<CachedParam, kMaxCrossovers> crossoverCache{};
     CachedParam inGainCache, outGainCache, globalMixCache, autoGainCache, numBandsCache, stereoModeCache;
+    CachedParam ditherCache, xyAxisCache;
     std::array<LfoCache, kNumXLFOs> lfoCache{};
     std::array<EgCache, kNumEnvGenerators> egCache{};
     std::array<EfCache, kNumEnvFollowers> efCache{};

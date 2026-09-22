@@ -55,6 +55,10 @@ public:
     /** Control-rate parameter update. Realtime-safe. */
     void setParameters(const BandParams& p) noexcept;
 
+    /** Dither for the Bitcrush style's quantiser. Realtime-safe: it writes a
+        mode on one style object and touches nothing else. */
+    void setDitherMode(DitherMode) noexcept;
+
     /** In place, at the host sample rate. Realtime-safe. */
     void process(juce::AudioBuffer<float>& buffer, int numSamples) noexcept;
 

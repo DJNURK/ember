@@ -758,8 +758,26 @@ void BandPanel::resized()
     for (int band = 0; band < active; ++band)
         totalWeight += moduleWeight[idx(band)].getValue();
 
+    // The weights start at zero and only reach their targets once the motion
+    // clock has ticked, so the FIRST layout finds no width to share out. In a
+    // host that is one frame of an empty strip and nobody sees it; anywhere the
+    // clock never ticks - an offscreen render, a peer that never arrives - the
+    // strip stays empty forever, which is how this was found. The steady state
+    // must not depend on an animation running, so snap to it and carry on.
+    // Animation still applies to every later change, which is what it is for.
     if (totalWeight < 0.1f)
-        return;
+    {
+        totalWeight = 0.0f;
+
+        for (int band = 0; band < kMaxBands; ++band)
+            moduleWeight[idx(band)].snapToTarget();
+
+        for (int band = 0; band < active; ++band)
+            totalWeight += moduleWeight[idx(band)].getValue();
+
+        if (totalWeight < 0.1f)
+            return;
+    }
     const int available = strip.getWidth() - moduleGap * juce::jmax(0, active - 1);
 
     if (available < active * 24)
@@ -776,6 +794,32 @@ void BandPanel::resized()
         moduleBounds[idx(band)] = {x, strip.getY(), width, strip.getHeight()};
         x += width + moduleGap;
     }
+
+    // Keep the anchors on the slots they name. Bands that are not active have
+    // no slot, so their anchor is empty rather than left on a stale rectangle.
+    for (int band = 0; band < kMaxBands; ++band)
+    {
+        if (moduleAnchor[idx(band)] == nullptr)
+        {
+            moduleAnchor[idx(band)] = std::make_unique<tutorial::TourAnchor>(tutorial::TourTargets::band(band));
+            addAndMakeVisible(*moduleAnchor[idx(band)]);
+        }
+
+        moduleAnchor[idx(band)]->setBounds(band < active ? moduleBounds[idx(band)] : juce::Rectangle<int>());
+    }
+
+    // Visibility is settled here rather than only in setBand: setBand can run
+    // before the band-count parameter has been read, and anything it hid then
+    // would stay hidden through every later layout.
+    //
+    // It must come BEFORE the modules are laid out, not after. It shows every
+    // control the selected band owns, including ones the layout is about to
+    // decide there is no room for - and a control shown after being hidden
+    // keeps whatever bounds it last had. With the Learn panel open the strip is
+    // narrow enough that the tone editor does not fit, so it was hidden, shown
+    // again, and painted at its previous width: 89 px past the edge of its own
+    // module and across the band beside it.
+    showControlsFor(currentBand);
 
     // ---- the selected module gets the full editor -------------------------
     auto& controls = controlsFor(currentBand);
@@ -825,11 +869,6 @@ void BandPanel::resized()
     layoutKnobGrid(area, controls);
 
     // ---- everything else is compact ---------------------------------------
-    // Visibility is settled here rather than only in setBand: setBand can run
-    // before the band-count parameter has been read, and anything it hid then
-    // would stay hidden through every later layout.
-    showControlsFor(currentBand);
-
     for (int band = 0; band < active; ++band)
         if (band != currentBand)
             layoutCompactModule(moduleBounds[idx(band)], controlsFor(band));

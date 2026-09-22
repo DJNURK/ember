@@ -17,6 +17,24 @@ void EmberEngine::prepare(const juce::dsp::ProcessSpec& spec)
     crossoverA.setMode(globalParams.crossoverMode);
     crossoverB.setMode(globalParams.crossoverMode);
     activeCrossover = &crossoverA;
+
+    // Publish the layout now, not only from the first processBlock. The editor
+    // reads these to know where each band begins and ends, and a host that
+    // opens the window before transporting audio would otherwise find them
+    // zero: band 0 spanning 20 Hz to 0 Hz, every other band 0 to 0.
+    //
+    // From globalParams, NOT from activeCrossover. The crossover's own
+    // frequencies are placeholders until it is given some - {100, 300, 900,
+    // 2500, 7000}, which are not the parameter defaults and not this session's
+    // edges. Publishing those would replace a layout that is obviously
+    // unpopulated with one that looks reasonable and is wrong. globalParams
+    // holds the real defaults before the first block and the last resolved
+    // values after it, which is right in both cases and survives a re-prepare.
+    publishedNumBands.store(juce::jlimit(kMinBands, kMaxBands, globalParams.numBands), std::memory_order_relaxed);
+
+    for (int i = 0; i < kMaxCrossovers; ++i)
+        publishedEdges[static_cast<size_t>(i)].store(globalParams.crossoverHz[static_cast<size_t>(i)],
+                                                     std::memory_order_relaxed);
     previousCrossover = nullptr;
 
     for (auto& b : bands)
@@ -191,6 +209,16 @@ void EmberEngine::setParameters(const GlobalParams& global, const BandParams* ba
 
     globalParams = global;
 
+    // Publish the layout the filters are actually using, for the editor. The
+    // crossover clamps what it is given, so these are the real edges rather
+    // than the requested ones, and they are atomics because the reader is the
+    // message thread.
+    publishedNumBands.store(activeNumBands, std::memory_order_relaxed);
+
+    for (int i = 0; i < kMaxCrossovers; ++i)
+        publishedEdges[static_cast<size_t>(i)].store(activeCrossover->getCrossoverFrequency(i),
+                                                     std::memory_order_relaxed);
+
     smoothedInputGain.setTargetValue(juce::Decibels::decibelsToGain(juce::jlimit(-24.0f, 24.0f, global.inputGainDb)));
     smoothedOutputGain.setTargetValue(juce::Decibels::decibelsToGain(juce::jlimit(-24.0f, 24.0f, global.outputGainDb)));
     smoothedGlobalMix.setTargetValue(juce::jlimit(0.0f, 1.0f, global.mix01));
@@ -203,6 +231,9 @@ void EmberEngine::setParameters(const GlobalParams& global, const BandParams* ba
     for (int b = 0; b < n; ++b)
     {
         bandParams[static_cast<size_t>(b)] = bandsIn[b];
+
+        bands[static_cast<size_t>(b)].setDitherMode(global.dither);
+
         bands[static_cast<size_t>(b)].setParameters(bandsIn[b]);
 
         // Solo mutes every non-soloed band; without any solo, all bands pass.
@@ -485,5 +516,17 @@ void EmberEngine::accumulateSpectrum(const float* input, const float* output, in
     analyse(input, scratchFrame.inputDb);
     analyse(output, scratchFrame.outputDb);
     spectrumFifo.push(scratchFrame);
+}
+float EmberEngine::getAppliedCrossoverHz(int edge) const noexcept
+{
+    if (edge < 0 || edge >= kMaxCrossovers)
+        return 0.0f;
+
+    return publishedEdges[static_cast<size_t>(edge)].load(std::memory_order_relaxed);
+}
+
+int EmberEngine::getAppliedNumBands() const noexcept
+{
+    return publishedNumBands.load(std::memory_order_relaxed);
 }
 } // namespace ember

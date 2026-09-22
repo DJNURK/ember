@@ -168,8 +168,17 @@ public:
 
             if (article.whenToUse.isNotEmpty())
             {
+                // With the lead-in, because the advice is written to follow it:
+                // "*When to use it:* to bring a quiet source up..." reads as a
+                // sentence after "When to use it" and as a fragment starting
+                // mid-clause without it.
                 g.setColour(tk.textMuted.brighter(0.4f));
-                g.drawFittedText(article.whenToUse, inner, juce::Justification::topLeft, 3, 1.0f);
+                // Six lines, not three. The parser used to keep only the first
+                // physical line of this paragraph; now that it keeps all of it
+                // the text is up to four times longer, and a three-line cap
+                // ellipsises the end of the longest articles - in the panel the
+                // parser fix was made for.
+                g.drawFittedText("When to use it: " + article.whenToUse, inner, juce::Justification::topLeft, 6, 1.0f);
             }
 
             y += height;
@@ -189,7 +198,7 @@ private:
     static int heightOf(const Article& a)
     {
         return 16 + (a.range.isNotEmpty() ? 13 : 0) + bodyHeight(a) +
-               (a.whenToUse.isNotEmpty() ? juce::jlimit(20, 48, a.whenToUse.length() / 4) : 0) + 16;
+               (a.whenToUse.isNotEmpty() ? juce::jlimit(20, 56, (a.whenToUse.length() + 16) / 4) : 0) + 16;
     }
 
     std::vector<const Article*> shown{Reference::search({})};
@@ -263,7 +272,7 @@ juce::StringPairArray aboutRows()
     juce::StringPairArray rows;
     rows.set("Version", EMBER_VERSION_STRING);
     rows.set("Formats", "VST3, Audio Unit, Standalone");
-    rows.set("Type", "Inter and Barlow Condensed, SIL OFL");
+    rows.set("Typefaces", "Inter and Barlow Condensed, SIL OFL");
     rows.set("Settings", UserSettings::file().getFullPathName());
     return rows;
 }

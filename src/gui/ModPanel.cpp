@@ -2058,6 +2058,10 @@ private:
                 addAndMakeVisible(*xyPad);
                 addKnob(pid::xyX, "X");
                 addKnob(pid::xyY, "Y");
+                // Which axis the source emits. Without this the only way to
+                // reach it was host automation, so the pad's second dimension
+                // was unusable from inside the plug-in that owns it.
+                addCombo(pid::xyAxis, "Axis");
                 break;
 
             case ModSourceType::MidiSource:

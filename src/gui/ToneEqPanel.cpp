@@ -6,6 +6,25 @@
 
 namespace ember::gui
 {
+float clampToneNodeHz(const juce::RangedAudioParameter& parameter, float bandLowHz, float bandHighHz, float requestedHz)
+{
+    const auto& range = parameter.getNormalisableRange();
+
+    auto low = juce::jmax(bandLowHz, range.start);
+    auto high = juce::jmin(bandHighHz, range.end);
+
+    // No overlap - or a span that has not been published yet, which arrives
+    // here inverted. Either way the band cannot be honoured, so do not let it
+    // saturate the write to whichever end of the range is nearer.
+    if (!(low < high))
+    {
+        low = range.start;
+        high = range.end;
+    }
+
+    return juce::jlimit(low, high, requestedHz);
+}
+
 namespace
 {
 constexpr float kMinHz = 20.0f;
@@ -629,10 +648,10 @@ void ToneEqPanel::mouseDrag(const juce::MouseEvent& event)
 
     setParam(gainParam(dragging), decibelsForY(event.position.y), false);
 
-    // The node stays inside its own band: moving a low shelf up into the next
-    // band's territory would draw a curve this stage cannot produce there.
     const auto requested = frequencyForX(event.position.x);
-    setParam(freqParam(dragging), juce::jlimit(bandLowHz, bandHighHz, requested), false);
+
+    if (auto* p = freqParam(dragging))
+        setParam(p, clampToneNodeHz(*p, bandLowHz, bandHighHz, requested), false);
 }
 
 void ToneEqPanel::mouseUp(const juce::MouseEvent&)

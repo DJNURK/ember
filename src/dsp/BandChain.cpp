@@ -1,4 +1,5 @@
 #include "dsp/BandChain.h"
+#include "dsp/styles/DestroyStyles.h"
 #include "dsp/DspUtils.h"
 
 namespace ember
@@ -138,6 +139,20 @@ void BandChain::setParameters(const BandParams& p) noexcept
 
     feedback.setParameters(juce::jlimit(0.0f, 1.0f, p.feedback01), juce::jlimit(20.0f, 2000.0f, p.feedbackFreq));
     dynamics.setAmount(juce::jlimit(-1.0f, 1.0f, p.dynamics));
+    // The node frequencies are used exactly as written. 2.1.1 briefly clamped
+    // them into the band's own span, which is wrong for a reason that only
+    // shows up against real content: no preset stores a node frequency, so
+    // every one of them loads at the defaults - 150 Hz, 1 kHz, 4 kHz - and
+    // under the default crossovers two of those three sit outside each band.
+    //
+    // Outside the band they do nothing, which is the whole reason it never
+    // mattered: a 150 Hz low shelf applied to a band that starts at 600 Hz is
+    // flat across everything the band carries. Clamping moves it to 600 Hz,
+    // where it is suddenly at full strength on the band's own content. That
+    // silently re-voiced 34 of the 36 factory presets.
+    //
+    // A node outside its band is a thing the interface should discourage, not
+    // a thing the engine should rewrite underneath a saved file.
     tone.setShape({p.toneLowHz, p.toneMidHz, p.toneMidQ, p.toneHighHz});
 
     // A bypassed tone stage is flat rather than skipped, so switching it off
@@ -372,6 +387,15 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
 
         publishHeat(inIn, inOut, outOut);
     }
+}
+
+void BandChain::setDitherMode(DitherMode mode) noexcept
+{
+    // Only Bitcrush quantises, so only Bitcrush has a dither to set. Every
+    // style is constructed up front, so this reaches the object whether or not
+    // the band is currently using it.
+    if (auto* bitcrush = dynamic_cast<BitcrushStyle*>(styles[static_cast<size_t>(StyleID::Bitcrush)].get()))
+        bitcrush->setDitherMode(mode);
 }
 
 void BandChain::publishHeat(float inIn, float inOut, float outOut) noexcept

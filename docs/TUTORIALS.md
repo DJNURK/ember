@@ -102,9 +102,9 @@ can see the spotlight is not a help system.
 
 ## 5. Reference articles
 
-209 parameters, but only **53 distinct kinds** — `band3Drive` and `band5Drive`
+210 parameters, but only **54 distinct kinds** — `band3Drive` and `band5Drive`
 want the same article with a different number in it. Articles are keyed by kind,
-and the test asserts that every one of the 209 resolves to one.
+and the test asserts that every one of the 210 resolves to one.
 
 An article is short by design: one to three sentences of *what it does*, one or
 two of *when to use it*, and a "Show me" link into the relevant tour step.

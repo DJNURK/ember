@@ -10,6 +10,7 @@
 #include "gui/tutorial/TourLibrary.h"
 #include "gui/tutorial/TourTargets.h"
 #include "plugin/PluginEditor.h"
+#include "plugin/ParameterIDs.h"
 #include "plugin/PluginProcessor.h"
 
 using namespace ember;
@@ -38,6 +39,21 @@ bool findID(juce::Component& c, const juce::String& id)
             return true;
 
     return false;
+}
+
+/** The component claiming `id`, or nullptr. `findID` answers whether a tour's
+    target exists; this answers what it is, which is what a question about size
+    or visibility needs. */
+juce::Component* componentWithID(juce::Component& c, const juce::String& id)
+{
+    if (c.getComponentID() == id)
+        return &c;
+
+    for (auto* child : c.getChildren())
+        if (auto* found = componentWithID(*child, id))
+            return found;
+
+    return nullptr;
 }
 } // namespace
 
@@ -120,6 +136,136 @@ TEST_CASE("every tour target resolves to a real component", "[tutorials]")
          << missing.joinIntoString("\n") << "\n\navailable ids:\n"
          << available.joinIntoString("\n"));
     REQUIRE(missing.isEmpty());
+}
+
+TEST_CASE("the band strip lays out without the motion clock", "[tutorials][gui]")
+{
+    // Existing well before this test: every band module's width came from an
+    // `Animated` weight that starts at zero and only reaches its target once a
+    // `VBlankAttachment` frame has fired. The first layout therefore found no
+    // width to share out and returned early, leaving the strip empty.
+    //
+    // In a host that is one invisible frame. Anywhere the clock never ticks -
+    // an offscreen render, a peer that never arrives - it is permanent, and the
+    // plugin's entire control surface is a blank rectangle. Two releases of
+    // documentation screenshots shipped with that hole in them.
+    //
+    // No VBlank fires in this process either, which is exactly why the test can
+    // see it: the steady state must not depend on an animation having run.
+    EmberAudioProcessor processor;
+    processor.prepareToPlay(48000.0, 512);
+
+    std::unique_ptr<juce::AudioProcessorEditor> editor(processor.createEditor());
+    REQUIRE(editor != nullptr);
+
+    editor->setSize(1200, 720);
+    editor->setSize(1180, 700);
+
+    auto* bandCount = processor.getAPVTS().getRawParameterValue(ember::pid::numBands);
+    REQUIRE(bandCount != nullptr);
+
+    const int active = static_cast<int>(*bandCount);
+    REQUIRE(active >= 1);
+
+    for (int band = 0; band < active; ++band)
+    {
+        const auto id = TourTargets::bandDrive(band);
+        auto* drive = componentWithID(*editor, id);
+
+        INFO("band " << (band + 1) << " drive control '" << id << "'");
+        REQUIRE(drive != nullptr);
+
+        // Bounds, not just existence. The bug left every one of these present,
+        // parented and correct - and zero pixels wide.
+        REQUIRE(drive->getWidth() > 0);
+        REQUIRE(drive->getHeight() > 0);
+        REQUIRE(drive->isVisible());
+    }
+}
+
+TEST_CASE("no band's controls are drawn outside its module", "[tutorials][gui]")
+{
+    // Found by opening the Learn panel in a render and looking at it. The panel
+    // takes its width from the band strip, which leaves the selected module too
+    // narrow for the tone editor, so the layout hid it - and then the visibility
+    // pass for the selected band showed everything again, including the control
+    // that had just been dropped. A control shown after being hidden keeps its
+    // old bounds, so the tone editor painted at its previous width: 89 px past
+    // the edge of its own module and across the band beside it.
+    //
+    // Overlap between two bands' CONTROLS was too weak a test to catch it - the
+    // neighbour is compact, so there was nothing at that height to collide
+    // with, and the strayed control sat on the neighbour's empty background.
+    // Containment in its own module is the invariant that actually holds.
+    EmberAudioProcessor processor;
+    processor.prepareToPlay(48000.0, 512);
+
+    // Six bands, because the defect is a squeeze: at the default three each
+    // module is 505 px wide and everything fits with room to spare. This is
+    // the whole reason the bug survived - the wide case is the one anybody
+    // looks at.
+    if (auto* bands = processor.getAPVTS().getParameter(ember::pid::numBands))
+        bands->setValueNotifyingHost(bands->convertTo0to1(6.0f));
+
+    std::unique_ptr<juce::AudioProcessorEditor> editor(processor.createEditor());
+    REQUIRE(editor != nullptr);
+
+    editor->setSize(1200, 720);
+    editor->setSize(1180, 700);
+
+    auto check = [&editor](const juce::String& what)
+    {
+        juce::StringArray strays;
+        int checked = 0;
+
+        std::function<void(juce::Component&)> walk = [&](juce::Component& c)
+        {
+            const auto id = c.getComponentID();
+            const auto rest = id.fromFirstOccurrenceOf("band.", false, false);
+            const auto bandText = rest.upToFirstOccurrenceOf(".", false, false);
+
+            // "band.1.drive", not the bare "band.1" of the module anchor itself.
+            if (c.isVisible() && id.startsWith("band.") && rest.contains(".") && bandText.containsOnly("123456"))
+            {
+                if (auto* module = componentWithID(*editor, "band." + bandText))
+                {
+                    const auto slot = editor->getLocalArea(module, module->getLocalBounds());
+                    const auto here = editor->getLocalArea(&c, c.getLocalBounds());
+
+                    if (!here.isEmpty() && !slot.isEmpty())
+                    {
+                        ++checked;
+
+                        if (!slot.contains(here))
+                            strays.add(id + " " + here.toString() + " is not inside module " + bandText + " " +
+                                       slot.toString());
+                    }
+                }
+            }
+
+            for (auto* child : c.getChildren())
+                walk(*child);
+        };
+
+        walk(*editor);
+
+        INFO(what << ": controls outside their own module:\n" << strays.joinIntoString("\n"));
+        REQUIRE(checked > 0);
+        REQUIRE(strays.isEmpty());
+    };
+
+    check("default layout");
+
+    // Now the narrow case. The Learn panel takes its width from the strip, and
+    // triggerClick() posts through a message queue this build has no loop to
+    // drain, so call the click handler directly.
+    auto* help = dynamic_cast<juce::Button*>(componentWithID(*editor, TourTargets::helpButton));
+    REQUIRE(help != nullptr);
+    REQUIRE(help->onClick != nullptr);
+    help->onClick();
+    editor->resized();
+
+    check("Learn panel open");
 }
 
 TEST_CASE("every parameter a tour names exists", "[tutorials]")
