@@ -1,4 +1,5 @@
 #include "gui/SpectrumDisplay.h"
+#include "gui/ToneEqPanel.h"
 #include "gui/EmberTheme.h"
 #include "gui/tutorial/TourAnchor.h"
 #include "gui/tutorial/TourTargets.h"
@@ -1537,11 +1538,14 @@ void SpectrumDisplay::mouseDrag(const juce::MouseEvent& e)
         if (auto* p = eqNodeGain(draggedEqNode.band, draggedEqNode.node))
             p->setValueNotifyingHost(p->convertTo0to1(eqDecibelsForY(e.position.y)));
 
-        // Clamped to the band, for the same reason the module's panel clamps:
-        // a node outside its band would draw a response that stage cannot
-        // produce there.
+        // The same rule as the band module's own panel, from the same function.
+        // This copy was clamping to the band alone, so a high-shelf node in any
+        // band below 1 kHz - bands 1 and 2 of the default three - saturated to
+        // 1 kHz on the first mouse-move and could not be dragged at all. This
+        // is the display people actually drag in.
         if (auto* p = eqNodeFreq(draggedEqNode.band, draggedEqNode.node))
-            p->setValueNotifyingHost(p->convertTo0to1(juce::jlimit(bandLow, bandHigh, frequencyForX(e.position.x))));
+            p->setValueNotifyingHost(
+                p->convertTo0to1(clampToneNodeHz(*p, bandLow, bandHigh, frequencyForX(e.position.x))));
 
         repaintPlot();
         return;
@@ -1600,11 +1604,27 @@ void SpectrumDisplay::mouseDrag(const juce::MouseEvent& e)
     {
         // Link: every crossover moves by the same musical interval, so the band
         // layout keeps its proportions and only shifts up or down.
+        //
+        // Written without the neighbour clamp, for the reason "distribute
+        // evenly" is: scaling every edge by one ratio preserves the spacing
+        // between them, so the result is valid by construction - while clamping
+        // each edge against its neighbour AS IT STANDS checks it against an
+        // edge that has not moved yet. Dragging the set upwards, every edge was
+        // stopped by the old position of the one above it, and the layout
+        // squashed instead of shifting.
         const auto ratio = target / juce::jmax(1.0f, crossoverHz[static_cast<size_t>(draggedDivider)]);
+        std::array<float, static_cast<size_t>(kMaxCrossovers)> scaled{};
 
         for (int i = 0; i < kMaxCrossovers; ++i)
-            if (i != draggedDivider)
-                setCrossover(i, juce::jlimit(minFrequency, maxFrequency, crossoverHz[static_cast<size_t>(i)] * ratio));
+            scaled[static_cast<size_t>(i)] = crossoverHz[static_cast<size_t>(i)] * ratio;
+
+        scaled[static_cast<size_t>(draggedDivider)] = target;
+
+        for (int i = 0; i < kMaxCrossovers; ++i)
+            setCrossoverUnclamped(i, scaled[static_cast<size_t>(i)]);
+
+        repaintPlot();
+        return;
     }
 
     setCrossover(draggedDivider, target);

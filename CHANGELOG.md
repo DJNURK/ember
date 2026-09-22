@@ -55,9 +55,11 @@ checking the fix against real content.
   on top, so the marker whose only job is to say where the edge really is
   could sit a third of an octave away from it — and two ghosts could be drawn
   in the opposite order to the edges they described.
-- **The Reference tab reads as sentences.** Each article's advice is written to
-  follow the words "When to use it", and the panel was dropping them, so every
-  entry's second paragraph began mid-clause on a lowercase word.
+- **The Reference tab reads as sentences, and finishes them.** Each article's
+  advice is written to follow the words "When to use it", and the panel was
+  dropping them, so every entry's second paragraph began mid-clause on a
+  lowercase word. Keeping the whole paragraph made the text up to four times
+  longer, which the panel's three-line cap then ellipsised; it fits six now.
 - **The parameter reference reads as sentences.** Every one of the 54 rows in
   the manual's table ended with an orphan fragment, because the parser took
   only the first physical line of each entry's advice and appended the rest to
@@ -66,11 +68,31 @@ checking the fix against real content.
 - **A release cannot ship with the wrong version on it.** The tag-versus-build
   check was a warning, and v1.0.1 duly published binaries reporting 1.0.0. It
   fails the build now.
-- **Tone nodes can be dragged in every band.** The drag was clamped to the
-  band, but each node has its own range — the high shelf stops at 1 kHz — and a
-  band can sit entirely outside it. Band 1 runs to 120 Hz by default, so a high
-  shelf dragged anywhere in it saturated back to 1 kHz: the node could not be
-  moved at all. Where band and range do not overlap, the range wins.
+- **Tone nodes can be dragged in every band, in both node editors.** The drag
+  was clamped to the band, but each node has its own range — the high shelf
+  *starts* at 1 kHz — and a band can sit entirely outside it. Band 1 runs to
+  120 Hz by default, so a high shelf dragged anywhere in it saturated back to
+  1 kHz on the first mouse-move and could not be moved at all. Where band and
+  range do not overlap, the range wins.
+
+  There are two node editors — the band module's panel and the main analyser —
+  and the first version of this fix reached only the panel, leaving the display
+  people actually drag in still broken. They call one function now.
+- **Linked crossover drags shift the layout instead of squashing it.** Cmd-drag
+  scales every edge by one ratio, which preserves their spacing, but each edge
+  was still checked against its neighbour *as it stood* — an edge that had not
+  moved yet. Dragging the set upwards, every edge was stopped by the old
+  position of the one above it.
+- **The editor never reads a band layout that has not been published.** Moving
+  the span off the audio thread's struct left it reading zeroes until the first
+  audio block, so a plugin opened before the transport rolled saw band 1 as
+  20 Hz to 0 Hz. The layout is published when the engine is prepared as well,
+  and a span that still reads back inverted is refused rather than passed to a
+  clamp that would write 0 into a parameter.
+- **Factory presets carry the XY axis they were authored with.** A parameter
+  absent from a preset keeps whatever the last one set it to, so once you
+  touched the new Axis control every preset using the XY source loaded with the
+  wrong axis.
 - **"Distribute bands evenly" distributes them.** Each edge was clamped against
   the one above it as it stood before the command ran, so a layout squeezed to
   the bottom of the spectrum stayed squeezed.

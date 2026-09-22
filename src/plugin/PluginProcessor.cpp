@@ -938,6 +938,15 @@ void EmberAudioProcessor::getBandSpanHz(int band, float& lowHz, float& highHz) c
 
     if (band < numEdges)
         highHz = edges[static_cast<size_t>(band)];
+
+    // Never hand back an inverted or empty span. Callers clamp against it, and
+    // a clamp to [20, 0] writes 0 - so one unpublished edge would silently
+    // rewrite a parameter. Full range is the honest answer for "not known yet".
+    if (!(highHz > lowHz))
+    {
+        lowHz = 20.0f;
+        highHz = 20000.0f;
+    }
 }
 
 EmberAudioProcessor::AnalyserSettings EmberAudioProcessor::getAnalyserSettings() const

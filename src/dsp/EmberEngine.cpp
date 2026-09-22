@@ -17,6 +17,16 @@ void EmberEngine::prepare(const juce::dsp::ProcessSpec& spec)
     crossoverA.setMode(globalParams.crossoverMode);
     crossoverB.setMode(globalParams.crossoverMode);
     activeCrossover = &crossoverA;
+
+    // Publish the layout now, not only from the first processBlock. The editor
+    // reads these to know where each band begins and ends, and a host that
+    // opens the window before transporting audio would otherwise find them
+    // zero: band 0 spanning 20 Hz to 0 Hz, every other band 0 to 0.
+    publishedNumBands.store(activeNumBands, std::memory_order_relaxed);
+
+    for (int i = 0; i < kMaxCrossovers; ++i)
+        publishedEdges[static_cast<size_t>(i)].store(activeCrossover->getCrossoverFrequency(i),
+                                                     std::memory_order_relaxed);
     previousCrossover = nullptr;
 
     for (auto& b : bands)

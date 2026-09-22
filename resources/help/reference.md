@@ -66,7 +66,8 @@ costs CPU, so add one only when you can name what it is for.
 
 The edge between band N and band N+1; defaults 120, 600, 2500, 6000, 12000 Hz.
 Edges are kept a third of an octave apart however they are moved — by hand, by
-automation or by modulation — so a band can never be squeezed down to nothing.
+automation or by modulation. The one exception is the top of the range: edges
+driven past 20 kHz all stop there, and can end up on the same frequency.
 
 *When to use it:* place edges where the source changes character — under the
 body of a kick, above the fundamental of a bass. Judge the result unsoloed.
@@ -263,9 +264,10 @@ low end before a Pre-positioned saturator so it stops eating headroom.
 ## bandNToneLowHz
 **Tone Low Frequency** — 20 Hz to 1 kHz
 
-Corner of the low shelf; default 150 Hz. Dragging the node sideways on the
-display clamps it to the band's own span, but the parameter range is wider, so
-automation and modulation can take it outside.
+Corner of the low shelf; default 150 Hz. Dragging the node keeps it inside the
+band where the band and this range overlap; automation and modulation are not
+held to the band at all. Outside the band a shelf does nothing — its corner is
+below everything the band carries — which is why nothing stops them.
 
 *When to use it:* move it down to lift only the deepest weight, or up towards
 the low mids when the band is carrying body rather than bass.
@@ -282,8 +284,9 @@ with Tone Position set to Pre — to aim the saturator at one part of the band.
 ## bandNToneMidHz
 **Tone Mid Frequency** — 100 Hz to 8 kHz
 
-Centre of the peaking filter; default 1 kHz. Dragging the node sideways clamps
-it to the band's own span; the parameter range itself is wider.
+Centre of the peaking filter; default 1 kHz. Dragging the node keeps it inside
+the band where the band and this range overlap. Automation and modulation are
+not held to the band; a bell well outside it contributes almost nothing.
 
 *When to use it:* sweep it with a boost to find what is bothering you, then cut
 there. Pair it with a high Q for a notch and a low one for a tilt.
@@ -308,8 +311,9 @@ or to add air after a tape style has softened the top.
 ## bandNToneHighHz
 **Tone High Frequency** — 1 kHz to 18 kHz
 
-Corner of the high shelf; default 4 kHz. Dragging the node sideways clamps it
-to the band's own span; the parameter range is wider.
+Corner of the high shelf; default 4 kHz. Note that this range starts at 1 kHz,
+so in a band that ends below that the shelf cannot be brought into the band at
+all — it stays where you put it and shelves nothing the band carries.
 
 *When to use it:* down around 2–4 kHz to work on presence and bite, up towards
 10 kHz and above when you only want air.

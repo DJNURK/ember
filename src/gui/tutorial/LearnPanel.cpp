@@ -173,7 +173,12 @@ public:
                 // sentence after "When to use it" and as a fragment starting
                 // mid-clause without it.
                 g.setColour(tk.textMuted.brighter(0.4f));
-                g.drawFittedText("When to use it: " + article.whenToUse, inner, juce::Justification::topLeft, 3, 1.0f);
+                // Six lines, not three. The parser used to keep only the first
+                // physical line of this paragraph; now that it keeps all of it
+                // the text is up to four times longer, and a three-line cap
+                // ellipsises the end of the longest articles - in the panel the
+                // parser fix was made for.
+                g.drawFittedText("When to use it: " + article.whenToUse, inner, juce::Justification::topLeft, 6, 1.0f);
             }
 
             y += height;
