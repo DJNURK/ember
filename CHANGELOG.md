@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [2.1.1] — 2026-09-22
+
+Fixes the four things 2.1.0 listed as known limitations. Each was documented
+rather than repaired, which is better than hiding them but not better than
+fixing them.
+
+### Fixed
+
+- **Crossovers can no longer be driven closer than a third of an octave.** The
+  engine enforced 1/35th while the GUI enforced a third and the manual promised
+  a third; automation could put two edges almost on top of each other and leave
+  a band a few hertz wide.
+- **Tone nodes stay inside their band whatever moves them.** Dragging was
+  clamped; automation and modulation were not, so a node could sit two bands
+  away, shaping a range that stage does not touch.
+- **Dither works.** The parameter saved and restored but was read by no code —
+  Bitcrush always used its own triangular default.
+- **The XY pad's Y axis works.** A pad has two dimensions but a modulation
+  source emits one value, and the axis selector defaulted to X with nothing
+  able to change it. There is an **XY Axis** parameter now.
+
+### Known
+
+- The eight animated GIFs the tutorial specification asks for are not built.
+  The screenshot harness renders stills and would need a frame-sequence mode.
+- CPU at six bands and 4× is 4.25 % against a 3 % target; met at three bands.
+
 ## [2.1.0] — 2026-09-22
 
 In-plugin help. Nothing about the audio changes.

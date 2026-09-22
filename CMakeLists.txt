@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
 project(Ember
-    VERSION 2.1.0
+    VERSION 2.1.1
     DESCRIPTION "Ember — multiband analog saturation and distortion"
     LANGUAGES C CXX)
 
