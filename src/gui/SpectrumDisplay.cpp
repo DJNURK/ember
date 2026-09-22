@@ -231,8 +231,14 @@ void SpectrumDisplay::updateSmoothingCoefficients()
     // raw FFT frames produce.
     const auto rate = static_cast<float>(refreshRateHz);
 
+    // Averaging is a release-time choice: the attack stays fast at every
+    // setting, because a slow attack hides transients, which is never what
+    // "slow averaging" is asked for.
+    constexpr float releaseSeconds[] = {0.12f, 0.32f, 0.90f};
+    const auto averaging = juce::jlimit(0, 2, processor.getAnalyserSettings().averaging);
+
     attackCoefficient = 1.0f - std::exp(-1.0f / (rate * 0.020f));
-    releaseCoefficient = 1.0f - std::exp(-1.0f / (rate * 0.320f));
+    releaseCoefficient = 1.0f - std::exp(-1.0f / (rate * releaseSeconds[averaging]));
 }
 
 void SpectrumDisplay::updateCachedFonts(float scale)
@@ -373,6 +379,11 @@ bool SpectrumDisplay::refreshHeat()
 
 bool SpectrumDisplay::refreshSpectrum()
 {
+    // Freeze holds the last frame rather than stopping the timer: the meters,
+    // heat and crossover handles all still have to move.
+    if (processor.getAnalyserSettings().freeze)
+        return false;
+
     const int columns = static_cast<int>(inputCurve.size());
 
     if (columns < 2 || outputCurve.size() != inputCurve.size() || plotArea.getWidth() < 2.0f)
@@ -488,6 +499,7 @@ void SpectrumDisplay::paint(juce::Graphics& g)
     paintCrossovers(g, scale);
     paintDragReadout(g, scale);
     paintMouseFrequency(g, scale);
+    paintGear(g, scale);
     paintModeSelector(g, scale);
 }
 
@@ -1220,6 +1232,12 @@ void SpectrumDisplay::mouseDown(const juce::MouseEvent& e)
 {
     // The mode selector takes the click before anything else: it sits over the
     // plot, and a crossover drag starting on it would be a trap.
+    if (gearBounds(currentUiScale()).contains(e.position))
+    {
+        showAnalyserMenu();
+        return;
+    }
+
     if (const auto segment = modeSegmentAt(e.position, currentUiScale()); segment >= 0)
     {
         setDisplayMode(static_cast<DisplayMode>(segment));
@@ -1315,6 +1333,119 @@ void SpectrumDisplay::mouseDrag(const juce::MouseEvent& e)
 
     setCrossover(draggedDivider, target);
     repaintPlot();
+}
+
+juce::Rectangle<float> SpectrumDisplay::gearBounds(float scale) const
+{
+    const auto selector = modeSelectorBounds(scale);
+
+    if (selector.isEmpty())
+        return {};
+
+    const auto size = selector.getHeight();
+
+    return {selector.getX() - size - 4.0f * scale, selector.getY(), size, size};
+}
+
+void SpectrumDisplay::paintGear(juce::Graphics& g, float scale) const
+{
+    const auto bounds = gearBounds(scale);
+
+    if (bounds.isEmpty())
+        return;
+
+    const auto& tk = EmberTheme::tokens();
+
+    g.setColour(tk.bgDeep.withAlpha(0.85f));
+    g.fillRoundedRectangle(bounds, bounds.getHeight() * 0.3f);
+    g.setColour(tk.panelEdge);
+    g.drawRoundedRectangle(bounds.reduced(0.5f), bounds.getHeight() * 0.3f, 1.0f);
+
+    // A gear drawn as a ring with teeth: at 17 px a literal cog is mush, and
+    // this reads as "settings" at any size.
+    const auto centre = bounds.getCentre();
+    const auto radius = bounds.getWidth() * 0.26f;
+
+    g.setColour(tk.textDim);
+    g.drawEllipse(juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(centre), 1.4f);
+
+    for (int i = 0; i < 6; ++i)
+    {
+        const auto angle = juce::MathConstants<float>::twoPi * static_cast<float>(i) / 6.0f;
+        const auto inner = centre.getPointOnCircumference(radius * 1.15f, angle);
+        const auto outer = centre.getPointOnCircumference(radius * 1.7f, angle);
+        g.drawLine({inner, outer}, 1.4f);
+    }
+}
+
+void SpectrumDisplay::showAnalyserMenu()
+{
+    auto settings = processor.getAnalyserSettings();
+
+    juce::PopupMenu menu;
+    menu.setLookAndFeel(&getLookAndFeel());
+
+    const auto addChoice = [this](juce::PopupMenu& parent, const juce::String& title, const juce::StringArray& names,
+                                  int current, std::function<void(int)> apply)
+    {
+        juce::PopupMenu sub;
+
+        for (int i = 0; i < names.size(); ++i)
+            sub.addItem(names[i], true, i == current,
+                        [this, apply, i]
+                        {
+                            apply(i);
+                            repaintPlot();
+                        });
+
+        parent.addSubMenu(title, sub);
+    };
+
+    addChoice(menu, "Resolution", {"Low", "Medium", "High"}, settings.resolution,
+              [this](int v)
+              {
+                  auto s = processor.getAnalyserSettings();
+                  s.resolution = v;
+                  processor.setAnalyserSettings(s);
+              });
+
+    addChoice(menu, "Averaging", {"Fast", "Medium", "Slow"}, settings.averaging,
+              [this](int v)
+              {
+                  auto s = processor.getAnalyserSettings();
+                  s.averaging = v;
+                  processor.setAnalyserSettings(s);
+                  updateSmoothingCoefficients();
+              });
+
+    addChoice(menu, "Tilt", {"Flat", "3 dB / octave", "4.5 dB / octave"}, settings.tiltIndex,
+              [this](int v)
+              {
+                  auto s = processor.getAnalyserSettings();
+                  s.tiltIndex = v;
+                  processor.setAnalyserSettings(s);
+              });
+
+    menu.addSeparator();
+
+    menu.addItem("Freeze", true, settings.freeze,
+                 [this]
+                 {
+                     auto s = processor.getAnalyserSettings();
+                     s.freeze = !s.freeze;
+                     processor.setAnalyserSettings(s);
+                 });
+
+    menu.addItem("Peak hold", true, settings.peakHold,
+                 [this]
+                 {
+                     auto s = processor.getAnalyserSettings();
+                     s.peakHold = !s.peakHold;
+                     processor.setAnalyserSettings(s);
+                     repaintPlot();
+                 });
+
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this).withMinimumWidth(170));
 }
 
 void SpectrumDisplay::showDisplayMenu(juce::Point<float> position)

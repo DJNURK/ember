@@ -97,6 +97,31 @@ public:
         over one another; this sorts before reading edges off. */
     void getBandSpanHz(int band, float& lowHz, float& highHz) const noexcept;
 
+    /** How the analyser draws itself.
+
+        View settings, not parameters: they change nothing about the audio, so
+        automating them would be noise in a host's lane list. They still belong
+        in the session, because an analyser set to slow averaging and a 4.5 dB
+        tilt is a considered choice the user should not have to make twice. */
+    struct AnalyserSettings
+    {
+        int resolution{1}; ///< 0 low, 1 medium, 2 high
+        int averaging{1};  ///< 0 fast, 1 medium, 2 slow
+        int tiltIndex{1};  ///< 0 = flat, 1 = 3 dB/oct, 2 = 4.5 dB/oct
+        bool freeze{false};
+        bool peakHold{true};
+
+        /** Decibels per octave the tilt applies. */
+        [[nodiscard]] float tiltDbPerOctave() const noexcept
+        {
+            constexpr float values[] = {0.0f, 3.0f, 4.5f};
+            return values[juce::jlimit(0, 2, tiltIndex)];
+        }
+    };
+
+    AnalyserSettings getAnalyserSettings() const;
+    void setAnalyserSettings(const AnalyserSettings&);
+
     /** Which band the GUI has selected. Persisted with the plugin state. */
     int getSelectedBand() const noexcept { return selectedBand.load(std::memory_order_relaxed); }
     void setSelectedBand(int band) noexcept;
@@ -224,6 +249,8 @@ private:
     int activeSlot{0};
 
     std::atomic<int> selectedBand{0};
+    AnalyserSettings analyserSettings;
+    mutable juce::CriticalSection analyserLock;
     std::atomic<int> editorWidth{1100}, editorHeight{640};
 
     int controlCounter{0};

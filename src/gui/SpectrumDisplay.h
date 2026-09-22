@@ -189,6 +189,12 @@ private:
     /** Right-click menu: add a band here, distribute evenly, reset. */
     void showDisplayMenu(juce::Point<float> position);
 
+    /** The gear beside the mode selector: resolution, averaging, tilt, freeze
+        and peak-hold. */
+    void showAnalyserMenu();
+    juce::Rectangle<float> gearBounds(float scale) const;
+    void paintGear(juce::Graphics&, float scale) const;
+
     //==========================================================================
     juce::Rectangle<float> regionForBand(int band) const;
     int bandAt(juce::Point<float> position) const;

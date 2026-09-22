@@ -747,6 +747,15 @@ juce::ValueTree EmberAudioProcessor::captureFullState() const
     tree.setProperty("editorWidth", editorWidth.load(std::memory_order_relaxed), nullptr);
     tree.setProperty("editorHeight", editorHeight.load(std::memory_order_relaxed), nullptr);
 
+    {
+        const auto view = getAnalyserSettings();
+        tree.setProperty("analyserResolution", view.resolution, nullptr);
+        tree.setProperty("analyserAveraging", view.averaging, nullptr);
+        tree.setProperty("analyserTilt", view.tiltIndex, nullptr);
+        tree.setProperty("analyserFreeze", view.freeze, nullptr);
+        tree.setProperty("analyserPeakHold", view.peakHold, nullptr);
+    }
+
     tree.addChild(mutableApvts.copyState().createCopy(), -1, nullptr);
 
     auto mod = modulation.toValueTree();
@@ -817,6 +826,18 @@ void EmberAudioProcessor::restoreFullState(const juce::ValueTree& tree)
                       std::memory_order_relaxed);
     editorHeight.store(juce::jlimit(480, 2000, static_cast<int>(tree.getProperty("editorHeight", 640))),
                        std::memory_order_relaxed);
+
+    {
+        // Defaults match a fresh instance, so a session saved before these
+        // existed restores the analyser it was showing rather than a frozen one.
+        AnalyserSettings view;
+        view.resolution = juce::jlimit(0, 2, static_cast<int>(tree.getProperty("analyserResolution", 1)));
+        view.averaging = juce::jlimit(0, 2, static_cast<int>(tree.getProperty("analyserAveraging", 1)));
+        view.tiltIndex = juce::jlimit(0, 2, static_cast<int>(tree.getProperty("analyserTilt", 1)));
+        view.freeze = static_cast<bool>(tree.getProperty("analyserFreeze", false));
+        view.peakHold = static_cast<bool>(tree.getProperty("analyserPeakHold", true));
+        setAnalyserSettings(view);
+    }
 }
 
 void EmberAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
@@ -899,6 +920,20 @@ void EmberAudioProcessor::getBandSpanHz(int band, float& lowHz, float& highHz) c
 
     if (band < numEdges)
         highHz = edges[static_cast<size_t>(band)];
+}
+
+EmberAudioProcessor::AnalyserSettings EmberAudioProcessor::getAnalyserSettings() const
+{
+    const juce::ScopedLock lock{analyserLock};
+    return analyserSettings;
+}
+
+void EmberAudioProcessor::setAnalyserSettings(const AnalyserSettings& settings)
+{
+    // Message thread only, and read by the editor's timer on the same thread;
+    // the lock is for the state save, which can come from elsewhere.
+    const juce::ScopedLock lock{analyserLock};
+    analyserSettings = settings;
 }
 
 juce::AudioProcessorEditor* EmberAudioProcessor::createEditor()
