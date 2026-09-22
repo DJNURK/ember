@@ -56,7 +56,8 @@ public:
 
         // The ring: a full circle when finished, an arc while in progress.
         const auto total = juce::jmax(1, static_cast<int>(tour.steps.size()));
-        const auto fraction = completed ? 1.0f : juce::jlimit(0.0f, 1.0f, static_cast<float>(progress) / static_cast<float>(total));
+        const auto fraction =
+            completed ? 1.0f : juce::jlimit(0.0f, 1.0f, static_cast<float>(progress) / static_cast<float>(total));
 
         g.setColour(tk.panelEdge);
         g.drawEllipse(ringArea, 2.0f);
@@ -65,8 +66,8 @@ public:
         {
             juce::Path arc;
             arc.addCentredArc(ringArea.getCentreX(), ringArea.getCentreY(), ringArea.getWidth() * 0.5f,
-                              ringArea.getHeight() * 0.5f, 0.0f, 0.0f,
-                              juce::MathConstants<float>::twoPi * fraction, true);
+                              ringArea.getHeight() * 0.5f, 0.0f, 0.0f, juce::MathConstants<float>::twoPi * fraction,
+                              true);
             g.setColour(completed ? tk.ember : tk.ember.withAlpha(0.7f));
             g.strokePath(arc, juce::PathStrokeType(2.5f));
         }
@@ -187,8 +188,8 @@ private:
 
     static int heightOf(const Article& a)
     {
-        return 16 + (a.range.isNotEmpty() ? 13 : 0) + bodyHeight(a)
-               + (a.whenToUse.isNotEmpty() ? juce::jlimit(20, 48, a.whenToUse.length() / 4) : 0) + 16;
+        return 16 + (a.range.isNotEmpty() ? 13 : 0) + bodyHeight(a) +
+               (a.whenToUse.isNotEmpty() ? juce::jlimit(20, 48, a.whenToUse.length() / 4) : 0) + 16;
     }
 
     std::vector<const Article*> shown{Reference::search({})};

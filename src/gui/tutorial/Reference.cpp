@@ -12,12 +12,12 @@ juce::String Reference::kindOf(const juce::String& parameterID)
     {
         const juce::String p{prefix};
 
-        if (! parameterID.startsWith(p))
+        if (!parameterID.startsWith(p))
             continue;
 
         auto rest = parameterID.substring(p.length());
 
-        if (rest.isEmpty() || ! juce::CharacterFunctions::isDigit(rest[0]))
+        if (rest.isEmpty() || !juce::CharacterFunctions::isDigit(rest[0]))
             continue;
 
         int digits = 0;
@@ -136,9 +136,9 @@ std::vector<const Article*> Reference::search(const juce::String& term)
 
     for (const auto& article : articles())
     {
-        if (needle.isEmpty() || article.displayName.toLowerCase().contains(needle)
-            || article.kind.toLowerCase().contains(needle) || article.body.toLowerCase().contains(needle)
-            || article.whenToUse.toLowerCase().contains(needle))
+        if (needle.isEmpty() || article.displayName.toLowerCase().contains(needle) ||
+            article.kind.toLowerCase().contains(needle) || article.body.toLowerCase().contains(needle) ||
+            article.whenToUse.toLowerCase().contains(needle))
             result.push_back(&article);
     }
 

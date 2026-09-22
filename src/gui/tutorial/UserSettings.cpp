@@ -24,7 +24,7 @@ juce::var UserSettings::load()
 {
     const auto f = file();
 
-    if (! f.existsAsFile())
+    if (!f.existsAsFile())
         return juce::var(new juce::DynamicObject());
 
     const auto parsed = juce::JSON::parse(f.loadFileAsString());
@@ -41,7 +41,7 @@ void UserSettings::save(const juce::var& value)
     const auto f = file();
 
     // Best effort throughout: a plugin cannot assume it may write to disk.
-    if (! f.getParentDirectory().createDirectory())
+    if (!f.getParentDirectory().createDirectory())
         return;
 
     f.replaceWithText(juce::JSON::toString(value, false));
@@ -79,9 +79,9 @@ juce::DynamicObject* tourEntry(juce::var& settings, const juce::String& tourId, 
 
     auto tours = root->getProperty(kToursKey);
 
-    if (! tours.isObject())
+    if (!tours.isObject())
     {
-        if (! createIfMissing)
+        if (!createIfMissing)
             return nullptr;
 
         tours = juce::var(new juce::DynamicObject());
@@ -91,9 +91,9 @@ juce::DynamicObject* tourEntry(juce::var& settings, const juce::String& tourId, 
     auto* toursObject = tours.getDynamicObject();
     auto entry = toursObject->getProperty(tourId);
 
-    if (! entry.isObject())
+    if (!entry.isObject())
     {
-        if (! createIfMissing)
+        if (!createIfMissing)
             return nullptr;
 
         entry = juce::var(new juce::DynamicObject());
