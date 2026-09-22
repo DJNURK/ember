@@ -1,5 +1,6 @@
 #include "gui/SpectrumDisplay.h"
 #include "gui/EmberTheme.h"
+#include <limits>
 
 #include <cmath>
 
@@ -486,6 +487,7 @@ void SpectrumDisplay::paint(juce::Graphics& g)
 
     paintCrossovers(g, scale);
     paintDragReadout(g, scale);
+    paintMouseFrequency(g, scale);
     paintModeSelector(g, scale);
 }
 
@@ -931,6 +933,60 @@ void SpectrumDisplay::paintCrossovers(juce::Graphics& g, float scale) const
     }
 }
 
+namespace
+{
+/** The note nearest a frequency, as a name plus octave.
+
+    Engineers think in notes as often as in hertz - "the bass sits around E1"
+    is more useful than "41 Hz" when deciding where a crossover goes - and the
+    two together cost one line along the bottom of the plot. */
+juce::String noteNameFor(float hz)
+{
+    if (hz <= 0.0f)
+        return {};
+
+    static const char* names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+
+    // A4 = 440 Hz is MIDI note 69.
+    const auto midi = 69.0 + 12.0 * std::log2(static_cast<double>(hz) / 440.0);
+    const auto rounded = juce::roundToInt(midi);
+
+    if (rounded < 0 || rounded > 127)
+        return {};
+
+    return juce::String(names[rounded % 12]) + juce::String(rounded / 12 - 1);
+}
+} // namespace
+
+void SpectrumDisplay::paintMouseFrequency(juce::Graphics& g, float scale) const
+{
+    if (!mouseInPlot || draggedDivider >= 0 || plotArea.getWidth() < 120.0f)
+        return;
+
+    const auto& tk = EmberTheme::tokens();
+    const auto hz = frequencyForX(lastMousePosition.x);
+    const auto note = noteNameFor(hz);
+
+    juce::String text = note.isNotEmpty() ? note + "  " : juce::String();
+    text += hz >= 1000.0f ? juce::String(hz / 1000.0f, 2) + " kHz" : juce::String(juce::roundToInt(hz)) + " Hz";
+
+    const auto font = EmberFonts::get(EmberFonts::Role::micro, scale);
+    g.setFont(font);
+
+    const auto width = juce::GlyphArrangement::getStringWidth(font, text) + 10.0f;
+    const auto height = font.getHeight() + 4.0f;
+
+    auto box =
+        juce::Rectangle<float>(width, height).withCentre({lastMousePosition.x, plotArea.getBottom() - height * 0.75f});
+
+    box.setX(juce::jlimit(plotArea.getX(), juce::jmax(plotArea.getX(), plotArea.getRight() - width), box.getX()));
+
+    g.setColour(tk.bgDeep.withAlpha(0.8f));
+    g.fillRoundedRectangle(box, height * 0.4f);
+    g.setColour(tk.textDim);
+    g.drawText(text, box, juce::Justification::centred, false);
+}
+
 void SpectrumDisplay::paintDragReadout(juce::Graphics& g, float scale) const
 {
     if (draggedDivider < 0 || draggedDivider >= kMaxCrossovers)
@@ -1138,6 +1194,9 @@ void SpectrumDisplay::mouseMove(const juce::MouseEvent& e)
         repaint();
     }
 
+    lastMousePosition = e.position;
+    mouseInPlot = plotArea.contains(e.position);
+
     updateHover(e.position);
 }
 
@@ -1164,6 +1223,12 @@ void SpectrumDisplay::mouseDown(const juce::MouseEvent& e)
     if (const auto segment = modeSegmentAt(e.position, currentUiScale()); segment >= 0)
     {
         setDisplayMode(static_cast<DisplayMode>(segment));
+        return;
+    }
+
+    if (e.mods.isPopupMenu())
+    {
+        showDisplayMenu(e.position);
         return;
     }
 
@@ -1207,8 +1272,109 @@ void SpectrumDisplay::mouseDrag(const juce::MouseEvent& e)
     const float delta = (e.position.x - dragStartX) * (fine ? 0.22f : 1.0f);
     const float hz = dragStartHz * std::exp(logFrequencyRatio * delta / plotArea.getWidth());
 
-    setCrossover(draggedDivider, juce::jlimit(minFrequency, maxFrequency, hz));
+    // Alt snaps to musical anchor points. The list is the octave-ish spacing
+    // engineers already think in, not a uniform grid: 250 Hz and 500 Hz matter,
+    // 350 Hz does not.
+    float target = hz;
+
+    if (e.mods.isAltDown())
+    {
+        static constexpr float kSnapPoints[] = {60.0f, 120.0f, 250.0f, 500.0f, 1000.0f, 2000.0f, 4000.0f, 8000.0f};
+
+        float best = target;
+        float bestDistance = std::numeric_limits<float>::max();
+
+        for (const auto point : kSnapPoints)
+        {
+            // Nearest in log distance, because the axis is logarithmic and
+            // "nearest in Hz" would snap almost everything to 8 kHz.
+            const auto distance = std::abs(std::log(target / point));
+
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = point;
+            }
+        }
+
+        target = best;
+    }
+
+    target = juce::jlimit(minFrequency, maxFrequency, target);
+
+    if (e.mods.isCommandDown())
+    {
+        // Link: every crossover moves by the same musical interval, so the band
+        // layout keeps its proportions and only shifts up or down.
+        const auto ratio = target / juce::jmax(1.0f, crossoverHz[static_cast<size_t>(draggedDivider)]);
+
+        for (int i = 0; i < kMaxCrossovers; ++i)
+            if (i != draggedDivider)
+                setCrossover(i, juce::jlimit(minFrequency, maxFrequency, crossoverHz[static_cast<size_t>(i)] * ratio));
+    }
+
+    setCrossover(draggedDivider, target);
     repaintPlot();
+}
+
+void SpectrumDisplay::showDisplayMenu(juce::Point<float> position)
+{
+    const auto hz = frequencyForX(position.x);
+
+    juce::PopupMenu menu;
+    menu.setLookAndFeel(&getLookAndFeel());
+
+    const int active = numBands;
+    const bool canAdd = active < kMaxBands;
+
+    menu.addItem("Add band at " + (hz >= 1000.0f ? juce::String(hz / 1000.0f, 2) + " kHz"
+                                                 : juce::String(juce::roundToInt(hz)) + " Hz"),
+                 canAdd, false,
+                 [this, hz]
+                 {
+                     // Raising the band count adds an edge at the top; moving it
+                     // to the click is what makes "add a band here" mean here.
+                     if (auto* p = processor.getAPVTS().getParameter(pid::numBands))
+                     {
+                         const auto next = static_cast<float>(numBands + 1);
+                         p->beginChangeGesture();
+                         p->setValueNotifyingHost(p->convertTo0to1(next));
+                         p->endChangeGesture();
+                     }
+
+                     setCrossover(juce::jlimit(0, kMaxCrossovers - 1, numBands - 1),
+                                  juce::jlimit(minFrequency, maxFrequency, hz));
+                 });
+
+    menu.addItem("Distribute bands evenly", active > 1, false,
+                 [this]
+                 {
+                     // Even in log space, not in hertz: evenly spaced in hertz
+                     // puts five of six edges above 10 kHz and is useless.
+                     const int edges = juce::jmax(1, numBands - 1);
+
+                     for (int i = 0; i < edges; ++i)
+                     {
+                         const auto t = static_cast<float>(i + 1) / static_cast<float>(edges + 1);
+                         setCrossover(i, minFrequency * std::pow(maxFrequency / minFrequency, t));
+                     }
+                 });
+
+    menu.addSeparator();
+
+    menu.addItem("Reset crossovers", true, false,
+                 [this]
+                 {
+                     for (int i = 0; i < kMaxCrossovers; ++i)
+                         if (auto* p = crossoverParams[static_cast<size_t>(i)])
+                         {
+                             p->beginChangeGesture();
+                             p->setValueNotifyingHost(p->getDefaultValue());
+                             p->endChangeGesture();
+                         }
+                 });
+
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this).withMinimumWidth(180));
 }
 
 void SpectrumDisplay::mouseUp(const juce::MouseEvent& e)

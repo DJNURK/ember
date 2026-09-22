@@ -183,6 +183,12 @@ private:
     int modeSegmentAt(juce::Point<float>, float scale) const;
     void paintDragReadout(juce::Graphics&, float scale) const;
 
+    /** Note name and frequency under the mouse, along the bottom of the plot. */
+    void paintMouseFrequency(juce::Graphics&, float scale) const;
+
+    /** Right-click menu: add a band here, distribute evenly, reset. */
+    void showDisplayMenu(juce::Point<float> position);
+
     //==========================================================================
     juce::Rectangle<float> regionForBand(int band) const;
     int bandAt(juce::Point<float> position) const;
@@ -226,6 +232,8 @@ private:
 
     DisplayMode displayMode{DisplayMode::both};
     int hoveredModeSegment{-1};
+    juce::Point<float> lastMousePosition;
+    bool mouseInPlot{false};
 
     /** One per band, for drawing only - never processes audio. Configured from
         the same parameters the audio path uses, so the drawn curve cannot drift
