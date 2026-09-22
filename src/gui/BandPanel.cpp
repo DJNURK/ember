@@ -758,8 +758,26 @@ void BandPanel::resized()
     for (int band = 0; band < active; ++band)
         totalWeight += moduleWeight[idx(band)].getValue();
 
+    // The weights start at zero and only reach their targets once the motion
+    // clock has ticked, so the FIRST layout finds no width to share out. In a
+    // host that is one frame of an empty strip and nobody sees it; anywhere the
+    // clock never ticks - an offscreen render, a peer that never arrives - the
+    // strip stays empty forever, which is how this was found. The steady state
+    // must not depend on an animation running, so snap to it and carry on.
+    // Animation still applies to every later change, which is what it is for.
     if (totalWeight < 0.1f)
-        return;
+    {
+        totalWeight = 0.0f;
+
+        for (int band = 0; band < kMaxBands; ++band)
+            moduleWeight[idx(band)].snapToTarget();
+
+        for (int band = 0; band < active; ++band)
+            totalWeight += moduleWeight[idx(band)].getValue();
+
+        if (totalWeight < 0.1f)
+            return;
+    }
     const int available = strip.getWidth() - moduleGap * juce::jmax(0, active - 1);
 
     if (available < active * 24)

@@ -11,9 +11,9 @@ Nothing yet.
 
 ## [2.1.1] — 2026-09-22
 
-Fixes the four things 2.1.0 listed as known limitations. Each was documented
+Fixes the four things 2.1.0 listed as known limitations — each was documented
 rather than repaired, which is better than hiding them but not better than
-fixing them.
+fixing them — and one that nothing had listed at all.
 
 ### Fixed
 
@@ -29,6 +29,13 @@ fixing them.
 - **The XY pad's Y axis works.** A pad has two dimensions but a modulation
   source emits one value, and the axis selector defaulted to X with nothing
   able to change it. There is an **XY Axis** parameter now.
+- **The band strip cannot come up empty.** Every module's width came from an
+  animated weight starting at zero, so the first layout had nothing to share
+  out and gave up. A host ticks its display clock a frame later and fills the
+  strip, which is why this was never visible in use — but the steady state must
+  not depend on an animation having run, and anywhere the clock does not tick
+  the plugin's whole control surface stayed blank. The documentation
+  screenshots were rendered that way and have been retaken.
 
 ### Known
 

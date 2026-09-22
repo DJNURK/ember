@@ -10,6 +10,7 @@
 #include "gui/tutorial/TourLibrary.h"
 #include "gui/tutorial/TourTargets.h"
 #include "plugin/PluginEditor.h"
+#include "plugin/ParameterIDs.h"
 #include "plugin/PluginProcessor.h"
 
 using namespace ember;
@@ -38,6 +39,21 @@ bool findID(juce::Component& c, const juce::String& id)
             return true;
 
     return false;
+}
+
+/** The component claiming `id`, or nullptr. `findID` answers whether a tour's
+    target exists; this answers what it is, which is what a question about size
+    or visibility needs. */
+juce::Component* componentWithID(juce::Component& c, const juce::String& id)
+{
+    if (c.getComponentID() == id)
+        return &c;
+
+    for (auto* child : c.getChildren())
+        if (auto* found = componentWithID(*child, id))
+            return found;
+
+    return nullptr;
 }
 } // namespace
 
@@ -120,6 +136,51 @@ TEST_CASE("every tour target resolves to a real component", "[tutorials]")
          << missing.joinIntoString("\n") << "\n\navailable ids:\n"
          << available.joinIntoString("\n"));
     REQUIRE(missing.isEmpty());
+}
+
+TEST_CASE("the band strip lays out without the motion clock", "[tutorials][gui]")
+{
+    // Existing well before this test: every band module's width came from an
+    // `Animated` weight that starts at zero and only reaches its target once a
+    // `VBlankAttachment` frame has fired. The first layout therefore found no
+    // width to share out and returned early, leaving the strip empty.
+    //
+    // In a host that is one invisible frame. Anywhere the clock never ticks -
+    // an offscreen render, a peer that never arrives - it is permanent, and the
+    // plugin's entire control surface is a blank rectangle. Two releases of
+    // documentation screenshots shipped with that hole in them.
+    //
+    // No VBlank fires in this process either, which is exactly why the test can
+    // see it: the steady state must not depend on an animation having run.
+    EmberAudioProcessor processor;
+    processor.prepareToPlay(48000.0, 512);
+
+    std::unique_ptr<juce::AudioProcessorEditor> editor(processor.createEditor());
+    REQUIRE(editor != nullptr);
+
+    editor->setSize(1200, 720);
+    editor->setSize(1180, 700);
+
+    auto* bandCount = processor.getAPVTS().getRawParameterValue(ember::pid::numBands);
+    REQUIRE(bandCount != nullptr);
+
+    const int active = static_cast<int>(*bandCount);
+    REQUIRE(active >= 1);
+
+    for (int band = 0; band < active; ++band)
+    {
+        const auto id = TourTargets::bandDrive(band);
+        auto* drive = componentWithID(*editor, id);
+
+        INFO("band " << (band + 1) << " drive control '" << id << "'");
+        REQUIRE(drive != nullptr);
+
+        // Bounds, not just existence. The bug left every one of these present,
+        // parented and correct - and zero pixels wide.
+        REQUIRE(drive->getWidth() > 0);
+        REQUIRE(drive->getHeight() > 0);
+        REQUIRE(drive->isVisible());
+    }
 }
 
 TEST_CASE("every parameter a tour names exists", "[tutorials]")
