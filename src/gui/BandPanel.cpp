@@ -1,6 +1,7 @@
 #include "gui/BandPanel.h"
 #include "gui/EmberTheme.h"
 #include "gui/ToneEqPanel.h"
+#include "gui/tutorial/TourTargets.h"
 
 #include "dsp/styles/SaturationStyle.h"
 #include "plugin/ParameterIDs.h"
@@ -360,7 +361,22 @@ struct BandPanel::BandControls
         solo.setTooltip("Solo this band: every other band is muted.");
         EmberStyleProps::setAccentColour(solo, colour);
 
+        // Tour names, so a step can point at "band.2.drive" and have it mean
+        // the same control after any future relayout.
+        drive.setComponentID(tutorial::TourTargets::bandDrive(bandIndex));
+        mix.setComponentID(tutorial::TourTargets::bandMix(bandIndex));
+        level.setComponentID(tutorial::TourTargets::bandLevel(bandIndex));
+        pan.setComponentID(tutorial::TourTargets::bandPan(bandIndex));
+        width.setComponentID(tutorial::TourTargets::bandWidth(bandIndex));
+        styleBox.setComponentID(tutorial::TourTargets::bandStyle(bandIndex));
+        feedbackAmount.setComponentID(tutorial::TourTargets::bandFeedback(bandIndex));
+        feedbackFrequency.setComponentID(tutorial::TourTargets::bandFeedbackFreq(bandIndex));
+        dynamics.setComponentID(tutorial::TourTargets::bandDynamics(bandIndex));
+        bypass.setComponentID(tutorial::TourTargets::bandBypass(bandIndex));
+        solo.setComponentID(tutorial::TourTargets::bandSolo(bandIndex));
+
         toneEq = std::make_unique<ToneEqPanel>(processorToUse, bandIndex);
+        toneEq->setComponentID(tutorial::TourTargets::bandTone(bandIndex));
         owner.addChildComponent(toneEq.get());
         allComponents.add(toneEq.get());
 
@@ -560,11 +576,20 @@ void BandPanel::showControlsFor(int bandIndex)
     // Every active band is on screen now - the panel is a strip of modules, not
     // a single editor with five hidden twins. The selected one shows its full
     // control set; the rest keep Drive and their heat bar.
+    const int active = activeBandCount();
+
+    // Every active band's control set is created here, not on first selection.
+    // They are all on screen now - the strip shows each band as its own module
+    // - and a set that does not exist cannot be found by name, which broke
+    // tour steps pointing at an unselected band.
+    for (int band = 0; band < active; ++band)
+        controlsFor(band);
+
     for (int band = 0; band < kMaxBands; ++band)
     {
         if (auto* controls = bandControls[idx(band)].get())
         {
-            const bool active = band < activeBandCount();
+            const bool isActive = band < active;
 
             if (!active)
             {

@@ -12,7 +12,8 @@ add_executable(ember_tests
     test_modulation_stress.cpp
     test_theme.cpp
     test_heat.cpp
-    test_eq.cpp)
+    test_eq.cpp
+    test_tutorials.cpp)
 
 target_include_directories(ember_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 # test_theme greps the GUI sources for stray colour literals, so it needs to

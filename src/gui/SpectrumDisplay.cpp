@@ -1,5 +1,7 @@
 #include "gui/SpectrumDisplay.h"
 #include "gui/EmberTheme.h"
+#include "gui/tutorial/TourAnchor.h"
+#include "gui/tutorial/TourTargets.h"
 #include <limits>
 
 #include <cmath>
@@ -79,6 +81,21 @@ void resampleCurve(std::vector<float>& curve, int newSize, float fallback)
 //==============================================================================
 SpectrumDisplay::SpectrumDisplay(EmberAudioProcessor& processorToUse) : processor(processorToUse)
 {
+    setComponentID(tutorial::TourTargets::display);
+
+    // The mode selector, the analyser gear and the crossover handles are
+    // painted rather than built from components, so each gets an anchor the
+    // tour can point at.
+    addAndMakeVisible(modeAnchor);
+    addAndMakeVisible(gearAnchor);
+
+    for (int i = 0; i < kMaxCrossovers; ++i)
+    {
+        crossoverAnchors[static_cast<size_t>(i)] =
+            std::make_unique<tutorial::TourAnchor>(tutorial::TourTargets::crossover(i));
+        addAndMakeVisible(crossoverAnchors[static_cast<size_t>(i)].get());
+    }
+
     setOpaque(false);
     setWantsKeyboardFocus(false);
 
@@ -210,6 +227,21 @@ void SpectrumDisplay::resized()
     plotArea = area;
 
     rebuildColumns();
+
+    // Anchors follow the regions they stand for, so a spotlight lands on the
+    // control rather than near it.
+    const auto anchorScale = currentUiScale();
+    modeAnchor.setBounds(modeSelectorBounds(anchorScale).toNearestInt());
+    gearAnchor.setBounds(gearBounds(anchorScale).toNearestInt());
+
+    for (int i = 0; i < kMaxCrossovers; ++i)
+        if (auto& anchor = crossoverAnchors[static_cast<size_t>(i)])
+        {
+            const auto x = i < numBands - 1 ? xForFrequency(crossoverHz[static_cast<size_t>(i)]) : -1000.0f;
+            anchor->setBounds(juce::Rectangle<float>(18.0f, plotArea.getHeight())
+                                  .withCentre({x, plotArea.getCentreY()})
+                                  .toNearestInt());
+        }
 }
 
 void SpectrumDisplay::rebuildColumns()

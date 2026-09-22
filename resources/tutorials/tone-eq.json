@@ -1,0 +1,36 @@
+{
+  "id": "tone-eq",
+  "title": "Tone EQ",
+  "estimatedMinutes": 2,
+  "steps": [
+    {
+      "target": "band.1.tone",
+      "title": "The tone stage is a curve you drag",
+      "body": "Three nodes: a low shelf, a mid bell, a high shelf. Drag for gain and frequency, Alt-drag or scroll the mid node for Q, double-click to reset."
+    },
+    {
+      "target": "band.1.tone",
+      "title": "It only affects its own band",
+      "body": "The curve fades outside the band's frequency range because that is the only range it touches, and the nodes are clamped to it for the same reason.",
+      "hint": "Drag a node.",
+      "action": { "type": "parameterChanged", "parameter": "band1ToneLow" }
+    },
+    {
+      "target": "band.1.tone",
+      "title": "PRE and POST are different instruments",
+      "body": "Post-EQ shapes what came out of the saturator. Pre-EQ changes what goes in, and therefore which harmonics get generated at all. Boosting 3 kHz before a tube stage is not the same as boosting it after.",
+      "hint": "Switch to PRE.",
+      "action": { "type": "parameterChanged", "parameter": "band1TonePre" }
+    },
+    {
+      "target": "display.mode",
+      "title": "See every band's curve at once",
+      "body": "Switch the display to EQ or Both. Each band's curve appears in its own region and the nodes are draggable there too."
+    },
+    {
+      "target": "display",
+      "title": "The combined response",
+      "body": "The thicker line is every band's curve weighted by how much signal that band is actually carrying. A band with nothing in it does not bend the line, however its curve is set."
+    }
+  ]
+}

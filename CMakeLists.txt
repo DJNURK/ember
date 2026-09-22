@@ -87,11 +87,18 @@ file(GLOB EMBER_PRESET_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/reso
 # so Ember renders identically on Windows, macOS and Linux. Both are SIL Open
 # Font License 1.1; the licences ship beside them and are embedded too, which
 # is what the OFL requires of a binary redistribution.
+# Tours are data compiled into the binary: a tour is prose with a few hooks in
+# it, and writing one in C++ would put whoever knows the plugin behind a
+# compiler to fix a typo.
+file(GLOB EMBER_TUTORIAL_FILES CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/resources/tutorials/*.json")
+
 file(GLOB EMBER_FONT_FILES CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/resources/fonts/*.ttf"
      "${CMAKE_CURRENT_SOURCE_DIR}/resources/fonts/*OFL.txt")
 
-juce_add_binary_data(ember_resources SOURCES ${EMBER_PRESET_FILES} ${EMBER_FONT_FILES})
+juce_add_binary_data(ember_resources SOURCES ${EMBER_PRESET_FILES} ${EMBER_FONT_FILES}
+                                             ${EMBER_TUTORIAL_FILES})
 set_target_properties(ember_resources PROPERTIES POSITION_INDEPENDENT_CODE ON FOLDER "Ember")
 
 add_subdirectory(src)

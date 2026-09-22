@@ -1,5 +1,6 @@
 #include "gui/ModPanel.h"
 #include "gui/EmberTheme.h"
+#include "gui/tutorial/TourTargets.h"
 
 #include "dsp/modulation/ModSources.h"
 #include "dsp/modulation/ModTypes.h"
@@ -1570,6 +1571,9 @@ public:
 
         configure(sourcesButton, View::sources, "Sources");
         configure(matrixButton, View::matrix, "Matrix");
+
+        sourcesButton.setComponentID(tutorial::TourTargets::modSources);
+        matrixButton.setComponentID(tutorial::TourTargets::modMatrix);
 
         sourcesButton.setToggleState(true, juce::dontSendNotification);
 

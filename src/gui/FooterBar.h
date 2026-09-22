@@ -1,6 +1,8 @@
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "gui/Widgets.h"
+#include "gui/tutorial/TourAnchor.h"
+#include "gui/tutorial/TourTargets.h"
 
 namespace ember
 {
@@ -55,6 +57,8 @@ private:
 
     LabelledKnob inputKnob, outputKnob, mixKnob;
     EmberToggle autoGainToggle{{}, ToggleLook::pill};
+
+    tutorial::TourAnchor cpuAnchor{tutorial::TourTargets::footerCpu};
 
     juce::String hint;
     juce::Rectangle<int> hintArea, readoutArea;
