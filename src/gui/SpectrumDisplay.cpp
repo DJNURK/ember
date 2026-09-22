@@ -1620,6 +1620,20 @@ void SpectrumDisplay::mouseDrag(const juce::MouseEvent& e)
 
         scaled[static_cast<size_t>(draggedDivider)] = target;
 
+        // Scaling preserves the spacing only while nothing saturates. Drag the
+        // set into either rail and every edge beyond it lands on the same
+        // frequency - a band of zero width, which is what the spacing rule
+        // exists to prevent. So enforce it on the ARRAY, where each edge is
+        // checked against its neighbour's new position rather than its old one,
+        // and only then write.
+        for (int i = 1; i < kMaxCrossovers; ++i)
+            scaled[static_cast<size_t>(i)] =
+                juce::jmax(scaled[static_cast<size_t>(i)], scaled[static_cast<size_t>(i - 1)] * kMinCrossoverRatio);
+
+        for (int i = kMaxCrossovers - 2; i >= 0; --i)
+            scaled[static_cast<size_t>(i)] =
+                juce::jmin(scaled[static_cast<size_t>(i)], scaled[static_cast<size_t>(i + 1)] / kMinCrossoverRatio);
+
         for (int i = 0; i < kMaxCrossovers; ++i)
             setCrossoverUnclamped(i, scaled[static_cast<size_t>(i)]);
 

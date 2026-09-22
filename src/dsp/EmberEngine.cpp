@@ -22,10 +22,18 @@ void EmberEngine::prepare(const juce::dsp::ProcessSpec& spec)
     // reads these to know where each band begins and ends, and a host that
     // opens the window before transporting audio would otherwise find them
     // zero: band 0 spanning 20 Hz to 0 Hz, every other band 0 to 0.
-    publishedNumBands.store(activeNumBands, std::memory_order_relaxed);
+    //
+    // From globalParams, NOT from activeCrossover. The crossover's own
+    // frequencies are placeholders until it is given some - {100, 300, 900,
+    // 2500, 7000}, which are not the parameter defaults and not this session's
+    // edges. Publishing those would replace a layout that is obviously
+    // unpopulated with one that looks reasonable and is wrong. globalParams
+    // holds the real defaults before the first block and the last resolved
+    // values after it, which is right in both cases and survives a re-prepare.
+    publishedNumBands.store(juce::jlimit(kMinBands, kMaxBands, globalParams.numBands), std::memory_order_relaxed);
 
     for (int i = 0; i < kMaxCrossovers; ++i)
-        publishedEdges[static_cast<size_t>(i)].store(activeCrossover->getCrossoverFrequency(i),
+        publishedEdges[static_cast<size_t>(i)].store(globalParams.crossoverHz[static_cast<size_t>(i)],
                                                      std::memory_order_relaxed);
     previousCrossover = nullptr;
 

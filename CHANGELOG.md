@@ -82,13 +82,15 @@ checking the fix against real content.
   scales every edge by one ratio, which preserves their spacing, but each edge
   was still checked against its neighbour *as it stood* — an edge that had not
   moved yet. Dragging the set upwards, every edge was stopped by the old
-  position of the one above it.
+  position of the one above it. The spacing is now enforced across the whole
+  new layout before any of it is written, so dragging into either rail still
+  cannot stack two edges on one frequency.
 - **The editor never reads a band layout that has not been published.** Moving
   the span off the audio thread's struct left it reading zeroes until the first
   audio block, so a plugin opened before the transport rolled saw band 1 as
   20 Hz to 0 Hz. The layout is published when the engine is prepared as well,
-  and a span that still reads back inverted is refused rather than passed to a
-  clamp that would write 0 into a parameter.
+  from the parameter defaults rather than from the crossover's own placeholder
+  frequencies, which are neither the defaults nor the session's edges.
 - **Factory presets carry the XY axis they were authored with.** A parameter
   absent from a preset keeps whatever the last one set it to, so once you
   touched the new Axis control every preset using the XY source loaded with the

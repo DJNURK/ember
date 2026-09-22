@@ -174,7 +174,7 @@
     <PARAM id="xover5" value="11977.0"/>
     <PARAM id="xoverMode" value="0.0"/>
     <PARAM id="xyX" value="50.0"/>
-    <PARAM id="xyAxis" value="0.0"/>
     <PARAM id="xyY" value="50.0"/>
+    <PARAM id="xyAxis" value="0.0"/>
   </EMBER>
 </EMBER_PRESET>
