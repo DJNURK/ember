@@ -34,10 +34,7 @@ void EmberEngine::prepare(const juce::dsp::ProcessSpec& spec)
     const int bandLatency = static_cast<int>(std::ceil(bands[0].getLatencySamples()));
     latencySamples = bandLatency + activeCrossover->getLatencySamples();
 
-    globalDryDelay.prepare(
-        {sampleRate, static_cast<juce::uint32>(maxBlockSize), static_cast<juce::uint32>(numChannels)});
-    globalDryDelay.setMaximumDelayInSamples(juce::jmax(8, latencySamples + 8));
-    globalDryDelay.setDelay(static_cast<float>(latencySamples));
+    globalDryDelay.prepare(numChannels, latencySamples);
 
     const double smoothSeconds = 0.02;
     smoothedInputGain.reset(sampleRate, smoothSeconds);
@@ -106,8 +103,7 @@ void EmberEngine::setOversamplingQuality(bool linearPhase)
 
     const int bandLatency = static_cast<int>(std::ceil(bands[0].getLatencySamples()));
     latencySamples = bandLatency + activeCrossover->getLatencySamples();
-    globalDryDelay.setMaximumDelayInSamples(juce::jmax(8, latencySamples + 8));
-    globalDryDelay.setDelay(static_cast<float>(latencySamples));
+    globalDryDelay.prepare(numChannels, latencySamples);
 }
 
 void EmberEngine::setOversamplingFactor(OversamplingFactor factor)
@@ -120,8 +116,7 @@ void EmberEngine::setOversamplingFactor(OversamplingFactor factor)
 
     const int bandLatency = static_cast<int>(std::ceil(bands[0].getLatencySamples()));
     latencySamples = bandLatency + activeCrossover->getLatencySamples();
-    globalDryDelay.setMaximumDelayInSamples(juce::jmax(8, latencySamples + 8));
-    globalDryDelay.setDelay(static_cast<float>(latencySamples));
+    globalDryDelay.prepare(numChannels, latencySamples);
 }
 
 void EmberEngine::setCrossoverMode(CrossoverMode mode)
@@ -132,8 +127,7 @@ void EmberEngine::setCrossoverMode(CrossoverMode mode)
 
     const int bandLatency = static_cast<int>(std::ceil(bands[0].getLatencySamples()));
     latencySamples = bandLatency + activeCrossover->getLatencySamples();
-    globalDryDelay.setMaximumDelayInSamples(juce::jmax(8, latencySamples + 8));
-    globalDryDelay.setDelay(static_cast<float>(latencySamples));
+    globalDryDelay.prepare(numChannels, latencySamples);
 }
 
 int EmberEngine::getLatencySamples() const noexcept
@@ -149,6 +143,11 @@ float EmberEngine::getBandGainReductionDb(int band) const noexcept
 float EmberEngine::getBandLevel(int band) const noexcept
 {
     return band >= 0 && band < kMaxBands ? bandLevels[static_cast<size_t>(band)].load(std::memory_order_relaxed) : 0.0f;
+}
+
+float EmberEngine::getBandHeatRatio(int band) const noexcept
+{
+    return band >= 0 && band < kMaxBands ? bands[static_cast<size_t>(band)].getHeatRatio() : 1.0f;
 }
 
 void EmberEngine::setParameters(const GlobalParams& global, const BandParams* bandsIn, int numBandParams) noexcept
@@ -258,18 +257,7 @@ void EmberEngine::process(juce::AudioBuffer<float>& buffer) noexcept
     for (int ch = 0; ch < numCh; ++ch)
         dryBuffer.copyFrom(ch, 0, buffer, ch, 0, numSamples);
 
-    if (latencySamples > 0)
-    {
-        for (int ch = 0; ch < numCh; ++ch)
-        {
-            auto* d = dryBuffer.getWritePointer(ch);
-            for (int i = 0; i < numSamples; ++i)
-            {
-                globalDryDelay.pushSample(ch, d[i]);
-                d[i] = globalDryDelay.popSample(ch);
-            }
-        }
-    }
+    globalDryDelay.process(dryBuffer.getArrayOfWritePointers(), numCh, numSamples);
 
     // ---- mid/side encode ----
     const bool midSide = (globalParams.stereoMode == StereoMode::MidSide) && numCh >= 2;

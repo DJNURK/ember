@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include "TestHelpers.h"
 #include "dsp/BandChain.h"
+#include "dsp/PolyphaseOversampler.h"
 #include "dsp/styles/SaturationStyle.h"
 
 using namespace ember;
@@ -112,5 +113,82 @@ TEST_CASE("the other hard-edged styles are also anti-aliased", "[aliasing]")
         const float aliasDb = runAndMeasure(OversamplingFactor::x16, style, 24.0f);
         INFO(getStyleName(style) << " alias floor: " << aliasDb << " dB");
         REQUIRE(aliasDb < -60.0f);
+    }
+}
+
+TEST_CASE("the polyphase oversampler matches the JUCE one it replaced", "[aliasing][oversampling]")
+{
+    // The realtime oversampler is hand-written (see PolyphaseOversampler.h) so
+    // that the two polyphase cascades and the two channels can run as four
+    // lanes of one register instead of four separate passes. It is only allowed
+    // to be faster: the filters, the recursion and the latency compensation are
+    // meant to be JUCE's, to the bit.
+    //
+    // That is worth pinning down, because nothing else in the suite would
+    // notice if it drifted. The alias gate above passes with 8 dB of margin and
+    // would swallow a coefficient wrong in the seventh place; the dry/wet comb
+    // that a half-sample of latency error produces is not measured anywhere.
+    //
+    // A hard clipper sits between the up and the down pass so the downsampling
+    // filters see full-band content rather than a signal their own stopband has
+    // already removed.
+    for (int numChannels : {1, 2})
+    {
+        for (int numStages = 1; numStages <= 4; ++numStages)
+        {
+            constexpr int block = 512;
+
+            PolyphaseOversampler mine;
+            mine.prepare(numChannels, numStages, block);
+
+            juce::dsp::Oversampling<float> theirs(static_cast<size_t>(numChannels), static_cast<size_t>(numStages),
+                                                  juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true,
+                                                  true);
+            theirs.initProcessing(static_cast<size_t>(block));
+            theirs.reset();
+
+            INFO("channels = " << numChannels << ", stages = " << numStages);
+            REQUIRE(mine.getLatencyInSamples() == static_cast<float>(theirs.getLatencyInSamples()));
+
+            juce::AudioBuffer<float> a(numChannels, block), b(numChannels, block);
+            float worst = 0.0f;
+
+            for (int pass = 0; pass < 8; ++pass)
+            {
+                fillWhiteNoise(a, 0x5eedu + static_cast<uint32_t>(pass), 0.8f);
+                b.makeCopyOf(a);
+
+                auto blockA = juce::dsp::AudioBlock<float>(a);
+                auto blockB = juce::dsp::AudioBlock<float>(b);
+
+                auto upA = mine.processSamplesUp(juce::dsp::AudioBlock<const float>(blockA));
+                auto upB = theirs.processSamplesUp(juce::dsp::AudioBlock<const float>(blockB));
+
+                REQUIRE(upA.getNumSamples() == upB.getNumSamples());
+
+                for (size_t ch = 0; ch < static_cast<size_t>(numChannels); ++ch)
+                {
+                    auto* pa = upA.getChannelPointer(ch);
+                    auto* pb = upB.getChannelPointer(ch);
+
+                    for (size_t i = 0; i < upA.getNumSamples(); ++i)
+                    {
+                        worst = juce::jmax(worst, std::abs(pa[i] - pb[i]));
+                        pa[i] = juce::jlimit(-1.0f, 1.0f, pa[i]);
+                        pb[i] = juce::jlimit(-1.0f, 1.0f, pb[i]);
+                    }
+                }
+
+                mine.processSamplesDown(blockA);
+                theirs.processSamplesDown(blockB);
+
+                for (int ch = 0; ch < numChannels; ++ch)
+                    for (int i = 0; i < block; ++i)
+                        worst = juce::jmax(worst, std::abs(a.getSample(ch, i) - b.getSample(ch, i)));
+            }
+
+            INFO("worst difference against juce::dsp::Oversampling: " << worst);
+            REQUIRE(worst == 0.0f);
+        }
     }
 }

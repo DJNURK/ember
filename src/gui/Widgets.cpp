@@ -1,4 +1,5 @@
 #include "gui/Widgets.h"
+#include "gui/EmberTheme.h"
 
 #include <cmath>
 
@@ -177,7 +178,12 @@ void ModulatableKnob::paint(juce::Graphics& g)
     const auto rotary = getRotaryParameters();
     const float startAngle = rotary.startAngleRadians;
     const float endAngle = rotary.endAngleRadians;
-    const auto accent = EmberStyleProps::accentColourFor(*this);
+    // The modulation ring is cool while the value arc beneath it is warm. That
+    // is the redesign's one colour rule - warm is audio, cool is control - and
+    // it is what lets you tell, on a knob that is moving, whether you moved it
+    // or something else did.
+    const auto modColour = EmberTheme::tokens().cold;
+
     const juce::PathStrokeType ringStroke(geo.modRingThickness, juce::PathStrokeType::curved,
                                           juce::PathStrokeType::rounded);
 
@@ -185,7 +191,7 @@ void ModulatableKnob::paint(juce::Graphics& g)
     {
         // The full ring says "this destination is assigned" even when every
         // source happens to be sitting still.
-        g.setColour(accent.withAlpha(0.16f));
+        g.setColour(modColour.withAlpha(0.20f));
         g.strokePath(EmberLookAndFeel::arcPath(geo.centre, geo.modRingRadius, startAngle, endAngle), ringStroke);
 
         const float valueProportion = static_cast<float>(valueToProportionOfLength(getValue()));
@@ -194,7 +200,7 @@ void ModulatableKnob::paint(juce::Graphics& g)
 
         if (high - low > 1.0e-3f)
         {
-            g.setColour(accent.withAlpha(0.6f));
+            g.setColour(modColour.withAlpha(0.7f));
             g.strokePath(EmberLookAndFeel::arcPath(geo.centre, geo.modRingRadius,
                                                    EmberLookAndFeel::rotaryAngle(low, startAngle, endAngle),
                                                    EmberLookAndFeel::rotaryAngle(high, startAngle, endAngle)),
@@ -206,7 +212,7 @@ void ModulatableKnob::paint(juce::Graphics& g)
             geo.modRingRadius, EmberLookAndFeel::rotaryAngle(live, startAngle, endAngle));
         const float markerRadius = juce::jmax(1.6f, geo.modRingThickness * 0.85f);
 
-        g.setColour(accent);
+        g.setColour(modColour);
         g.fillEllipse(juce::Rectangle<float>(markerRadius * 2.0f, markerRadius * 2.0f).withCentre(marker));
     }
 
@@ -216,15 +222,17 @@ void ModulatableKnob::paint(juce::Graphics& g)
     if (midiLearning)
     {
         const float pulse = 0.35f + 0.35f * std::sin(learnPhase);
-        g.setColour(EmberColours::accent.withAlpha(pulse));
+        g.setColour(EmberColours::accent().withAlpha(pulse));
         g.drawEllipse(outerCircle.reduced(1.0f), 2.0f);
     }
 
     if (dragHighlight)
     {
-        g.setColour(accent.withAlpha(0.18f));
+        // A valid drop target, highlighted cool: what is being dropped is a
+        // modulation source, so the invitation is a control-coloured one.
+        g.setColour(modColour.withAlpha(0.22f));
         g.fillEllipse(outerCircle);
-        g.setColour(accent);
+        g.setColour(modColour);
         g.drawEllipse(outerCircle.reduced(1.0f), 2.0f);
     }
 }
@@ -519,7 +527,7 @@ ParameterValueLabel::ParameterValueLabel(juce::AudioProcessorValueTreeState& sta
     setEditable(false, true, false); // double-click to type a value
     setFont(EmberFonts::get(EmberFonts::Role::value));
     setMinimumHorizontalScale(0.7f);
-    setColour(juce::Label::textColourId, EmberColours::textPrimary);
+    setColour(juce::Label::textColourId, EmberColours::textPrimary());
     setBorderSize({0, 2, 0, 2});
 
     if (parameter != nullptr)
@@ -585,31 +593,31 @@ void EmberButton::applyStyleColours()
     switch (style)
     {
     case Style::neutral:
-        setColour(juce::TextButton::buttonColourId, EmberColours::panelRaised);
-        setColour(juce::TextButton::buttonOnColourId, EmberColours::accentDim);
-        setColour(juce::TextButton::textColourOffId, EmberColours::textSecondary);
-        setColour(juce::TextButton::textColourOnId, EmberColours::textPrimary);
+        setColour(juce::TextButton::buttonColourId, EmberColours::panelRaised());
+        setColour(juce::TextButton::buttonOnColourId, EmberColours::accentDim());
+        setColour(juce::TextButton::textColourOffId, EmberColours::textSecondary());
+        setColour(juce::TextButton::textColourOnId, EmberColours::textPrimary());
         break;
 
     case Style::accent:
-        setColour(juce::TextButton::buttonColourId, EmberColours::accentDim);
-        setColour(juce::TextButton::buttonOnColourId, EmberColours::accent);
-        setColour(juce::TextButton::textColourOffId, EmberColours::textPrimary);
-        setColour(juce::TextButton::textColourOnId, EmberColours::backgroundDeep);
+        setColour(juce::TextButton::buttonColourId, EmberColours::accentDim());
+        setColour(juce::TextButton::buttonOnColourId, EmberColours::accent());
+        setColour(juce::TextButton::textColourOffId, EmberColours::textPrimary());
+        setColour(juce::TextButton::textColourOnId, EmberColours::backgroundDeep());
         break;
 
     case Style::ghost:
         setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
-        setColour(juce::TextButton::buttonOnColourId, EmberColours::panelRaised);
-        setColour(juce::TextButton::textColourOffId, EmberColours::textSecondary);
-        setColour(juce::TextButton::textColourOnId, EmberColours::textPrimary);
+        setColour(juce::TextButton::buttonOnColourId, EmberColours::panelRaised());
+        setColour(juce::TextButton::textColourOffId, EmberColours::textSecondary());
+        setColour(juce::TextButton::textColourOnId, EmberColours::textPrimary());
         break;
 
     case Style::danger:
-        setColour(juce::TextButton::buttonColourId, EmberColours::panelRaised);
-        setColour(juce::TextButton::buttonOnColourId, EmberColours::warning.withMultipliedBrightness(0.6f));
-        setColour(juce::TextButton::textColourOffId, EmberColours::warning);
-        setColour(juce::TextButton::textColourOnId, EmberColours::textPrimary);
+        setColour(juce::TextButton::buttonColourId, EmberColours::panelRaised());
+        setColour(juce::TextButton::buttonOnColourId, EmberColours::warning().withMultipliedBrightness(0.6f));
+        setColour(juce::TextButton::textColourOffId, EmberColours::warning());
+        setColour(juce::TextButton::textColourOnId, EmberColours::textPrimary());
         break;
     }
 }
@@ -618,7 +626,7 @@ void EmberButton::applyStyleColours()
 EmberToggle::EmberToggle(const juce::String& buttonText, ToggleLook look) : juce::ToggleButton(buttonText)
 {
     EmberStyleProps::setToggleLook(*this, look);
-    setColour(juce::ToggleButton::textColourId, EmberColours::textSecondary);
+    setColour(juce::ToggleButton::textColourId, EmberColours::textSecondary());
 }
 
 EmberToggle::~EmberToggle() = default;
@@ -664,7 +672,7 @@ int EmberToggle::preferredWidth() const
 EmberComboBox::EmberComboBox()
 {
     setJustificationType(juce::Justification::centredLeft);
-    setColour(juce::ComboBox::textColourId, EmberColours::textPrimary);
+    setColour(juce::ComboBox::textColourId, EmberColours::textPrimary());
 }
 
 EmberComboBox::~EmberComboBox() = default;
@@ -750,7 +758,7 @@ void SectionHeader::paint(juce::Graphics& g)
         const float trailingWidth = juce::GlyphArrangement::getStringWidth(trailingFont, trailing) + 4.0f;
 
         g.setFont(trailingFont);
-        g.setColour(EmberColours::textDisabled);
+        g.setColour(EmberColours::textDisabled());
         g.drawText(trailing, remaining.removeFromRight(juce::jmin(trailingWidth, remaining.getWidth())),
                    juce::Justification::centredRight, false);
     }
@@ -762,7 +770,7 @@ void SectionHeader::paint(juce::Graphics& g)
         const float titleWidth = juce::GlyphArrangement::getStringWidth(titleFont, upper) + 3.0f;
 
         g.setFont(titleFont);
-        g.setColour(EmberColours::textSecondary);
+        g.setColour(EmberColours::textSecondary());
         g.drawText(upper, remaining.removeFromLeft(juce::jmin(titleWidth, remaining.getWidth())),
                    juce::Justification::centredLeft, false);
     }
@@ -770,7 +778,7 @@ void SectionHeader::paint(juce::Graphics& g)
     const auto rule = remaining.withTrimmedLeft(gap).withTrimmedRight(gap);
 
     if (rule.getWidth() > 4.0f)
-        EmberLookAndFeel::drawHairline(g, rule, EmberColours::outlineStrong);
+        EmberLookAndFeel::drawHairline(g, rule, EmberColours::outlineStrong());
 }
 
 //==============================================================================
@@ -888,7 +896,7 @@ void LevelMeter::paint(juce::Graphics& g)
     if (bar.getWidth() > 0.3f && bar.getHeight() > 0.3f)
     {
         const bool hot = !reduction && currentNormalised > 0.93f;
-        g.setColour(hot ? EmberColours::warning : accent);
+        g.setColour(hot ? EmberColours::warning() : accent);
         g.fillRect(bar);
     }
 
@@ -904,7 +912,7 @@ void LevelMeter::paint(juce::Graphics& g)
                 : juce::Rectangle<float>(reduction ? peakBar.getX() : peakBar.getRight() - thickness, inner.getY(),
                                          thickness, inner.getHeight());
 
-        g.setColour(EmberColours::textPrimary.withAlpha(0.75f));
+        g.setColour(EmberColours::textPrimary().withAlpha(0.75f));
         g.fillRect(tick.getIntersection(inner));
     }
 }
@@ -916,7 +924,7 @@ LabelledKnob::LabelledKnob(EmberAudioProcessor& processorToUse, const juce::Stri
 {
     captionLabel.setJustificationType(juce::Justification::centred);
     captionLabel.setInterceptsMouseClicks(false, false);
-    captionLabel.setColour(juce::Label::textColourId, EmberColours::textSecondary);
+    captionLabel.setColour(juce::Label::textColourId, EmberColours::textSecondary());
     captionLabel.setMinimumHorizontalScale(0.7f);
 
     setCaption(caption.isNotEmpty()

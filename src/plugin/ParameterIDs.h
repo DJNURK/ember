@@ -33,6 +33,15 @@ juce::String dynamics(int band);
 juce::String toneLow(int band);
 juce::String toneMid(int band);
 juce::String toneHigh(int band);
+
+// The tone stage's node positions and routing. These were fixed constants
+// until the tone stage became a draggable node editor.
+juce::String toneLowHz(int band);
+juce::String toneMidHz(int band);
+juce::String toneMidQ(int band);
+juce::String toneHighHz(int band);
+juce::String tonePre(int band);
+juce::String toneBypass(int band);
 juce::String bypass(int band);
 juce::String solo(int band);
 

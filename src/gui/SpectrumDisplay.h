@@ -8,6 +8,7 @@
 #include "dsp/EmberTypes.h"
 #include "dsp/SpectrumFifo.h"
 #include "gui/EmberLookAndFeel.h"
+#include "dsp/BandFx.h"
 #include "plugin/PluginProcessor.h"
 
 /**
@@ -67,6 +68,10 @@ public:
         zero-based. The processor's own selection has already been updated. */
     std::function<void(int)> onBandSelected;
 
+    /** The mouse is over a band's EQ node, or has left one (-1). The editor
+        uses it to light the matching band module. */
+    std::function<void(int bandIndex)> onEqNodeHovered;
+
     //==========================================================================
     /** Frame rate for polling and repainting, clamped to 15..60 Hz.
         Default: 50. */
@@ -102,6 +107,23 @@ public:
     /** The rectangle the curves and band regions are drawn in — everything
         except the frequency scale along the bottom. */
     juce::Rectangle<float> getPlotArea() const noexcept { return plotArea; }
+
+    /** What the display is showing.
+
+        The analyser and the EQ curves answer different questions - "what is in
+        the signal" and "what am I doing to it" - and drawn together at full
+        strength they fight for the same pixels. Both is the default because
+        the two together are how you work; either alone is for when one of them
+        is in the way. */
+    enum class DisplayMode
+    {
+        spectrum = 0,
+        eq,
+        both
+    };
+
+    void setDisplayMode(DisplayMode);
+    DisplayMode getDisplayMode() const noexcept { return displayMode; }
 
     //==========================================================================
     juce::String getTooltip() override;
@@ -153,7 +175,54 @@ private:
     void paintGrid(juce::Graphics&, float scale) const;
     void paintSpectra(juce::Graphics&, float scale); // not const: reuses the cached paths
     void paintCrossovers(juce::Graphics&, float scale) const;
+
+    /** Every band's tone curve in its own region, plus the combined response.
+        Not const: it reconfigures the per-band drawing filters. */
+    void paintEqOverlay(juce::Graphics&, float scale);
+
+    /** The Spectrum / EQ / Both selector, top-right of the plot. A painted hit
+        region rather than a child component, like the EQ panel's chips. */
+    void paintModeSelector(juce::Graphics&, float scale) const;
+    juce::Rectangle<float> modeSelectorBounds(float scale) const;
+    int modeSegmentAt(juce::Point<float>, float scale) const;
     void paintDragReadout(juce::Graphics&, float scale) const;
+
+    /** Note name and frequency under the mouse, along the bottom of the plot. */
+    void paintMouseFrequency(juce::Graphics&, float scale) const;
+
+    /** Right-click menu: add a band here, distribute evenly, reset. */
+    void showDisplayMenu(juce::Point<float> position);
+
+    /** One EQ node on the big display: which band owns it, and which of its
+        three it is. */
+    struct EqNodeRef
+    {
+        int band{-1};
+        int node{-1};
+
+        [[nodiscard]] bool isValid() const noexcept { return band >= 0 && node >= 0; }
+        [[nodiscard]] bool operator==(const EqNodeRef& other) const noexcept
+        {
+            return band == other.band && node == other.node;
+        }
+    };
+
+    /** The EQ overlay's own vertical scale, which is +/-12 dB rather than the
+        analyser's 80 dB: a 6 dB shelf on an 80 dB scale is a flat line. */
+    float yForEqDecibels(float db) const;
+    float eqDecibelsForY(float y) const;
+
+    juce::Point<float> eqNodePosition(int band, int node) const;
+    EqNodeRef eqNodeAt(juce::Point<float>) const;
+    juce::RangedAudioParameter* eqNodeGain(int band, int node) const;
+    juce::RangedAudioParameter* eqNodeFreq(int band, int node) const;
+    void paintEqNodes(juce::Graphics&, float scale) const;
+
+    /** The gear beside the mode selector: resolution, averaging, tilt, freeze
+        and peak-hold. */
+    void showAnalyserMenu();
+    juce::Rectangle<float> gearBounds(float scale) const;
+    void paintGear(juce::Graphics&, float scale) const;
 
     //==========================================================================
     juce::Rectangle<float> regionForBand(int band) const;
@@ -195,6 +264,20 @@ private:
 
     // Geometry, recomputed in resized().
     juce::Rectangle<float> plotArea;
+
+    DisplayMode displayMode{DisplayMode::both};
+    EqNodeRef hoveredEqNode;
+    EqNodeRef draggedEqNode;
+    int hoveredModeSegment{-1};
+    juce::Point<float> lastMousePosition;
+    bool mouseInPlot{false};
+
+    /** One per band, for drawing only - never processes audio. Configured from
+        the same parameters the audio path uses, so the drawn curve cannot drift
+        from the filters. */
+    std::array<ToneStack, static_cast<size_t>(kMaxBands)> toneDrawing;
+    std::array<juce::Path, static_cast<size_t>(kMaxBands)> tonePaths;
+    juce::Path combinedPath;
     juce::Rectangle<float> axisArea;
 
     // Paint-path scratch. Held between frames so a 50 Hz repaint reuses the

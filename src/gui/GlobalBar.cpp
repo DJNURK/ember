@@ -1,4 +1,5 @@
 #include "gui/GlobalBar.h"
+#include "gui/EmberTheme.h"
 #include "plugin/ParameterIDs.h"
 
 #include <algorithm>
@@ -91,7 +92,7 @@ void drawCopyIcon(juce::Graphics& g, juce::Rectangle<float> area, juce::Colour c
 
     const auto front = shape.withCentre({centre.x + offset, centre.y + offset});
 
-    g.setColour(EmberColours::panelRaised);
+    g.setColour(EmberColours::panelRaised());
     g.fillRoundedRectangle(front, corner);
     g.setColour(colour);
     g.drawRoundedRectangle(front, corner, thickness);
@@ -123,8 +124,8 @@ void drawMoreIcon(juce::Graphics& g, juce::Rectangle<float> area, juce::Colour c
 IconButton::IconButton(Icon iconToDraw, const juce::String& componentName)
     : juce::Button(componentName), icon(iconToDraw)
 {
-    setColour(juce::TextButton::buttonColourId, EmberColours::panelRaised);
-    setColour(juce::TextButton::buttonOnColourId, EmberColours::accentDim);
+    setColour(juce::TextButton::buttonColourId, EmberColours::panelRaised());
+    setColour(juce::TextButton::buttonOnColourId, EmberColours::accentDim());
 }
 
 IconButton::~IconButton() = default;
@@ -145,14 +146,14 @@ void IconButton::paintButton(juce::Graphics& g, bool shouldDrawButtonAsHighlight
 
     getLookAndFeel().drawButtonBackground(g, *this, background, shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
 
-    auto colour = EmberColours::textSecondary;
+    auto colour = EmberColours::textSecondary();
 
     if (!isEnabled())
-        colour = EmberColours::textDisabled;
+        colour = EmberColours::textDisabled();
     else if (getToggleState())
-        colour = EmberColours::textPrimary;
+        colour = EmberColours::textPrimary();
     else if (shouldDrawButtonAsDown || shouldDrawButtonAsHighlighted)
-        colour = EmberColours::textPrimary;
+        colour = EmberColours::textPrimary();
 
     const auto area = getLocalBounds().toFloat().reduced(juce::jmax(2.0f, static_cast<float>(getHeight()) * 0.22f));
 
@@ -399,7 +400,7 @@ void BandCountSelector::paint(juce::Graphics& g)
         const bool hovered = (hoveredSegment == i) && isEnabled();
         const float corner = juce::jmax(1.5f, chip.getHeight() * 0.22f);
 
-        auto fill = lit ? EmberColours::bandDim(i) : EmberColours::panel;
+        auto fill = lit ? EmberColours::bandDim(i) : EmberColours::panel();
 
         if (hovered)
             fill = fill.brighter(0.18f);
@@ -414,11 +415,11 @@ void BandCountSelector::paint(juce::Graphics& g)
         }
         else if (hovered)
         {
-            g.setColour(EmberColours::outlineStrong);
+            g.setColour(EmberColours::outlineStrong());
             g.drawRoundedRectangle(chip.reduced(0.5f), corner, 1.0f);
         }
 
-        g.setColour(lit ? EmberColours::textPrimary : EmberColours::textDisabled);
+        g.setColour(lit ? EmberColours::textPrimary() : EmberColours::textDisabled());
         g.setFont(lit ? litFont : unlitFont);
         g.drawText(juce::String(i + 1), chip, juce::Justification::centred, false);
     }
@@ -474,12 +475,12 @@ void LatencyReadout::paint(juce::Graphics& g)
     {
         auto right = inner.removeFromRight(samplesWidth);
         g.setFont(unitFont);
-        g.setColour(EmberColours::textSecondary);
+        g.setColour(EmberColours::textSecondary());
         g.drawText(samplesText, right, juce::Justification::centredRight, false);
     }
 
     g.setFont(valueFont);
-    g.setColour(latencySamples > 0 ? EmberColours::textPrimary : EmberColours::textSecondary);
+    g.setColour(latencySamples > 0 ? EmberColours::textPrimary() : EmberColours::textSecondary());
     g.drawText(milliseconds, inner, roomForBoth ? juce::Justification::centredLeft : juce::Justification::centred,
                false);
 }
@@ -552,10 +553,10 @@ void MidiLearnBanner::paint(juce::Graphics& g)
     const float corner = juce::jlimit(3.0f, 12.0f, bounds.getHeight() * 0.12f);
     const float pulse = 0.5f + 0.5f * std::sin(pulsePhase);
 
-    g.setColour(EmberColours::backgroundDeep.withAlpha(0.94f));
+    g.setColour(EmberColours::backgroundDeep().withAlpha(0.94f));
     g.fillRoundedRectangle(bounds, corner);
 
-    g.setColour(EmberColours::accent.withAlpha(0.3f + 0.55f * pulse));
+    g.setColour(EmberColours::accent().withAlpha(0.3f + 0.55f * pulse));
     g.drawRoundedRectangle(bounds.reduced(0.5f), corner, juce::jmax(1.0f, 1.4f * uiScale));
 
     auto area = bounds.reduced(10.0f * uiScale, 6.0f * uiScale);
@@ -564,9 +565,9 @@ void MidiLearnBanner::paint(juce::Graphics& g)
     const float lamp = juce::jlimit(6.0f, 16.0f, area.getHeight() * 0.3f);
     auto lampArea = area.removeFromLeft(lamp * 2.0f);
 
-    g.setColour(EmberColours::accentGlow.withAlpha(0.15f + 0.35f * pulse));
+    g.setColour(EmberColours::accentGlow().withAlpha(0.15f + 0.35f * pulse));
     g.fillEllipse(juce::Rectangle<float>(lamp * 2.0f, lamp * 2.0f).withCentre(lampArea.getCentre()));
-    g.setColour(EmberColours::accent.withAlpha(0.55f + 0.45f * pulse));
+    g.setColour(EmberColours::accent().withAlpha(0.55f + 0.45f * pulse));
     g.fillEllipse(juce::Rectangle<float>(lamp, lamp).withCentre(lampArea.getCentre()));
 
     // Keep clear of the cancel button.
@@ -592,17 +593,17 @@ void MidiLearnBanner::paint(juce::Graphics& g)
         auto top = area.removeFromTop(area.getHeight() * 0.54f);
 
         g.setFont(EmberFonts::get(EmberFonts::Role::body, uiScale));
-        g.setColour(EmberColours::textPrimary);
+        g.setColour(EmberColours::textPrimary());
         g.drawFittedText(headline, top.toNearestInt(), juce::Justification::bottomLeft, 1, 0.75f);
 
         g.setFont(EmberFonts::get(EmberFonts::Role::micro, uiScale));
-        g.setColour(EmberColours::textSecondary);
+        g.setColour(EmberColours::textSecondary());
         g.drawFittedText(detail, area.toNearestInt(), juce::Justification::topLeft, 1, 0.75f);
     }
     else
     {
         g.setFont(EmberFonts::get(EmberFonts::Role::label, uiScale));
-        g.setColour(EmberColours::textPrimary);
+        g.setColour(EmberColours::textPrimary());
         g.drawFittedText(headline + "   " + detail, area.toNearestInt(), juce::Justification::centredLeft, 1, 0.7f);
     }
 }
@@ -757,6 +758,21 @@ void GlobalBar::lookAndFeelChanged()
 }
 
 //==============================================================================
+void GlobalBar::setIoSectionVisible(bool shouldBeVisible)
+{
+    if (showIoSection == shouldBeVisible)
+        return;
+
+    showIoSection = shouldBeVisible;
+
+    const std::initializer_list<juce::Component*> io{&inputKnob, &outputKnob, &mixKnob, &autoGainToggle};
+
+    for (auto* component : io)
+        component->setVisible(shouldBeVisible);
+
+    resized();
+}
+
 void GlobalBar::timerCallback()
 {
     refreshFromProcessor();
@@ -1024,6 +1040,55 @@ void GlobalBar::showOverflowMenu()
         menu.addItem(item);
     }
 
+    // ---- view: zoom and appearance ---------------------------------------
+    // The design wants zoom and settings as their own header items. At 860 px
+    // there is no room for two more controls without pushing a real one out,
+    // so they live here - reachable at every size, which matters more than
+    // being one click away at the widest one.
+    menu.addSeparator();
+
+    juce::PopupMenu zoom;
+
+    for (const int percent : {75, 100, 125, 150, 200})
+        zoom.addItem(juce::String(percent) + " %", true, false,
+                     [this, percent]
+                     {
+                         if (onZoomRequested)
+                             onZoomRequested(static_cast<float>(percent) * 0.01f);
+                     });
+
+    menu.addSubMenu("Zoom", zoom);
+
+    juce::PopupMenu appearance;
+
+    appearance.addItem("Ember", true, EmberTheme::variant() == ThemeVariant::emberDefault,
+                       [this]
+                       {
+                           EmberTheme::setVariant(ThemeVariant::emberDefault);
+                           if (onAppearanceChanged)
+                               onAppearanceChanged();
+                       });
+
+    appearance.addItem("Cool Ember", true, EmberTheme::variant() == ThemeVariant::coolEmber,
+                       [this]
+                       {
+                           EmberTheme::setVariant(ThemeVariant::coolEmber);
+                           if (onAppearanceChanged)
+                               onAppearanceChanged();
+                       });
+
+    appearance.addSeparator();
+
+    appearance.addItem("Reduce motion", true, EmberTheme::reduceMotion(),
+                       [this]
+                       {
+                           EmberTheme::setReduceMotion(!EmberTheme::reduceMotion());
+                           if (onAppearanceChanged)
+                               onAppearanceChanged();
+                       });
+
+    menu.addSubMenu("Appearance", appearance);
+
     if (menu.getNumItems() == 0)
         return;
 
@@ -1047,14 +1112,14 @@ void GlobalBar::paint(juce::Graphics& g)
     {
         const juce::Rectangle<float> line(static_cast<float>(x) - 0.5f, bounds.getY() + bounds.getHeight() * 0.2f, 1.0f,
                                           bounds.getHeight() * 0.6f);
-        EmberLookAndFeel::drawHairline(g, line, EmberColours::outline, true);
+        EmberLookAndFeel::drawHairline(g, line, EmberColours::outline(), true);
     }
 
     if (captions.empty())
         return;
 
     g.setFont(EmberFonts::get(EmberFonts::Role::micro, uiScale));
-    g.setColour(EmberColours::textDisabled);
+    g.setColour(EmberColours::textDisabled());
 
     for (const auto& caption : captions)
         g.drawFittedText(caption.text, caption.bounds,
@@ -1246,6 +1311,11 @@ void GlobalBar::resized()
     // Levels: the knobs normally take the full height and caption themselves.
     // In a short strip they drop their own caption, so the row supplies one —
     // three unlabelled knobs would be a puzzle.
+    //
+    // The redesign moves Input / Output / Mix / Auto-Gain to the footer, where
+    // they sit beside the CPU and latency readouts. When the footer owns them
+    // this block is skipped entirely rather than drawing a second copy.
+    if (showIoSection)
     {
         auto cell = nextLeft(levelsW, true);
         const bool knobsNeedCaption = cell.getHeight() < 52;

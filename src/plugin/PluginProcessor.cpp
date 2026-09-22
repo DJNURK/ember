@@ -100,6 +100,12 @@ void EmberAudioProcessor::buildParameterCache()
         c.toneLow = cache(pid::toneLow(b));
         c.toneMid = cache(pid::toneMid(b));
         c.toneHigh = cache(pid::toneHigh(b));
+        c.toneLowHz = cache(pid::toneLowHz(b));
+        c.toneMidHz = cache(pid::toneMidHz(b));
+        c.toneMidQ = cache(pid::toneMidQ(b));
+        c.toneHighHz = cache(pid::toneHighHz(b));
+        c.tonePre = cache(pid::tonePre(b));
+        c.toneBypass = cache(pid::toneBypass(b));
         c.bypass = cache(pid::bypass(b));
         c.solo = cache(pid::solo(b));
     }
@@ -413,6 +419,12 @@ void EmberAudioProcessor::resolveParameters(int numSamples) noexcept
         p.toneLowDb = value(c.toneLow);
         p.toneMidDb = value(c.toneMid);
         p.toneHighDb = value(c.toneHigh);
+        p.toneLowHz = value(c.toneLowHz);
+        p.toneMidHz = value(c.toneMidHz);
+        p.toneMidQ = value(c.toneMidQ);
+        p.toneHighHz = value(c.toneHighHz);
+        p.tonePreSaturation = c.tonePre.isOn();
+        p.toneBypass = c.toneBypass.isOn();
         p.bypass = c.bypass.isOn();
         p.solo = c.solo.isOn();
     }
@@ -421,6 +433,8 @@ void EmberAudioProcessor::resolveParameters(int numSamples) noexcept
 void EmberAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
+
+    const auto blockStartTicks = juce::Time::getHighResolutionTicks();
 
     // Index by the buffer's OWN channel count, never by the bus layout's.
     // getArrayOfWritePointers() has exactly buffer.getNumChannels() entries, so
@@ -499,6 +513,37 @@ void EmberAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         for (int i = 0; i < numSamples; ++i)
             d[i] = dsputil::sanitise(d[i]);
     }
+
+    publishCpuLoad(blockStartTicks, numSamples);
+}
+
+void EmberAudioProcessor::publishCpuLoad(juce::int64 startTicks, int numSamples) noexcept
+{
+    const auto rate = getSampleRate();
+
+    if (rate <= 0.0 || numSamples <= 0)
+        return;
+
+    const auto elapsed = juce::Time::highResolutionTicksToSeconds(juce::Time::getHighResolutionTicks() - startTicks);
+    const auto available = static_cast<double>(numSamples) / rate;
+
+    if (available <= 0.0 || !std::isfinite(elapsed))
+        return;
+
+    const auto instant = static_cast<float>(100.0 * elapsed / available);
+
+    // One-pole at roughly a second. A per-block figure swings by several
+    // percent block to block and is unreadable; the peak still gets through
+    // because the coefficient is asymmetric - it rises four times faster than
+    // it falls, so a spike shows up rather than being averaged away.
+    const auto previous = cpuLoadPercent.load(std::memory_order_relaxed);
+    const float coefficient = instant > previous ? 0.08f : 0.02f;
+    auto smoothed = previous + (instant - previous) * coefficient;
+
+    if (!std::isfinite(smoothed))
+        smoothed = 0.0f;
+
+    cpuLoadPercent.store(juce::jlimit(0.0f, 999.0f, smoothed), std::memory_order_relaxed);
 }
 
 void EmberAudioProcessor::processBlock(juce::AudioBuffer<double>& buffer, juce::MidiBuffer&)
@@ -702,6 +747,15 @@ juce::ValueTree EmberAudioProcessor::captureFullState() const
     tree.setProperty("editorWidth", editorWidth.load(std::memory_order_relaxed), nullptr);
     tree.setProperty("editorHeight", editorHeight.load(std::memory_order_relaxed), nullptr);
 
+    {
+        const auto view = getAnalyserSettings();
+        tree.setProperty("analyserResolution", view.resolution, nullptr);
+        tree.setProperty("analyserAveraging", view.averaging, nullptr);
+        tree.setProperty("analyserTilt", view.tiltIndex, nullptr);
+        tree.setProperty("analyserFreeze", view.freeze, nullptr);
+        tree.setProperty("analyserPeakHold", view.peakHold, nullptr);
+    }
+
     tree.addChild(mutableApvts.copyState().createCopy(), -1, nullptr);
 
     auto mod = modulation.toValueTree();
@@ -772,6 +826,18 @@ void EmberAudioProcessor::restoreFullState(const juce::ValueTree& tree)
                       std::memory_order_relaxed);
     editorHeight.store(juce::jlimit(480, 2000, static_cast<int>(tree.getProperty("editorHeight", 640))),
                        std::memory_order_relaxed);
+
+    {
+        // Defaults match a fresh instance, so a session saved before these
+        // existed restores the analyser it was showing rather than a frozen one.
+        AnalyserSettings view;
+        view.resolution = juce::jlimit(0, 2, static_cast<int>(tree.getProperty("analyserResolution", 1)));
+        view.averaging = juce::jlimit(0, 2, static_cast<int>(tree.getProperty("analyserAveraging", 1)));
+        view.tiltIndex = juce::jlimit(0, 2, static_cast<int>(tree.getProperty("analyserTilt", 1)));
+        view.freeze = static_cast<bool>(tree.getProperty("analyserFreeze", false));
+        view.peakHold = static_cast<bool>(tree.getProperty("analyserPeakHold", true));
+        setAnalyserSettings(view);
+    }
 }
 
 void EmberAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
@@ -784,6 +850,90 @@ void EmberAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary(data, sizeInBytes))
         restoreFullState(juce::ValueTree::fromXml(*xml));
+}
+
+float EmberAudioProcessor::getBandHeat(int band) const noexcept
+{
+    if (band < 0 || band >= kMaxBands)
+        return 0.0f;
+
+    // The engine hands back a normalised distortion residual, already 0..1 and
+    // already immune to level, gain matching and auto-gain. It only needs a
+    // curve: distortion figures crowd into the bottom of the range, so a square
+    // root spreads the useful part of the scale where the eye can see it.
+    const float residual = engine.getBandHeatRatio(band);
+
+    // Distortion figures crowd into the bottom of the range, so a square root
+    // spreads the useful part of the scale where the eye can actually see it.
+    const float shaped = std::sqrt(juce::jlimit(0.0f, 1.0f, residual));
+
+    // Weighted by drive. The residual measures everything that makes the band's
+    // output differ from its input - tone EQ, dynamics, feedback and pan all
+    // contribute - but heat is meant to read as saturation. Without this, a
+    // band at zero drive with an EQ curve on it glows as brightly as one being
+    // hammered, which is exactly the wrong story.
+    const auto& p = bandParams[static_cast<size_t>(band)];
+    const float driveWeight = juce::jlimit(0.0f, 1.0f, p.driveDb / 24.0f);
+
+    return juce::jlimit(0.0f, 1.0f, shaped * driveWeight);
+}
+
+float EmberAudioProcessor::getGlobalHeat() const noexcept
+{
+    const int bands = juce::jlimit(kMinBands, kMaxBands, globalParams.numBands);
+
+    float weighted = 0.0f;
+    float weight = 0.0f;
+
+    for (int b = 0; b < bands; ++b)
+    {
+        // Weight by the band's own level, or a silent band driven to the moon
+        // would light the logo as brightly as the one doing the work.
+        const float level = juce::jlimit(0.0f, 1.0f, engine.getBandLevel(b));
+        weighted += getBandHeat(b) * level;
+        weight += level;
+    }
+
+    return weight > 1.0e-6f ? juce::jlimit(0.0f, 1.0f, weighted / weight) : 0.0f;
+}
+
+void EmberAudioProcessor::getBandSpanHz(int band, float& lowHz, float& highHz) const noexcept
+{
+    lowHz = 20.0f;
+    highHz = 20000.0f;
+
+    const int active = juce::jlimit(kMinBands, kMaxBands, globalParams.numBands);
+    const int numEdges = active - 1;
+
+    if (band < 0 || band >= active || numEdges <= 0)
+        return;
+
+    std::array<float, static_cast<size_t>(kMaxCrossovers)> edges{};
+
+    for (int i = 0; i < numEdges; ++i)
+        edges[static_cast<size_t>(i)] = globalParams.crossoverHz[static_cast<size_t>(i)];
+
+    std::sort(edges.begin(), edges.begin() + numEdges);
+
+    if (band > 0)
+        lowHz = edges[static_cast<size_t>(band - 1)];
+
+    if (band < numEdges)
+        highHz = edges[static_cast<size_t>(band)];
+}
+
+EmberAudioProcessor::AnalyserSettings EmberAudioProcessor::getAnalyserSettings() const
+{
+    const juce::ScopedLock lock{analyserLock};
+    return analyserSettings;
+}
+
+void EmberAudioProcessor::setAnalyserSettings(const AnalyserSettings& settings)
+{
+    // Message thread only, and read by the editor's timer on the same thread;
+    // the lock is for the state save, which can come from elsewhere.
+    const juce::ScopedLock lock{analyserLock};
+    analyserSettings = settings;
 }
 
 juce::AudioProcessorEditor* EmberAudioProcessor::createEditor()

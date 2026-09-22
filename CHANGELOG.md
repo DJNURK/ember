@@ -9,6 +9,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [2.0.0] — 2026-09-22
+
+A complete rebuild of the interface, and the tone stage becomes an EQ you can
+grab. The saturation, crossovers, modulation engine and presets are unchanged:
+every factory preset written for 1.x loads into 2.0 with an identical response.
+
+### Added
+
+#### The interface
+
+- **Heat.** Each band measures how much of its output is no longer a scaled
+  copy of its input - a normalised distortion residual - and that drives the
+  spectrum tint, the module chrome, the knob glow and the logo filament. A
+  level ratio cannot show this: Ember gain-matches every style to within
+  0.1 dB, so a screaming band and a clean one measure the same loudness.
+- **Band strip.** Every active band is on screen as its own module, the
+  selected one 1.6x wide with the full control set, the rest showing Drive, the
+  style name, a heat bar and a sparkline of their tone curve.
+- **Embedded type.** Inter and Barlow Condensed ship with the plug-in, so it
+  renders identically on every platform. Values use tabular figures and stop
+  changing width as they count.
+- **Footer** carrying input, output, mix, auto-gain, CPU, latency and a hint
+  line. Tooltip popups are gone: on a surface this dense they spend their life
+  covering the control beside the one being described.
+- **Zoom** at 75-200 %, a **Cool Ember** accent variant, and **Reduce motion**.
+- **One motion clock.** A single VBlank attachment drives every animation and
+  meter rather than six timers at unrelated rates beating against each other.
+
+#### The EQ
+
+- **Per-band node editor** replacing the three anonymous tone knobs. Drag for
+  gain and frequency, Alt-drag or scroll the mid node for Q, double-click to
+  reset. The curve fades outside the band's own range, because that is the only
+  range it affects.
+- **Pre/post switch** per band: tone before the saturator changes which
+  harmonics exist, after it shapes what came out.
+- **Overlay on the main display** with every band's curve and the combined
+  response weighted by band level, and the same nodes draggable there.
+- **Analyser settings** - resolution, averaging, tilt, freeze, peak hold -
+  stored in the session.
+- **Crossover handling**: Alt snaps to musical points, Cmd links all edges
+  proportionally, right-click adds a band at the pointer, distributes evenly or
+  resets, and a note name follows the mouse.
+
+### Changed
+
+- Band regions lose their per-band hues. A band's colour is its heat now, and
+  the old ramp's blue-white top band would read as modulation under the rule
+  that warm is audio and cool is control.
+
+- Realtime CPU, full plugin with six modulation routings, on the host machine:
+  **6.57 % → 4.25 %** of one core at 6 bands / 4× / 48 kHz, and
+  **3.24 % → 2.15 %** at 3 bands, so the specification's 3 % target is now met
+  at three bands. 16× went 23.6 % → 15.8 % and 96 kHz 15.4 % → 9.9 %. Both
+  figures are medians of five alternating runs of the two binaries.
+
+  No audio changed. Every change is the same arithmetic in a different loop:
+  per-sample recursions that ran one channel to completion before starting the
+  other now run both in the same iteration, which covers two dependency chains
+  in the time of one; the tone stack, the crossover filters, the dry delays and
+  the oversampler's latency compensator are written out in place rather than
+  called out of line into JUCE's separately compiled filter classes; and the
+  oversampler's two polyphase cascades and two channels are now four lanes of
+  one SIMD register. A new test runs that oversampler against
+  `juce::dsp::Oversampling` and requires the two to agree exactly.
+
+  The aliasing, flatness, gain-match, stability and smoothing gates all report
+  the same numbers afterwards as before, to the digit. See `docs/STATUS.md` for
+  the full breakdown, including what was tried and did not pay.
+
+### Fixed
+
+- `docs/STATUS.md` quoted stale aliasing figures (−91.2 dB for hard clip at 16×
+  rather than the −88.7 dB the code actually measures, and −84 rather than −78
+  for Foldback). Re-measuring the unmodified code produced the corrected
+  figures exactly, so this is a documentation drift rather than a regression.
+
 ## [1.0.1] — 2026-09-16
 
 ### Fixed

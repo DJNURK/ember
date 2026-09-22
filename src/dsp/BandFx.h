@@ -85,16 +85,65 @@ private:
 class ToneStack
 {
 public:
+    /** Where the three bands sit, in Hz, and how sharp the mid bell is.
+
+        These were fixed constants until the tone stage became a node editor:
+        dragging a node horizontally has to move a real frequency, and there is
+        no honest way to draw a curve the user can grab if the curve cannot
+        move. Defaults are the values the constants held, so a preset saved
+        before they existed loads unchanged. */
+    struct Shape
+    {
+        float lowHz{150.0f};
+        float midHz{1000.0f};
+        float midQ{0.7f};
+        float highHz{4000.0f};
+    };
+
     void prepare(double sampleRate, int maxBlockSize, int numChannels);
     void reset() noexcept;
     void setGainsDb(float lowDb, float midDb, float highDb) noexcept;
+
+    /** Realtime-safe: recomputes coefficients only when something moved. */
+    void setShape(const Shape& newShape) noexcept;
+
     void process(float* const* channels, int numChannels, int numSamples) noexcept;
 
+    /** The stage's magnitude response at `frequencyHz`, in decibels.
+
+        Message-thread only, and deliberately not read from the live filters:
+        it recomputes the same biquads from the current gains and shape so the
+        drawn curve is the curve the filters implement, rather than a separate
+        model of it that can drift. `test_eq.cpp` checks it against an offline
+        sweep of the real processor. */
+    [[nodiscard]] float magnitudeDbAt(float frequencyHz) const noexcept;
+
+    [[nodiscard]] Shape getShape() const noexcept { return shape; }
+    [[nodiscard]] float getLowDb() const noexcept { return lastLow; }
+    [[nodiscard]] float getMidDb() const noexcept { return lastMid; }
+    [[nodiscard]] float getHighDb() const noexcept { return lastHigh; }
+
 private:
-    using Filter = juce::dsp::IIR::Filter<float>;
-    using Coeffs = juce::dsp::IIR::Coefficients<float>;
+    /** Normalise a `juce::dsp::IIR::ArrayCoefficients` design into one section,
+        by the same division by a0 that `IIR::Coefficients` would do. */
+    void setSection(size_t index, const std::array<float, 6>& design) noexcept;
+
     double sampleRate{44100.0};
     float lastLow{0.0f}, lastMid{0.0f}, lastHigh{0.0f};
-    std::array<std::array<Filter, 3>, 2> filters; // [channel][low, mid, high]
+    Shape shape;
+
+    /** b0, b1, b2, a1, a2 for the low shelf, the mid peak and the high shelf.
+        The three sections are the same for both channels, which is why they are
+        held here rather than inside a per-channel filter object: the hot loop
+        then reads one set of fifteen floats and runs both channels against it.
+
+        This is `juce::dsp::IIR::Filter`'s transposed direct form II written out.
+        Keeping the JUCE object meant an out-of-line call per sample per section
+        - six per stereo frame - each of which re-read the coefficient order
+        through a `getFilterOrder` stub before doing three multiply-adds. */
+    std::array<std::array<float, 5>, 3> coeffs{
+        {{{1.0f, 0.0f, 0.0f, 0.0f, 0.0f}}, {{1.0f, 0.0f, 0.0f, 0.0f, 0.0f}}, {{1.0f, 0.0f, 0.0f, 0.0f, 0.0f}}}};
+
+    std::array<std::array<std::array<float, 2>, 3>, 2> state{}; // [channel][section][order]
 };
 } // namespace ember

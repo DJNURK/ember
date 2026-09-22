@@ -199,6 +199,45 @@ void WarmTubeStyle::reset() noexcept
         filter.reset();
 }
 
+namespace
+{
+/** Warm Tube, `NumCh` channels at a time.
+
+    The chain is a shelf lowpass feeding two saturators in series, the second of
+    which is a `fastTanh` and so ends in a division: about as deep a dependency
+    per sample as anything in the plugin, and nothing else to fill it with while
+    one channel runs alone. The shelf filter is copied into a local because the
+    audio pointers could alias the state array, which would otherwise force a
+    reload of the filter state on every sample. */
+template<int NumCh>
+void warmTubeKernel(float* const* data, int numSamples, float drive, float shelfMix, float bias,
+                    dsputil::SvfTPT* shelf) noexcept
+{
+    dsputil::SvfTPT f[NumCh];
+
+    for (int k = 0; k < NumCh; ++k)
+        f[k] = shelf[k];
+
+    for (int n = 0; n < numSamples; ++n)
+    {
+        for (int k = 0; k < NumCh; ++k)
+        {
+            const float in = prepareInput(data[k][n]);
+            const float shelved = in + shelfMix * f[k].process(in).lp;
+            const float driven = prepareInput(shelved * drive);
+
+            const float stage1 = valveShape(driven, bias, kWarmInner, kWarmInvInner);
+            const float stage2 = dsputil::fastTanh(stage1 * kWarmSqueeze) * kWarmInvSqueeze;
+
+            data[k][n] = finalise(stage2);
+        }
+    }
+
+    for (int k = 0; k < NumCh; ++k)
+        shelf[k] = f[k];
+}
+} // namespace
+
 void WarmTubeStyle::process(float* const* channelData, int numChannels, int numSamples,
                             const StyleParams& params) noexcept
 {
@@ -215,25 +254,21 @@ void WarmTubeStyle::process(float* const* channelData, int numChannels, int numS
     const float bias = kWarmBiasBase + kWarmBiasRange * amount;
 
     for (int ch = 0; ch < channels; ++ch)
+        shelfLowpass[static_cast<size_t>(ch)].sanitiseState();
+
+    if (channels >= 2 && channelData[0] != nullptr && channelData[1] != nullptr)
     {
-        float* const samples = channelData[ch];
-        if (samples == nullptr)
+        warmTubeKernel<2>(channelData, numSamples, drive, shelfMix, bias, shelfLowpass.data());
+        return;
+    }
+
+    for (int ch = 0; ch < channels; ++ch)
+    {
+        if (channelData[ch] == nullptr)
             continue;
 
-        auto& filter = shelfLowpass[static_cast<size_t>(ch)];
-        filter.sanitiseState();
-
-        for (int n = 0; n < numSamples; ++n)
-        {
-            const float in = prepareInput(samples[n]);
-            const float shelved = in + shelfMix * filter.process(in).lp;
-            const float driven = prepareInput(shelved * drive);
-
-            const float stage1 = valveShape(driven, bias, kWarmInner, kWarmInvInner);
-            const float stage2 = dsputil::fastTanh(stage1 * kWarmSqueeze) * kWarmInvSqueeze;
-
-            samples[n] = finalise(stage2);
-        }
+        float* one[1] = {channelData[ch]};
+        warmTubeKernel<1>(one, numSamples, drive, shelfMix, bias, &shelfLowpass[static_cast<size_t>(ch)]);
     }
 }
 

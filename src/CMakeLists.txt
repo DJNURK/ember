@@ -6,6 +6,7 @@ add_library(ember_dsp STATIC)
 target_sources(ember_dsp PRIVATE
     dsp/EmberEngine.cpp
     dsp/BandChain.cpp
+    dsp/PolyphaseOversampler.cpp
     dsp/BandFx.cpp
     dsp/Crossover.cpp
     dsp/StyleCalibrator.cpp
@@ -23,11 +24,16 @@ target_sources(ember_dsp PRIVATE
     plugin/PresetManager.cpp
     plugin/PluginProcessor.cpp
     plugin/PluginEditor.cpp
+    gui/EmberTheme.cpp
     gui/EmberLookAndFeel.cpp
     gui/Widgets.cpp
     gui/SpectrumDisplay.cpp
     gui/BandPanel.cpp
     gui/GlobalBar.cpp
+    gui/FooterBar.cpp
+    gui/Wordmark.cpp
+    gui/ToneEqPanel.cpp
+    gui/MotionClock.cpp
     gui/ModPanel.cpp
     gui/PresetBrowser.cpp)
 

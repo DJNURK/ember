@@ -9,6 +9,7 @@
 #include "dsp/EmberTypes.h"
 #include "gui/EmberLookAndFeel.h"
 #include "gui/Widgets.h"
+#include "gui/MotionClock.h"
 #include "plugin/PluginProcessor.h"
 
 /**
@@ -57,6 +58,16 @@ public:
         the data flows one way and a selection can never bounce between the two. */
     void setBand(int newBandIndex);
 
+    /** Lights a module without selecting it - used while the mouse is over that
+        band's node on the main display, so the two halves of the EQ editor are
+        visibly the same thing. -1 clears it. */
+    void setHighlightedBand(int bandIndex);
+
+    /** Hands the strip the editor's clock so module widths can animate rather
+        than snap. Without one the widths jump, which is correct but reads as a
+        relayout rather than as a module opening. */
+    void setMotionClock(MotionClock&);
+
     /** The band currently being edited, zero-based. */
     int getBand() const noexcept { return currentBand; }
 
@@ -64,6 +75,10 @@ public:
     // Modulation and MIDI gestures are REPORTED, never acted on: this panel
     // does not know the modulation engine exists. The editor forwards these to
     // the modulation panel, which owns the graph.
+
+    /** A module was clicked. The editor owns selection, so the strip only
+        reports the click rather than selecting anything itself. */
+    std::function<void(int bandIndex)> onBandClicked;
 
     /** A modulation source was dropped on one of this band's knobs. */
     std::function<void(const juce::String& targetParameterID, int sourceFlatIndex)> onModulationDropped;
@@ -114,6 +129,23 @@ private:
     //==========================================================================
     void timerCallback() override;
 
+    /** Slot each band's module occupies. Computed in resized(), used by paint()
+        and by hit-testing, so chrome and clicks can never disagree. */
+    std::array<juce::Rectangle<int>, static_cast<size_t>(kMaxBands)> moduleBounds{};
+    int highlightedBand{-1};
+
+    /** Each module's width weight, 1.0 collapsed and 1.6 selected. */
+    std::array<Animated, static_cast<size_t>(kMaxBands)> moduleWeight;
+    MotionClock::Registration motionRegistration;
+
+    /** Lays one unselected module out: title strip, Drive, heat bar. */
+    void layoutCompactModule(juce::Rectangle<int> slot, BandControls& controls);
+
+    /** Draws a module's chrome: raised panel, title bar warmed by heat. */
+    void paintModuleChrome(juce::Graphics&, int band, juce::Rectangle<int> slot, bool selected);
+
+    void mouseDown(const juce::MouseEvent&) override;
+
     BandControls& controlsFor(int bandIndex);
     void showControlsFor(int bandIndex);
 
@@ -132,6 +164,7 @@ private:
     void cacheHeaderFonts();
 
     void layoutHeader(juce::Rectangle<int> area, BandControls& controls);
+    void layoutKnobGrid(juce::Rectangle<int> area, BandControls& controls);
     void layoutGroups(juce::Rectangle<int> area, BandControls& controls);
     void layoutRow(juce::Rectangle<int> row, const int* groupIndices, int numGroups, BandControls& controls);
     void layoutGroup(int groupIndex, juce::Rectangle<int> bounds, BandControls& controls);

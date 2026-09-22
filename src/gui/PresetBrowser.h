@@ -6,6 +6,7 @@
 
 #include "gui/EmberLookAndFeel.h"
 #include "gui/Widgets.h"
+#include "gui/Wordmark.h"
 #include "plugin/PluginProcessor.h"
 #include "plugin/PresetManager.h"
 
@@ -305,6 +306,10 @@ private:
 
     std::function<void()> previousListChanged, previousPresetLoaded;
     bool callbacksInstalled{false};
+
+    /** The logo lives here because the preset name is the other thing you read
+        from across the room, and the two belong on the same line. */
+    Wordmark wordmark;
 
     ChevronButton previousButton{false}, nextButton{true};
     NameDisplay nameDisplay;

@@ -52,6 +52,50 @@ inline int usableChannels(float* const* channelData, int numChannels, int numSam
 }
 } // namespace
 
+/**
+    Why these kernels take the channels together
+    --------------------------------------------
+    A tape shaper's per-sample chain is a `fastTanh` — which ends in a float
+    division — feeding a one-pole whose state is the next sample's input. That
+    is twenty-odd cycles of pure dependency and only a handful of cycles of
+    actual issue, so a loop that finishes one channel before starting the other
+    leaves most of the core idle. The two channels share every coefficient and
+    touch no common state, so putting both in the same iteration covers two
+    chains in the time of one. The arithmetic per channel is untouched.
+
+    The smoothers are copied into locals for the duration: they live in arrays
+    the audio pointers could in principle alias, and without the copy the
+    compiler has to reload the filter state from memory on every sample.
+*/
+namespace
+{
+template<int NumCh>
+void cleanTapeKernel(float* const* data, int numSamples, float drive, float retain, dsputil::OnePole* rolloff) noexcept
+{
+    dsputil::OnePole lp[NumCh];
+
+    for (int k = 0; k < NumCh; ++k)
+        lp[k] = rolloff[k];
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+        for (int k = 0; k < NumCh; ++k)
+        {
+            const float x = dsputil::sanitise(data[k][i]);
+
+            // Odd-symmetric soft curve: no bias, so no even harmonics and no DC.
+            const float shaped = dsputil::fastTanh(x * drive);
+
+            const float low = lp[k].process(shaped);
+            data[k][i] = tapedetail::finish(low + retain * (shaped - low));
+        }
+    }
+
+    for (int k = 0; k < NumCh; ++k)
+        rolloff[k] = lp[k];
+}
+} // namespace
+
 //==============================================================================
 void CleanTapeStyle::prepare(double oversampledSampleRate, [[maybe_unused]] int maxBlockSize,
                              [[maybe_unused]] int numChannels)
@@ -91,26 +135,73 @@ void CleanTapeStyle::process(float* const* channelData, int numChannels, int num
 
     for (int ch = 0; ch < chans; ++ch)
     {
-        float* data = channelData[ch];
-        if (data == nullptr)
-            continue;
-
         auto& lp = rolloff[static_cast<size_t>(ch)];
         tapedetail::sanitiseOnePole(lp);
         lp.setCoefficient(coeff);
+    }
 
-        for (int i = 0; i < numSamples; ++i)
-        {
-            const float x = dsputil::sanitise(data[i]);
+    if (chans >= 2 && channelData[0] != nullptr && channelData[1] != nullptr)
+    {
+        cleanTapeKernel<2>(channelData, numSamples, drive, retain, rolloff.data());
+        return;
+    }
 
-            // Odd-symmetric soft curve: no bias, so no even harmonics and no DC.
-            const float shaped = dsputil::fastTanh(x * drive);
+    for (int ch = 0; ch < chans; ++ch)
+    {
+        if (channelData[ch] == nullptr)
+            continue;
 
-            const float low = lp.process(shaped);
-            data[i] = tapedetail::finish(low + retain * (shaped - low));
-        }
+        float* one[1] = {channelData[ch]};
+        cleanTapeKernel<1>(one, numSamples, drive, retain, &rolloff[static_cast<size_t>(ch)]);
     }
 }
+
+namespace
+{
+template<int NumCh>
+void warmTapeKernel(float* const* data, int numSamples, float drive, float magAmt, float squash, float retain,
+                    dsputil::OnePole* level, dsputil::OnePole* mag, dsputil::OnePole* tone) noexcept
+{
+    dsputil::OnePole lv[NumCh], mg[NumCh], tn[NumCh];
+
+    for (int k = 0; k < NumCh; ++k)
+    {
+        lv[k] = level[k];
+        mg[k] = mag[k];
+        tn[k] = tone[k];
+    }
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+        for (int k = 0; k < NumCh; ++k)
+        {
+            const float x = dsputil::sanitise(data[k][i]);
+
+            // One-sample-delayed magnetisation memory breaks the algebraic loop;
+            // it is itself bounded by +/-1 because it smooths a tanh output.
+            const float shaped = dsputil::fastTanh(x * drive - magAmt * mg[k].getState());
+            mg[k].process(shaped);
+
+            // Gain rides the curve's own output, so the squash adds to the
+            // saturation instead of backing the signal out of it: Warm Tape is
+            // more compressed than Clean Tape at every drive setting. The
+            // detector sees a bounded signal, so the divisor is always >= 1.
+            const float env = lv[k].process(std::abs(shaped));
+            const float squashed = shaped / (1.0f + squash * env);
+
+            const float low = tn[k].process(squashed);
+            data[k][i] = tapedetail::finish(low + retain * (squashed - low));
+        }
+    }
+
+    for (int k = 0; k < NumCh; ++k)
+    {
+        level[k] = lv[k];
+        mag[k] = mg[k];
+        tone[k] = tn[k];
+    }
+}
+} // namespace
 
 //==============================================================================
 void WarmTapeStyle::prepare(double oversampledSampleRate, [[maybe_unused]] int maxBlockSize,
@@ -161,10 +252,6 @@ void WarmTapeStyle::process(float* const* channelData, int numChannels, int numS
 
     for (int ch = 0; ch < chans; ++ch)
     {
-        float* data = channelData[ch];
-        if (data == nullptr)
-            continue;
-
         auto& s = state[static_cast<size_t>(ch)];
         tapedetail::sanitiseOnePole(s.level);
         tapedetail::sanitiseOnePole(s.mag);
@@ -173,26 +260,36 @@ void WarmTapeStyle::process(float* const* channelData, int numChannels, int numS
         s.level.setCoefficient(levelCoeff);
         s.mag.setCoefficient(magCoeff);
         s.tone.setCoefficient(toneCoeff);
+    }
 
-        for (int i = 0; i < numSamples; ++i)
+    if (chans >= 2 && channelData[0] != nullptr && channelData[1] != nullptr)
+    {
+        // A channel's three smoothers live in one struct, so a pair of channels
+        // is not contiguous per smoother. Gather them, run, scatter back.
+        dsputil::OnePole lv[2] = {state[0].level, state[1].level};
+        dsputil::OnePole mg[2] = {state[0].mag, state[1].mag};
+        dsputil::OnePole tn[2] = {state[0].tone, state[1].tone};
+
+        warmTapeKernel<2>(channelData, numSamples, drive, magAmt, squash, retain, lv, mg, tn);
+
+        for (size_t k = 0; k < 2; ++k)
         {
-            const float x = dsputil::sanitise(data[i]);
-
-            // One-sample-delayed magnetisation memory breaks the algebraic loop;
-            // it is itself bounded by +/-1 because it smooths a tanh output.
-            const float shaped = dsputil::fastTanh(x * drive - magAmt * s.mag.getState());
-            s.mag.process(shaped);
-
-            // Gain rides the curve's own output, so the squash adds to the
-            // saturation instead of backing the signal out of it: Warm Tape is
-            // more compressed than Clean Tape at every drive setting. The
-            // detector sees a bounded signal, so the divisor is always >= 1.
-            const float env = s.level.process(std::abs(shaped));
-            const float squashed = shaped / (1.0f + squash * env);
-
-            const float low = s.tone.process(squashed);
-            data[i] = tapedetail::finish(low + retain * (squashed - low));
+            state[k].level = lv[k];
+            state[k].mag = mg[k];
+            state[k].tone = tn[k];
         }
+
+        return;
+    }
+
+    for (int ch = 0; ch < chans; ++ch)
+    {
+        if (channelData[ch] == nullptr)
+            continue;
+
+        auto& s = state[static_cast<size_t>(ch)];
+        float* one[1] = {channelData[ch]};
+        warmTapeKernel<1>(one, numSamples, drive, magAmt, squash, retain, &s.level, &s.mag, &s.tone);
     }
 }
 

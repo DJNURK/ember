@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
 project(Ember
-    VERSION 1.0.1
+    VERSION 2.0.0
     DESCRIPTION "Ember — multiband analog saturation and distortion"
     LANGUAGES C CXX)
 
@@ -82,7 +82,16 @@ juce_add_plugin(Ember
 # Factory presets are compiled in, so a fresh install has a full library with
 # nothing to copy alongside the plug-in.
 file(GLOB EMBER_PRESET_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/presets/*.xml")
-juce_add_binary_data(ember_resources SOURCES ${EMBER_PRESET_FILES})
+
+# The two UI families are embedded rather than resolved from the host system,
+# so Ember renders identically on Windows, macOS and Linux. Both are SIL Open
+# Font License 1.1; the licences ship beside them and are embedded too, which
+# is what the OFL requires of a binary redistribution.
+file(GLOB EMBER_FONT_FILES CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/resources/fonts/*.ttf"
+     "${CMAKE_CURRENT_SOURCE_DIR}/resources/fonts/*OFL.txt")
+
+juce_add_binary_data(ember_resources SOURCES ${EMBER_PRESET_FILES} ${EMBER_FONT_FILES})
 set_target_properties(ember_resources PROPERTIES POSITION_INDEPENDENT_CODE ON FOLDER "Ember")
 
 add_subdirectory(src)

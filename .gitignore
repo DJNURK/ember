@@ -10,3 +10,6 @@ test-renders/*.wav
 test-renders/*.csv
 _deps/
 build-asan/
+
+# Agent worktrees: transient, and each is its own git repo.
+.claude/worktrees/

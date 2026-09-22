@@ -68,6 +68,60 @@ public:
     float getBandLevel(int band) const noexcept { return engine.getBandLevel(band); }
     float getBandGainReductionDb(int band) const noexcept { return engine.getBandGainReductionDb(band); }
 
+    /** Per-band heat, 0 (cold) to 1 (glowing), for the visualiser.
+
+        The engine publishes a raw output/input RMS ratio per block; this folds
+        in how hard the band is driven and normalises to the 0..1 the GUI wants.
+        A band adding no harmonics reads 0 however loud it is, which is the
+        point: heat is saturation, not level. Smoothing happens in the editor's
+        60 Hz tick, so this stays a pure read. */
+    float getBandHeat(int band) const noexcept;
+
+    /** What the plugin is costing, as a percentage of the time available.
+
+        100 % means a block took exactly as long as the audio it produced - the
+        point at which the host starts dropping out. Measured with JUCE's high
+        resolution tick counter, which is a vDSO read rather than a syscall on
+        every platform Ember ships to, and smoothed on the audio thread so the
+        GUI reads a number instead of a blur. */
+    float getCpuLoadPercent() const noexcept { return cpuLoadPercent.load(std::memory_order_relaxed); }
+
+    /** Heat across the whole plugin, 0..1: the band heats weighted by how much
+        signal each band actually carries, so a screaming band with nothing in
+        it does not light the logo. */
+    float getGlobalHeat() const noexcept;
+
+    /** The frequency span band `band` covers, from the current crossovers.
+
+        The crossover parameters are independent, so automation can cross them
+        over one another; this sorts before reading edges off. */
+    void getBandSpanHz(int band, float& lowHz, float& highHz) const noexcept;
+
+    /** How the analyser draws itself.
+
+        View settings, not parameters: they change nothing about the audio, so
+        automating them would be noise in a host's lane list. They still belong
+        in the session, because an analyser set to slow averaging and a 4.5 dB
+        tilt is a considered choice the user should not have to make twice. */
+    struct AnalyserSettings
+    {
+        int resolution{1}; ///< 0 low, 1 medium, 2 high
+        int averaging{1};  ///< 0 fast, 1 medium, 2 slow
+        int tiltIndex{1};  ///< 0 = flat, 1 = 3 dB/oct, 2 = 4.5 dB/oct
+        bool freeze{false};
+        bool peakHold{true};
+
+        /** Decibels per octave the tilt applies. */
+        [[nodiscard]] float tiltDbPerOctave() const noexcept
+        {
+            constexpr float values[] = {0.0f, 3.0f, 4.5f};
+            return values[juce::jlimit(0, 2, tiltIndex)];
+        }
+    };
+
+    AnalyserSettings getAnalyserSettings() const;
+    void setAnalyserSettings(const AnalyserSettings&);
+
     /** Which band the GUI has selected. Persisted with the plugin state. */
     int getSelectedBand() const noexcept { return selectedBand.load(std::memory_order_relaxed); }
     void setSelectedBand(int band) noexcept;
@@ -137,6 +191,7 @@ private:
     {
         CachedParam drive, mix, level, pan, width, style, feedback, feedbackFreq, dynamics;
         CachedParam toneLow, toneMid, toneHigh, bypass, solo;
+        CachedParam toneLowHz, toneMidHz, toneMidQ, toneHighHz, tonePre, toneBypass;
     };
     struct LfoCache
     {
@@ -194,10 +249,16 @@ private:
     int activeSlot{0};
 
     std::atomic<int> selectedBand{0};
+    AnalyserSettings analyserSettings;
+    mutable juce::CriticalSection analyserLock;
     std::atomic<int> editorWidth{1100}, editorHeight{640};
 
     int controlCounter{0};
     std::array<float, kMaxBands> bandRms{};
+
+    /** Published by processBlock for the footer's readout. */
+    std::atomic<float> cpuLoadPercent{0.0f};
+    void publishCpuLoad(juce::int64 startTicks, int numSamples) noexcept;
 
     double lastSampleRate{44100.0};
     int lastBlockSize{512};

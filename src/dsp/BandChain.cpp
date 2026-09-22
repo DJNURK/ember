@@ -23,21 +23,31 @@ void BandChain::prepare(double hostSampleRate, int maxBlockSize, int numChannels
 
     const int numStages = static_cast<int>(factor); // Off=0, x2=1, x4=2, x8=3, x16=4
 
-    if (numStages > 0)
+    usingPolyphase = !linearPhaseOversampling;
+    hasOversampling = numStages > 0;
+
+    if (hasOversampling && usingPolyphase)
     {
-        oversampler = std::make_unique<juce::dsp::Oversampling<float>>(
+        firOversampler.reset();
+        polyphase.prepare(channels, numStages, maxBlock);
+        latencySamples = polyphase.getLatencyInSamples();
+    }
+    else if (hasOversampling)
+    {
+        polyphase.prepare(channels, 0, maxBlock);
+        firOversampler = std::make_unique<juce::dsp::Oversampling<float>>(
             static_cast<size_t>(channels), static_cast<size_t>(numStages),
-            linearPhaseOversampling ? juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple
-                                    : juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR,
+            juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple,
             true,  // maximum quality
             true); // integer latency where possible
-        oversampler->initProcessing(static_cast<size_t>(maxBlock));
-        oversampler->reset();
-        latencySamples = static_cast<float>(oversampler->getLatencyInSamples());
+        firOversampler->initProcessing(static_cast<size_t>(maxBlock));
+        firOversampler->reset();
+        latencySamples = static_cast<float>(firOversampler->getLatencyInSamples());
     }
     else
     {
-        oversampler.reset();
+        firOversampler.reset();
+        polyphase.prepare(channels, 0, maxBlock);
         latencySamples = 0.0f;
     }
 
@@ -56,12 +66,7 @@ void BandChain::prepare(double hostSampleRate, int maxBlockSize, int numChannels
     dynamics.prepare(hostRate, maxBlock, channels);
     tone.prepare(hostRate, maxBlock, channels);
 
-    // Order matters: prepare() establishes the channel count, and
-    // setMaximumDelayInSamples resizes while keeping it, so preparing second
-    // would leave the line sized for zero channels.
-    dryDelay.prepare({hostRate, static_cast<juce::uint32>(maxBlock), static_cast<juce::uint32>(channels)});
-    dryDelay.setMaximumDelayInSamples(juce::jmax(8, static_cast<int>(std::ceil(latencySamples)) + 8));
-    dryDelay.setDelay(latencySamples);
+    dryDelay.prepare(channels, static_cast<int>(std::floor(latencySamples)));
 
     dryBuffer.setSize(channels, maxBlock, false, false, true);
     fadeBuffer.setSize(channels, osBlock, false, false, true);
@@ -88,8 +93,10 @@ void BandChain::reset() noexcept
     for (auto& s : styles)
         s->reset();
 
-    if (oversampler != nullptr)
-        oversampler->reset();
+    polyphase.reset();
+
+    if (firOversampler != nullptr)
+        firOversampler->reset();
 
     dcBlocker.reset();
     feedback.reset();
@@ -131,8 +138,16 @@ void BandChain::setParameters(const BandParams& p) noexcept
 
     feedback.setParameters(juce::jlimit(0.0f, 1.0f, p.feedback01), juce::jlimit(20.0f, 2000.0f, p.feedbackFreq));
     dynamics.setAmount(juce::jlimit(-1.0f, 1.0f, p.dynamics));
-    tone.setGainsDb(juce::jlimit(-12.0f, 12.0f, p.toneLowDb), juce::jlimit(-12.0f, 12.0f, p.toneMidDb),
-                    juce::jlimit(-12.0f, 12.0f, p.toneHighDb));
+    tone.setShape({p.toneLowHz, p.toneMidHz, p.toneMidQ, p.toneHighHz});
+
+    // A bypassed tone stage is flat rather than skipped, so switching it off
+    // does not change the band's latency or leave its IIR state stale for when
+    // it comes back.
+    if (p.toneBypass)
+        tone.setGainsDb(0.0f, 0.0f, 0.0f);
+    else
+        tone.setGainsDb(juce::jlimit(-12.0f, 12.0f, p.toneLowDb), juce::jlimit(-12.0f, 12.0f, p.toneMidDb),
+                        juce::jlimit(-12.0f, 12.0f, p.toneHighDb));
 }
 
 void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexcept
@@ -146,18 +161,7 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
     for (int ch = 0; ch < numCh; ++ch)
         dryBuffer.copyFrom(ch, 0, buffer, ch, 0, numSamples);
 
-    if (latencySamples > 0.0f)
-    {
-        for (int ch = 0; ch < numCh; ++ch)
-        {
-            auto* d = dryBuffer.getWritePointer(ch);
-            for (int i = 0; i < numSamples; ++i)
-            {
-                dryDelay.pushSample(ch, d[i]);
-                d[i] = dryDelay.popSample(ch);
-            }
-        }
-    }
+    dryDelay.process(dryBuffer.getArrayOfWritePointers(), numCh, numSamples);
 
     // A fully bypassed band still has to come out with the same latency as its
     // neighbours, otherwise the band sum combs. The dry path above already
@@ -167,8 +171,17 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
         for (int ch = 0; ch < numCh; ++ch)
             buffer.copyFrom(ch, 0, dryBuffer, ch, 0, numSamples);
         applyLevelPanWidth(buffer, numSamples);
+        heatRatio.store(0.0f, std::memory_order_relaxed); // adds nothing, so it is cold
         return;
     }
+
+    // ---- tone, when it runs before the saturator ---------------------------
+    // Pre-EQ changes what the style is fed and so which harmonics it makes;
+    // post-EQ shapes what came out. It runs at base rate either way - putting
+    // it inside the oversampled section would make its own frequencies move
+    // with the oversampling factor.
+    if (params.tonePreSaturation)
+        tone.process(buffer.getArrayOfWritePointers(), numCh, numSamples);
 
     StyleParams sp;
     sp.sampleRate = osRate;
@@ -181,9 +194,10 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
     juce::dsp::AudioBlock<float> block(buffer.getArrayOfWritePointers(), static_cast<size_t>(numCh),
                                        static_cast<size_t>(numSamples));
 
-    if (oversampler != nullptr)
+    if (hasOversampling)
     {
-        auto up = oversampler->processSamplesUp(block);
+        auto up = usingPolyphase ? polyphase.processSamplesUp(juce::dsp::AudioBlock<const float>(block))
+                                 : firOversampler->processSamplesUp(block);
         const int n = static_cast<int>(up.getNumSamples());
 
         // AudioBlock exposes channels one at a time; the style interface wants
@@ -242,7 +256,10 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
             }
         }
 
-        oversampler->processSamplesDown(block);
+        if (usingPolyphase)
+            polyphase.processSamplesDown(block);
+        else
+            firOversampler->processSamplesDown(block);
     }
     else
     {
@@ -301,7 +318,9 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
     float* const* post = buffer.getArrayOfWritePointers();
     dcBlocker.process(post, numCh, numSamples);
     dynamics.process(post, numCh, numSamples);
-    tone.process(post, numCh, numSamples);
+
+    if (!params.tonePreSaturation)
+        tone.process(post, numCh, numSamples);
 
     applyLevelPanWidth(buffer, numSamples);
 
@@ -322,14 +341,67 @@ void BandChain::process(juce::AudioBuffer<float>& buffer, int numSamples) noexce
         const float m1 = smoothedMix.getCurrentValue();
         const float dm = (m1 - m0) / static_cast<float>(juce::jmax(1, numSamples));
 
+        // Heat is measured here because this loop already holds the band's
+        // input and its final output in registers: three multiply-adds per
+        // sample on one channel, no extra loads, no sample altered.
+        //
+        // It measures the DISTORTION RESIDUAL, not a level ratio. Ember
+        // gain-matches every style - the calibrator holds output level to
+        // within 0.1 dB of input across the whole drive range - so output-over-
+        // input RMS sits at 1.0 however hard a band is driven, and would report
+        // a screaming band as stone cold. What actually changes is how much of
+        // the output is no longer a scaled copy of the input.
+        float inIn = 0.0f;
+        float inOut = 0.0f;
+        float outOut = 0.0f;
+
         float mix = m0;
         for (int i = 0; i < numSamples; ++i)
         {
             for (int ch = 0; ch < numCh; ++ch)
                 wet[ch][i] = mix * wet[ch][i] + (1.0f - mix) * dry[ch][i];
+
+            const float in = dry[0][i];
+            const float out = wet[0][i];
+            inIn += in * in;
+            inOut += in * out;
+            outOut += out * out;
+
             mix += dm;
         }
+
+        publishHeat(inIn, inOut, outOut);
     }
+}
+
+void BandChain::publishHeat(float inIn, float inOut, float outOut) noexcept
+{
+    // Least-squares fit the output as a scaled copy of the input, then ask how
+    // much energy is left over. alpha = <in,out>/<in,in> is the best linear
+    // explanation of the output; everything the fit cannot account for is
+    // harmonic content the band added.
+    //
+    //   residual = <out,out> - <in,out>^2 / <in,in>
+    //   heat     = sqrt(residual / <out,out>)
+    //
+    // That is a normalised distortion figure: 0 when the band is a clean gain
+    // stage at any gain, rising towards 1 as the output stops resembling the
+    // input. It is immune to the gain matching, to auto-gain, and to the band's
+    // own level and pan.
+    float ratio = 0.0f;
+
+    // Below the noise floor the fit is meaningless - dividing near-zero
+    // energies swings violently and a silent plugin would flicker.
+    if (inIn > 1.0e-9f && outOut > 1.0e-9f)
+    {
+        const float residual = outOut - (inOut * inOut) / inIn;
+        ratio = std::sqrt(juce::jmax(0.0f, residual) / outOut);
+    }
+
+    if (!std::isfinite(ratio))
+        ratio = 0.0f;
+
+    heatRatio.store(juce::jlimit(0.0f, 1.0f, ratio), std::memory_order_relaxed);
 }
 
 void BandChain::applyLevelPanWidth(juce::AudioBuffer<float>& buffer, int numSamples) noexcept

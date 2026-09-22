@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "gui/EmberTheme.h"
 
 namespace ember
 {
@@ -6,13 +7,10 @@ namespace
 {
 // Layout proportions, expressed as fractions of the window so the interface
 // holds together from 800x480 up to 3000x2000.
-constexpr int kPresetBarHeight = 34;
-constexpr int kGlobalBarHeight = 74;
 // The band panel's content — style picker plus the saturation, stereo, feedback,
 // dynamics and tone groups — needs this much before it starts clipping. Measured
 // by rendering the editor offscreen, not guessed: at the previous 196 the style
 // combo was cut in half and none of the knobs were reachable at the default size.
-constexpr int kBandPanelHeight = 272;
 // Below this the spectrum stops being a usable editing surface, so the band
 // panel gives way first.
 constexpr int kMinSpectrumHeight = 150;
@@ -21,7 +19,7 @@ constexpr int kEdge = 8;
 
 EmberAudioProcessorEditor::EmberAudioProcessorEditor(EmberAudioProcessor& p)
     : juce::AudioProcessorEditor(&p), processorRef(p), presetBar(p), globalBar(p), spectrum(p), bandPanel(p),
-      modPanel(p)
+      modPanel(p), footer(p)
 {
     setLookAndFeel(&lookAndFeel);
 
@@ -30,6 +28,12 @@ EmberAudioProcessorEditor::EmberAudioProcessorEditor(EmberAudioProcessor& p)
     addAndMakeVisible(spectrum);
     addAndMakeVisible(bandPanel);
     addAndMakeVisible(modPanel);
+    addAndMakeVisible(footer);
+
+    bandPanel.setMotionClock(motion);
+
+    // The footer owns Input / Output / Mix / Auto-Gain now.
+    globalBar.setIoSectionVisible(false);
 
     wirePanels();
 
@@ -59,6 +63,27 @@ void EmberAudioProcessorEditor::wirePanels()
 {
     // Clicking a band region in the spectrum retargets the band panel.
     spectrum.onBandSelected = [this](int band) { selectBand(band); };
+    bandPanel.onBandClicked = [this](int band) { selectBand(band); };
+    spectrum.onEqNodeHovered = [this](int band) { bandPanel.setHighlightedBand(band); };
+
+    globalBar.onZoomRequested = [this](float factor)
+    {
+        // Zoom sets the window to the design's default size scaled, rather than
+        // multiplying whatever size it happens to be - otherwise repeated zooms
+        // compound and 125 % twice lands at 156 %.
+        setSize(juce::roundToInt(static_cast<float>(gui::Metrics::defaultWidth) * factor),
+                juce::roundToInt(static_cast<float>(gui::Metrics::defaultHeight) * factor));
+    };
+
+    globalBar.onAppearanceChanged = [this]
+    {
+        // Colours come from the theme at paint time, so nothing needs rebuilding
+        // - but every component has to be told to look again.
+        for (auto* child : getChildren())
+            child->repaint();
+
+        repaint();
+    };
 
     // A knob that accepts a modulation drop does not know how to build a
     // routing; it hands the (target, source) pair up and the modulation panel
@@ -100,7 +125,7 @@ void EmberAudioProcessorEditor::selectBand(int band)
 
 void EmberAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(gui::EmberColours::backgroundDeep);
+    g.fillAll(gui::EmberColours::backgroundDeep());
 }
 
 void EmberAudioProcessorEditor::resized()
@@ -113,25 +138,57 @@ void EmberAudioProcessorEditor::resized()
     const float scale = juce::jlimit(0.8f, 2.0f, static_cast<float>(getHeight()) / 640.0f);
     auto area = getLocalBounds().reduced(kEdge);
 
-    presetBar.setBounds(area.removeFromTop(juce::roundToInt(kPresetBarHeight * scale)));
-    area.removeFromTop(kEdge / 2);
-    globalBar.setBounds(area.removeFromTop(juce::roundToInt(kGlobalBarHeight * scale)));
+    // One header row, as the design specifies, rather than two stacked strips.
+    // The logo and preset name take the left; the global controls take the
+    // right and lean on GlobalBar's own overflow menu, which drops the least
+    // important control into "..." rather than off the edge - so a narrower
+    // slot costs reachability nothing.
+    auto header = area.removeFromTop(juce::roundToInt(static_cast<float>(gui::Metrics::headerHeight) * scale));
+    const int presetWidth = juce::jlimit(180, 460, juce::roundToInt(static_cast<float>(header.getWidth()) * 0.38f));
+
+    presetBar.setBounds(header.removeFromLeft(presetWidth));
+    header.removeFromLeft(kEdge / 2);
+    globalBar.setBounds(header);
     area.removeFromTop(kEdge / 2);
 
-    const int modHeight = juce::jmin(modPanel.getPreferredHeight(), area.getHeight() / 2);
+    footer.setBounds(area.removeFromBottom(gui::FooterBar::preferredHeight(scale)));
+    area.removeFromBottom(kEdge / 2);
+
+    // The three middle regions split what is left in the design's 38 : 34 : 18
+    // ratio rather than each taking a fixed height. The band strip is now a row
+    // of modules, not a single editor, so a fixed height starved it: the group
+    // layout saw less than its two-row minimum and was forced to squeeze five
+    // groups into a module-width slot, truncating every knob label.
+    const int modCollapsed = juce::roundToInt(static_cast<float>(gui::Metrics::modRailCollapsed) * scale);
+    const int modWanted = juce::jmin(modPanel.getPreferredHeight(), area.getHeight() / 2);
+    const bool modExpanded = modWanted > modCollapsed;
+
+    const int spacing = kEdge / 2;
+    int remaining = area.getHeight() - 2 * spacing;
+
+    int modHeight = modCollapsed;
+
+    if (modExpanded)
+    {
+        modHeight = juce::jmin(
+            modWanted, remaining * gui::Metrics::modRailWeight /
+                           (gui::Metrics::displayWeight + gui::Metrics::bandStripWeight + gui::Metrics::modRailWeight));
+        modHeight = juce::jmax(modHeight, modCollapsed);
+    }
+
+    remaining -= modHeight;
+
+    const int bandHeight = juce::jmax(0, remaining * gui::Metrics::bandStripWeight /
+                                             (gui::Metrics::displayWeight + gui::Metrics::bandStripWeight));
+
     modPanel.setBounds(area.removeFromBottom(modHeight));
-    area.removeFromBottom(kEdge / 2);
+    area.removeFromBottom(spacing);
 
-    // Give the band panel what its content actually needs, and only take it
-    // away when the spectrum would otherwise stop being a usable surface.
-    // The band panel's content stops needing more room well before the window
-    // does, so cap how far it grows and let the spectrum - which always benefits
-    // from height - take the rest.
-    const float bandScale = juce::jmin(scale, 1.35f);
-    const int wantedBand = juce::roundToInt(kBandPanelHeight * bandScale);
+    // The spectrum still has a floor: below it the display stops being a usable
+    // surface however generous the ratio would be.
     const int affordable = juce::jmax(0, area.getHeight() - juce::roundToInt(kMinSpectrumHeight * scale));
-    bandPanel.setBounds(area.removeFromBottom(juce::jmin(wantedBand, affordable)));
-    area.removeFromBottom(kEdge / 2);
+    bandPanel.setBounds(area.removeFromBottom(juce::jmin(bandHeight, affordable)));
+    area.removeFromBottom(spacing);
 
     spectrum.setBounds(area);
 }

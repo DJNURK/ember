@@ -271,6 +271,21 @@ private:
     //==========================================================================
     /** One optional element of the row, in priority order: the first to be
         dropped into the overflow menu is last. */
+    /** Hands Input / Output / Mix / Auto-Gain to the footer, which is where the
+        redesign puts them. The controls are hidden and skipped in layout rather
+        than drawn twice. */
+public:
+    void setIoSectionVisible(bool shouldBeVisible);
+
+    /** The user picked a zoom factor. The editor owns its own size, so the bar
+        only reports the request. */
+    std::function<void(float zoomFactor)> onZoomRequested;
+
+    /** The accent variant or the reduce-motion setting changed; everything
+        needs to repaint from the theme. */
+    std::function<void()> onAppearanceChanged;
+
+private:
     enum class Optional
     {
         latency = 0,
@@ -306,10 +321,20 @@ private:
     /** `base` px at the strip's own scale, clamped to a sane range. */
     int scaled(float base, int minimum, int maximum) const;
 
-    bool shows(Optional item) const noexcept { return optionalVisible[static_cast<size_t>(item)]; }
+    bool shows(Optional item) const noexcept
+    {
+        // Latency lives in the footer now. Showing it here too spends header
+        // width on a duplicate of something already on screen.
+        if (item == Optional::latency)
+            return false;
+
+        return optionalVisible[static_cast<size_t>(item)];
+    }
 
     //==========================================================================
     EmberAudioProcessor& processor;
+
+    bool showIoSection{true};
 
     LabelledKnob inputKnob, outputKnob, mixKnob;
     EmberToggle autoGainToggle{{}, ToggleLook::pill};

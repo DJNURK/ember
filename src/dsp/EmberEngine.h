@@ -4,6 +4,7 @@
 #include "dsp/EmberTypes.h"
 #include "dsp/BandParams.h"
 #include "dsp/BandChain.h"
+#include "dsp/DspUtils.h"
 #include "dsp/Crossover.h"
 #include "dsp/SpectrumFifo.h"
 
@@ -70,6 +71,10 @@ public:
     /** Peak level of each band's output, for the GUI band "heat" overlay. */
     float getBandLevel(int band) const noexcept;
 
+    /** How much energy band `band` is adding: output RMS over input RMS, 1
+        meaning unchanged. Drives the heat visualisation. Measurement only. */
+    float getBandHeatRatio(int band) const noexcept;
+
 private:
     void pushSpectrum(const juce::AudioBuffer<float>& in, const juce::AudioBuffer<float>& out, int numSamples) noexcept;
     void accumulateSpectrum(const float* input, const float* output, int numSamples) noexcept;
@@ -84,7 +89,7 @@ private:
     juce::AudioBuffer<float> dryBuffer, sumBuffer, msBuffer;
 
     /** Whole-sample latency, as in BandChain: no interpolation needed. */
-    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> globalDryDelay{8192};
+    dsputil::IntegerDelay globalDryDelay;
 
     // Band-count crossfade
     float bandFade{1.0f};
